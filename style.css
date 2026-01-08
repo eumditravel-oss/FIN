@@ -1,782 +1,245 @@
-/* =========================================================
-   FIN 산출자료 (Web) - Ctrl+K / Ctrl+Enter 버전
-   ✅ 산출식(formulaExpr) 입력 → 물량(value) 자동 계산
-   ✅ 산출식 → 물량(Value) 순서로 배치
-   ✅ Ctrl+K: 코드 선택 오버레이 (현재 탭 기준)
-   ✅ 더블클릭: 코드 선택
-   ✅ Ctrl+Enter: 선택 코드를 원래 탭(철골/부자재/동바리)에 추가
-   ✅ Esc: 닫기
-   ========================================================= */
-
-const STORAGE_KEY = "FIN_WEB_V3";
-
-/** 코드 마스터(초기값: 필요 시 더 넣으세요) */
-const SEED_CODES = [
-  {"code":"A0SM355150","name":"RH형강 / SM355","spec":"150*150*7*10","unit":"M","surcharge":7,"conv_unit":"TON","conv_factor":0.0315,"note":""},
-  {"code":"A0SM355200","name":"RH형강 / SM355","spec":"200*100*5.5*8","unit":"M","surcharge":7,"conv_unit":"TON","conv_factor":0.0213,"note":""},
-  {"code":"B0H398200","name":"H형강 / SS275","spec":"H-398*199*7*11","unit":"M","surcharge":7,"conv_unit":"TON","conv_factor":0.0656,"note":""},
-  {"code":"C0PLT","name":"PLATE / SS275","spec":"t= (사용자 입력)","unit":"M2","surcharge":7,"conv_unit":"TON","conv_factor":"","note":"환산계수는 사용자 입력 가능"},
-  {"code":"S0SUPPORT","name":"동바리(서포트)","spec":"(사용자 입력)","unit":"EA","surcharge":"","conv_unit":"","conv_factor":"","note":""},
-  {"code":"Z0ETC001","name":"기타","spec":"(사용자 입력)","unit":"","surcharge":"","conv_unit":"","conv_factor":"","note":""},
-];
-
-/* ---------- State ---------- */
-
-function makeEmptyCalcRow(){
-  return {
-    code: "",
-    name: "",
-    spec: "",
-    unit: "",
-    formulaExpr: "",   // 사용자가 입력: (0.5+0.3)/2
-    value: 0,          // 자동 계산 결과(읽기 전용)
-    note: "",
-    surchargeMul: "",  // 배수(예: 1.07)
-    convUnit: "",
-    convFactor: "",
-    convQty: 0,
-    finalQty: 0
-  };
+:root{
+  --bg:#f6f1e6;
+  --paper:#fffaf0;
+  --ink:#1d1d1f;
+  --muted:#5a5a61;
+  --line:rgba(0,0,0,.10);
+  --shadow:0 10px 26px rgba(0,0,0,.08);
+  --radius:16px;
+  --accent:#1a3d7c;
+  --danger:#b42318;
 }
 
-function makeState(){
-  return {
-    codes: SEED_CODES,
-    steel: Array.from({length: 20}, makeEmptyCalcRow),
-    steelSub: Array.from({length: 20}, makeEmptyCalcRow),
-    support: Array.from({length: 20}, makeEmptyCalcRow),
-  };
+*{ box-sizing:border-box; }
+body{
+  margin:0;
+  color:var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", Arial;
+  background:
+    radial-gradient(1200px 600px at 20% 0%, rgba(26,61,124,.08), transparent 55%),
+    radial-gradient(900px 500px at 90% 20%, rgba(214,178,94,.12), transparent 50%),
+    var(--bg);
 }
 
-function loadState(){
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if(!raw) return makeState();
-  try{
-    const s = JSON.parse(raw);
-    s.codes = Array.isArray(s.codes) ? s.codes : SEED_CODES;
-    s.steel = Array.isArray(s.steel) ? s.steel : [];
-    s.steelSub = Array.isArray(s.steelSub) ? s.steelSub : [];
-    s.support = Array.isArray(s.support) ? s.support : [];
-    return s;
-  }catch{
-    return makeState();
-  }
+.topbar{
+  position:sticky; top:0; z-index:10;
+  display:flex; gap:16px; align-items:center; justify-content:space-between;
+  padding:14px 16px;
+  background:rgba(246,241,230,.78);
+  backdrop-filter: blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.brand .title{ font-size:18px; font-weight:900; }
+.brand .sub{ font-size:12px; color:var(--muted); margin-top:2px; }
+.brand .hint{ font-size:12px; color:var(--muted); margin-top:6px; }
+.actions{ display:flex; gap:8px; flex-wrap:wrap; }
+
+.btn{
+  border:1px solid var(--line);
+  background:var(--paper);
+  border-radius:12px;
+  padding:10px 12px;
+  cursor:pointer;
+  box-shadow: var(--shadow);
+  font-weight:900;
+  color:var(--ink);
+}
+.btn:hover{ transform: translateY(-1px); }
+.btn.ghost{ background:transparent; }
+.btn.danger{ border-color: rgba(180,35,24,.3); color:var(--danger); }
+
+.tabs{
+  position: sticky;
+  top: 92px;
+  z-index: 9;
+  display:flex;
+  gap:8px;
+  padding:10px 16px;
+  overflow:auto;
+  background: rgba(246,241,230,.78);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
 }
 
-let state = loadState();
+.tab{
+  white-space:nowrap;
+  padding:10px 14px;
+  border-radius: 14px;
+  border:1px solid rgba(0,0,0,.10);
+  background: rgba(255,250,240,.80);
+  cursor:pointer;
+  font-weight:900;
+  color: var(--muted);
+  box-shadow: 0 6px 16px rgba(0,0,0,.06);
+  transition: transform .12s ease, background .12s ease, color .12s ease;
+}
+.tab:hover{ transform: translateY(-1px); }
 
-function saveState(){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+.tab.active{
+  background: linear-gradient(180deg, rgba(26,61,124,.10), rgba(255,250,240,.92));
+  color: var(--ink);
+  border-color: rgba(26,61,124,.22);
+  box-shadow: 0 10px 24px rgba(26,61,124,.10);
+  position: relative;
+}
+.tab.active::after{
+  content:"";
+  position:absolute;
+  left:12px;
+  right:12px;
+  bottom:6px;
+  height:3px;
+  border-radius: 999px;
+  background: rgba(26,61,124,.55);
 }
 
-/* ---------- Utils ---------- */
+.content{ padding: 0 16px 18px; }
 
-function num(v){
-  const x = (v ?? "").toString().trim();
-  if(x === "") return 0;
-  const n = Number(x.replaceAll(",",""));
-  return Number.isFinite(n) ? n : 0;
+.panel{
+  background:rgba(255,250,240,.78);
+  border:1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding:14px;
+  margin-bottom:14px;
+  animation: fadeIn .18s ease;
+}
+@keyframes fadeIn{
+  from{ opacity:.35; transform: translateY(4px); }
+  to{ opacity:1; transform: translateY(0); }
+}
+.panel-header{
+  display:flex; gap:10px; align-items:flex-end; justify-content:space-between;
+  margin-bottom:10px;
+}
+.panel-title{ font-size:16px; font-weight:900; }
+.panel-desc{ color:var(--muted); font-size:12px; margin-top:4px; }
+
+.table-wrap{
+  width:100%;
+  overflow:auto;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:rgba(255,255,255,.55);
 }
 
-function roundUp3(x){
-  const n = Number(x);
-  if(!Number.isFinite(n)) return 0;
-  const p = 1000;
-  return Math.ceil(n * p) / p;
+table{
+  border-collapse:separate;
+  border-spacing:0;
+  width:max-content;
+  min-width:100%;
+  font-size:12px;
+}
+thead th{
+  position:sticky; top:0;
+  background:rgba(255,250,240,.95);
+  border-bottom:1px solid var(--line);
+  padding:9px 8px;
+  text-align:left;
+  font-weight:900;
+}
+tbody td{
+  border-bottom:1px solid rgba(0,0,0,.06);
+  padding:4px 6px;
+  vertical-align:middle;
+}
+tbody tr:hover td{ background:rgba(26,61,124,.05); }
+
+input.cell, textarea.cell, select.cell{
+  width: 100%;
+  border:1px solid rgba(0,0,0,.12);
+  background:rgba(255,255,255,.75);
+  border-radius:10px;
+  padding:7px 8px;
+  outline:none;
+  font-size:12px;
+}
+textarea.cell{ resize:vertical; min-height:32px; }
+.cell.readonly{
+  background:rgba(0,0,0,.04);
+  border-color:rgba(0,0,0,.06);
 }
 
-function evalExpr(exprRaw){
-  const s = (exprRaw ?? "").toString().trim();
-  if(!s) return 0;
-  if(!/^[0-9+\-*/().\s,]+$/.test(s)) return 0;
-  try{
-    // eslint-disable-next-line no-new-func
-    const f = new Function(`return (${s.replaceAll(",","")});`);
-    const out = f();
-    return Number.isFinite(out) ? out : 0;
-  }catch{
-    return 0;
-  }
+.row-actions{ display:flex; gap:6px; }
+.smallbtn{
+  border:1px solid var(--line);
+  background:rgba(255,250,240,.85);
+  border-radius:10px;
+  padding:7px 9px;
+  cursor:pointer;
+  font-weight:900;
+}
+.smallbtn:hover{ transform: translateY(-1px); }
+
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border-radius:999px;
+  padding:6px 10px;
+  background:rgba(26,61,124,.08);
+  border:1px solid rgba(26,61,124,.18);
+  font-weight:900;
 }
 
-function surchargeToMul(surchargePercent){
-  const p = num(surchargePercent);
-  if(!p) return "";
-  return (1 + p/100);
+.overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.25);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 18px;
+  z-index: 100;
+}
+.hidden{ display:none !important; }
+
+.overlay-card{
+  width: min(1100px, 96vw);
+  background: rgba(255,250,240,.92);
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 18px;
+  box-shadow: 0 22px 60px rgba(0,0,0,.20);
+  padding: 14px;
 }
 
-function findCode(code){
-  const key = (code ?? "").toString().trim();
-  if(!key) return null;
-  return state.codes.find(x => (x.code ?? "").toString().trim() === key) ?? null;
+.overlay-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.overlay-title{ font-size:16px; font-weight:900; }
+.overlay-sub{ font-size:12px; color: var(--muted); margin-top:4px; }
+
+.overlay-tools{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  justify-content:space-between;
+  margin: 10px 0 10px;
+}
+.overlay-status{
+  font-size:12px;
+  color: var(--muted);
+  white-space:nowrap;
 }
 
-function recalcRow(row){
-  const m = findCode(row.code);
-
-  if(m){
-    row.name = m.name ?? "";
-    row.spec = m.spec ?? "";
-    row.unit = m.unit ?? "";
-    const mul = surchargeToMul(m.surcharge);
-    row.surchargeMul = mul === "" ? "" : mul;
-    row.convUnit = m.conv_unit ?? "";
-    if((row.convFactor ?? "").toString().trim() === ""){
-      row.convFactor = (m.conv_factor ?? "");
-    }
-  }
-
-  // 산출식 → 물량
-  row.value = evalExpr(row.formulaExpr);
-
-  const E = num(row.value);
-  const K = num(row.convFactor);
-  const I = num(row.surchargeMul);
-
-  row.convQty = (K === 0 ? E : E*K);
-  row.finalQty = (I === 0 ? row.convQty : row.convQty * I);
+.overlay-foot{
+  display:flex;
+  gap: 10px;
+  align-items:center;
+  justify-content:space-between;
+  margin-top: 10px;
 }
 
-function recalcAll(){
-  state.steel.forEach(recalcRow);
-  state.steelSub.forEach(recalcRow);
-  state.support.forEach(recalcRow);
+tr.pick-selected td{
+  background: rgba(26,61,124,.10) !important;
 }
 
-/* ---------- Tabs ---------- */
-
-const tabsDef = [
-  { id:"codes", label:"0.코드(Code)" },
-  { id:"steel", label:"철골(Steel)" },
-  { id:"steelTotal", label:"철골_집계" },
-  { id:"steelSub", label:"철골_부자재" },
-  { id:"support", label:"동바리(support)" },
-  { id:"supportTotal", label:"동바리_집계" }
-];
-
-let activeTabId = "steel";
-
-// 오버레이를 어느 탭에서 열었는지(삽입 대상)
-let codePickerOriginTabId = null;
-
-// 마지막으로 포커스된 “코드 셀” 행 기억(탭별)
-const lastFocus = { steel:null, steelSub:null, support:null };
-
-/* ---------- DOM ---------- */
-
-const $tabs = document.getElementById("tabs");
-const $view = document.getElementById("view");
-
-const $overlay = document.getElementById("codeOverlay");
-const $overlayBody = document.getElementById("codeOverlayBody");
-const $codeSearch = document.getElementById("codeSearch");
-const $overlayStatus = document.getElementById("overlayStatus");
-const $selectedBadge = document.getElementById("selectedBadge");
-const $btnCloseOverlay = document.getElementById("btnCloseOverlay");
-const $btnInsert = document.getElementById("btnInsert");
-
-let overlaySelectedCode = null;
-
-/* ---------- Render helpers ---------- */
-
-function renderTabs(){
-  $tabs.innerHTML = "";
-  for(const t of tabsDef){
-    const b = document.createElement("button");
-    b.className = "tab" + (t.id===activeTabId ? " active" : "");
-    b.textContent = t.label;
-    b.onclick = () => go(t.id);
-    $tabs.appendChild(b);
-  }
+.footer{
+  padding: 8px 16px 18px;
+  color:var(--muted);
+  font-size:12px;
 }
-
-function panel(title, desc){
-  const wrap = document.createElement("div");
-  wrap.className = "panel";
-  const h = document.createElement("div");
-  h.className = "panel-header";
-  const left = document.createElement("div");
-  left.innerHTML = `<div class="panel-title">${title}</div><div class="panel-desc">${desc || ""}</div>`;
-  h.appendChild(left);
-  wrap.appendChild(h);
-  return {wrap, header:h};
-}
-
-function escapeHtml(s){
-  return (s ?? "").toString()
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;");
-}
-function escapeAttr(s){
-  return escapeHtml(s).replaceAll("\n","&#10;");
-}
-
-/* ---------- Cells ---------- */
-
-const cellRegistry = [];
-function inputCell(value, onChange, placeholder="", extraAttrs=""){
-  const id = crypto.randomUUID();
-  cellRegistry.push({id, onChange});
-  return `<input class="cell" data-cell="${id}" value="${escapeAttr(value ?? "")}" placeholder="${escapeAttr(placeholder)}" ${extraAttrs}/>`;
-}
-function textAreaCell(value, onChange){
-  const id = crypto.randomUUID();
-  cellRegistry.push({id, onChange});
-  return `<textarea class="cell" data-cell="${id}">${escapeHtml(value ?? "")}</textarea>`;
-}
-function readonlyCell(value){
-  return `<input class="cell readonly" value="${escapeAttr(value ?? "")}" readonly />`;
-}
-function wireCells(){
-  document.querySelectorAll("[data-cell]").forEach(el=>{
-    const id = el.getAttribute("data-cell");
-    const meta = cellRegistry.find(x=>x.id===id);
-    if(!meta) return;
-
-    const handler = ()=>{
-      meta.onChange(el.value);
-      recalcAll();
-      saveState();
-      go(activeTabId, {silentTabRender:true});
-    };
-
-    el.addEventListener("change", handler);
-    el.addEventListener("blur", handler);
-  });
-  cellRegistry.length = 0;
-}
-
-/* ---------- Views ---------- */
-
-function renderCodes(){
-  $view.innerHTML = "";
-  const {wrap, header} = panel("0.코드(Code)", "코드 마스터(수정/추가 가능). Ctrl+K로 선택창을 열 수 있어요.");
-
-  const right = document.createElement("div");
-  right.style.display="flex";
-  right.style.gap="8px";
-
-  const addBtn = document.createElement("button");
-  addBtn.className="smallbtn";
-  addBtn.textContent="행 추가";
-  addBtn.onclick = ()=>{
-    state.codes.push({code:"",name:"",spec:"",unit:"",surcharge:"",conv_unit:"",conv_factor:"",note:""});
-    saveState(); go("codes");
-  };
-
-  right.appendChild(addBtn);
-  header.appendChild(right);
-
-  const tableWrap = document.createElement("div");
-  tableWrap.className="table-wrap";
-  tableWrap.innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th style="min-width:160px;">코드</th>
-          <th style="min-width:220px;">품명</th>
-          <th style="min-width:220px;">규격</th>
-          <th style="min-width:90px;">단위</th>
-          <th style="min-width:110px;">할증(%)</th>
-          <th style="min-width:120px;">환산단위</th>
-          <th style="min-width:140px;">환산계수</th>
-          <th style="min-width:260px;">비고</th>
-          <th style="min-width:120px;">작업</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  `;
-  const tbody = tableWrap.querySelector("tbody");
-
-  state.codes.forEach((r, idx)=>{
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${inputCell(r.code, v=>{ r.code=v; }, "예: A0SM355150")}</td>
-      <td>${inputCell(r.name, v=>{ r.name=v; })}</td>
-      <td>${inputCell(r.spec, v=>{ r.spec=v; })}</td>
-      <td>${inputCell(r.unit, v=>{ r.unit=v; })}</td>
-      <td>${inputCell(r.surcharge, v=>{ r.surcharge=v; }, "예: 7")}</td>
-      <td>${inputCell(r.conv_unit, v=>{ r.conv_unit=v; })}</td>
-      <td>${inputCell(r.conv_factor, v=>{ r.conv_factor=v; }, "예: 0.0315")}</td>
-      <td>${textAreaCell(r.note, v=>{ r.note=v; })}</td>
-      <td></td>
-    `;
-    const tdAct = tr.lastElementChild;
-    const act = document.createElement("div");
-    act.className="row-actions";
-    const del = document.createElement("button");
-    del.className="smallbtn";
-    del.textContent="삭제";
-    del.onclick=()=>{
-      state.codes.splice(idx,1);
-      saveState(); go("codes");
-    };
-    act.appendChild(del);
-    tdAct.appendChild(act);
-    tbody.appendChild(tr);
-  });
-
-  wrap.appendChild(tableWrap);
-  $view.appendChild(wrap);
-  wireCells();
-}
-
-function renderCalcSheet(title, rows, tabId, mode){
-  $view.innerHTML = "";
-  const desc = (mode==="steel")
-    ? '산출식에 예: (0.5+0.3)/2 입력 → 물량(Value) 자동 계산. (Ctrl+K 코드 선택 / Ctrl+Enter 추가)'
-    : '동바리도 산출식 기반으로 물량 자동 계산. 집계는 물량(Value) 합계. (Ctrl+K/Ctrl+Enter)';
-
-  const {wrap, header} = panel(title, desc);
-
-  const right = document.createElement("div");
-  right.style.display="flex";
-  right.style.gap="8px";
-
-  const addBtn = document.createElement("button");
-  addBtn.className="smallbtn";
-  addBtn.textContent="행 추가";
-  addBtn.onclick=()=>{
-    rows.push(makeEmptyCalcRow());
-    saveState(); go(tabId);
-  };
-
-  const add10Btn = document.createElement("button");
-  add10Btn.className="smallbtn";
-  add10Btn.textContent="+10행";
-  add10Btn.onclick=()=>{
-    for(let i=0;i<10;i++) rows.push(makeEmptyCalcRow());
-    saveState(); go(tabId);
-  };
-
-  right.appendChild(addBtn);
-  right.appendChild(add10Btn);
-  header.appendChild(right);
-
-  const tableWrap = document.createElement("div");
-  tableWrap.className="table-wrap";
-  tableWrap.innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th style="min-width:70px;">No</th>
-          <th style="min-width:170px;">코드</th>
-          <th style="min-width:220px;">품명(자동)</th>
-          <th style="min-width:220px;">규격(자동)</th>
-          <th style="min-width:90px;">단위(자동)</th>
-
-          <th style="min-width:220px;">산출식</th>
-          <th style="min-width:150px;">물량(Value)</th>
-
-          <th style="min-width:220px;">비고</th>
-          <th style="min-width:120px;">할증(배수)</th>
-          <th style="min-width:120px;">환산단위</th>
-          <th style="min-width:140px;">환산계수</th>
-          <th style="min-width:140px;">환산수량</th>
-          <th style="min-width:160px;">할증후수량</th>
-          <th style="min-width:120px;">작업</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  `;
-
-  const tbody = tableWrap.querySelector("tbody");
-
-  rows.forEach((r, idx)=>{
-    recalcRow(r);
-    const codeAttrs = `data-codecell="1" data-tab="${tabId}" data-row="${idx}"`;
-
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${idx+1}</td>
-      <td>${inputCell(r.code, v=>{ r.code=v; }, "코드 입력", codeAttrs)}</td>
-      <td>${readonlyCell(r.name)}</td>
-      <td>${readonlyCell(r.spec)}</td>
-      <td>${readonlyCell(r.unit)}</td>
-
-      <td>${inputCell(r.formulaExpr, v=>{ r.formulaExpr=v; }, "예: (0.5+0.3)/2")}</td>
-      <td>${readonlyCell(String(roundUp3(r.value)))}</td>
-
-      <td>${textAreaCell(r.note, v=>{ r.note=v; })}</td>
-      <td>${readonlyCell(r.surchargeMul === "" ? "" : String(r.surchargeMul))}</td>
-      <td>${readonlyCell(r.convUnit)}</td>
-      <td>${inputCell(r.convFactor, v=>{ r.convFactor=v; }, "비워도 됨")}</td>
-      <td>${readonlyCell(String(roundUp3(r.convQty)))}</td>
-      <td>${readonlyCell(String(roundUp3(r.finalQty)))}</td>
-      <td></td>
-    `;
-
-    const tdAct = tr.lastElementChild;
-    const act = document.createElement("div");
-    act.className="row-actions";
-
-    const del = document.createElement("button");
-    del.className="smallbtn";
-    del.textContent="삭제";
-    del.onclick=()=>{
-      rows.splice(idx,1);
-      saveState(); go(tabId);
-    };
-
-    const dup = document.createElement("button");
-    dup.className="smallbtn";
-    dup.textContent="복제";
-    dup.onclick=()=>{
-      rows.splice(idx+1,0, JSON.parse(JSON.stringify(r)));
-      saveState(); go(tabId);
-    };
-
-    act.appendChild(dup);
-    act.appendChild(del);
-    tdAct.appendChild(act);
-    tbody.appendChild(tr);
-  });
-
-  wrap.appendChild(tableWrap);
-
-  const sumBox = document.createElement("div");
-  sumBox.style.marginTop="10px";
-  const sumVal = (mode==="steel")
-    ? rows.reduce((a,b)=> a + roundUp3(b.finalQty), 0)
-    : rows.reduce((a,b)=> a + num(b.value), 0);
-  sumBox.innerHTML = `<span class="badge">합계: ${roundUp3(sumVal)}</span>`;
-  wrap.appendChild(sumBox);
-
-  $view.appendChild(wrap);
-
-  wireCells();
-  wireCodeCellFocusTracking();
-}
-
-function groupSum(rows, valueSelector){
-  const map = new Map();
-  for(const r of rows){
-    const code = (r.code ?? "").toString().trim();
-    if(!code) continue;
-    const m = findCode(code);
-    const cur = map.get(code) ?? {
-      code,
-      name: m?.name ?? r.name ?? "",
-      spec: m?.spec ?? r.spec ?? "",
-      unit: m?.unit ?? r.unit ?? "",
-      sum: 0
-    };
-    cur.sum += valueSelector(r);
-    map.set(code, cur);
-  }
-  return Array.from(map.values()).sort((a,b)=>a.code.localeCompare(b.code));
-}
-
-function renderSteelTotal(){
-  $view.innerHTML = "";
-  const {wrap} = panel("철골_집계(Steel_Total quantity)", "코드별 합계(철골+부자재의 할증후수량 합산)");
-
-  recalcAll();
-  const all = [...state.steel, ...state.steelSub];
-  const grouped = groupSum(all, r => roundUp3(r.finalQty));
-
-  const tableWrap = document.createElement("div");
-  tableWrap.className="table-wrap";
-  tableWrap.innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th style="min-width:170px;">코드</th>
-          <th style="min-width:220px;">품명</th>
-          <th style="min-width:220px;">규격</th>
-          <th style="min-width:90px;">단위</th>
-          <th style="min-width:160px;">할증후수량</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  `;
-  const tbody = tableWrap.querySelector("tbody");
-
-  grouped.forEach(g=>{
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${escapeHtml(g.code)}</td>
-      <td>${escapeHtml(g.name)}</td>
-      <td>${escapeHtml(g.spec)}</td>
-      <td>${escapeHtml(g.unit)}</td>
-      <td>${roundUp3(g.sum)}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  wrap.appendChild(tableWrap);
-  $view.appendChild(wrap);
-}
-
-function renderSupportTotal(){
-  $view.innerHTML = "";
-  const {wrap} = panel("동바리_집계(Support_Total quantity)", "코드별 합계(동바리의 물량(Value) 합계)");
-
-  recalcAll();
-  const grouped = groupSum(state.support, r => num(r.value));
-
-  const tableWrap = document.createElement("div");
-  tableWrap.className="table-wrap";
-  tableWrap.innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th style="min-width:170px;">코드</th>
-          <th style="min-width:220px;">품명</th>
-          <th style="min-width:220px;">규격</th>
-          <th style="min-width:90px;">단위</th>
-          <th style="min-width:160px;">물량(Value)</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  `;
-  const tbody = tableWrap.querySelector("tbody");
-
-  grouped.forEach(g=>{
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${escapeHtml(g.code)}</td>
-      <td>${escapeHtml(g.name)}</td>
-      <td>${escapeHtml(g.spec)}</td>
-      <td>${escapeHtml(g.unit)}</td>
-      <td>${roundUp3(g.sum)}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  wrap.appendChild(tableWrap);
-  $view.appendChild(wrap);
-}
-
-/* ---------- Navigation ---------- */
-
-function go(id, opts={silentTabRender:false}){
-  activeTabId = id;
-  recalcAll();
-  saveState();
-  if(!opts.silentTabRender) renderTabs();
-
-  if(id==="codes") renderCodes();
-  else if(id==="steel") renderCalcSheet("철골(Steel)", state.steel, "steel", "steel");
-  else if(id==="steelSub") renderCalcSheet("철골_부자재(Processing and assembly)", state.steelSub, "steelSub", "steel");
-  else if(id==="support") renderCalcSheet("동바리(support)", state.support, "support", "support");
-  else if(id==="steelTotal") renderSteelTotal();
-  else if(id==="supportTotal") renderSupportTotal();
-}
-
-renderTabs();
-go(activeTabId);
-
-/* ---------- Focus tracking ---------- */
-function wireCodeCellFocusTracking(){
-  document.querySelectorAll('input[data-codecell="1"]').forEach(el=>{
-    el.addEventListener("focus", ()=>{
-      const tab = el.getAttribute("data-tab");
-      const row = Number(el.getAttribute("data-row"));
-      if(tab && Number.isFinite(row)){
-        lastFocus[tab] = row;
-      }
-    });
-  });
-}
-
-/* =========================================================
-   Code Picker Overlay (Ctrl+K / Ctrl+Enter)
-   ========================================================= */
-
-function openCodeOverlay(originTabId){
-  codePickerOriginTabId = originTabId;
-  overlaySelectedCode = null;
-  $selectedBadge.textContent = "선택: 없음";
-  $codeSearch.value = "";
-
-  renderCodeOverlayList();
-  $overlay.classList.remove("hidden");
-  $overlay.setAttribute("aria-hidden","false");
-
-  $overlayStatus.textContent = `대상 탭: ${tabsDef.find(t=>t.id===originTabId)?.label || originTabId}`;
-  setTimeout(()=> $codeSearch.focus(), 0);
-}
-
-function closeCodeOverlay(){
-  $overlay.classList.add("hidden");
-  $overlay.setAttribute("aria-hidden","true");
-}
-
-function renderCodeOverlayList(){
-  const q = ($codeSearch.value ?? "").toString().trim().toLowerCase();
-  const list = state.codes.filter(x=>{
-    if(!q) return true;
-    return (
-      (x.code ?? "").toString().toLowerCase().includes(q) ||
-      (x.name ?? "").toString().toLowerCase().includes(q) ||
-      (x.spec ?? "").toString().toLowerCase().includes(q)
-    );
-  });
-
-  $overlayBody.innerHTML = "";
-  list.forEach(item=>{
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${escapeHtml(item.code)}</td>
-      <td>${escapeHtml(item.name)}</td>
-      <td>${escapeHtml(item.spec)}</td>
-      <td>${escapeHtml(item.unit)}</td>
-      <td>${escapeHtml(item.surcharge)}</td>
-      <td>${escapeHtml(item.conv_unit)}</td>
-      <td>${escapeHtml(item.conv_factor)}</td>
-      <td>${escapeHtml(item.note)}</td>
-    `;
-
-    tr.addEventListener("dblclick", ()=>{
-      overlaySelectedCode = (item.code ?? "").toString().trim();
-      $overlayBody.querySelectorAll("tr").forEach(r=>r.classList.remove("pick-selected"));
-      tr.classList.add("pick-selected");
-      $selectedBadge.textContent = `선택: ${overlaySelectedCode}`;
-    });
-
-    $overlayBody.appendChild(tr);
-  });
-
-  $overlayStatus.textContent =
-    `대상 탭: ${tabsDef.find(t=>t.id===codePickerOriginTabId)?.label || codePickerOriginTabId} · 결과 ${list.length}건`;
-}
-
-function insertSelectedCodeToOrigin(){
-  if(!codePickerOriginTabId) return;
-  if(!overlaySelectedCode){
-    alert("먼저 코드 항목을 더블클릭으로 선택해 주세요.");
-    return;
-  }
-
-  const tab = codePickerOriginTabId;
-
-  let rows = null;
-  if(tab === "steel") rows = state.steel;
-  else if(tab === "steelSub") rows = state.steelSub;
-  else if(tab === "support") rows = state.support;
-  else{
-    alert("코드 추가는 철골/부자재/동바리 탭에서만 가능합니다.");
-    return;
-  }
-
-  const targetIndex = (lastFocus[tab] !== null && rows[lastFocus[tab]])
-    ? lastFocus[tab]
-    : null;
-
-  if(targetIndex !== null){
-    rows[targetIndex].code = overlaySelectedCode;
-  }else{
-    const newRow = makeEmptyCalcRow();
-    newRow.code = overlaySelectedCode;
-    rows.push(newRow);
-  }
-
-  recalcAll();
-  saveState();
-  closeCodeOverlay();
-  go(tab);
-}
-
-/* Overlay UI events */
-$btnCloseOverlay.addEventListener("click", closeCodeOverlay);
-$btnInsert.addEventListener("click", insertSelectedCodeToOrigin);
-$codeSearch.addEventListener("input", renderCodeOverlayList);
-
-$overlay.addEventListener("click", (e)=>{
-  if(e.target === $overlay) closeCodeOverlay();
-});
-
-document.addEventListener("keydown", (e)=>{
-  if(e.key === "Escape" && !$overlay.classList.contains("hidden")){
-    e.preventDefault();
-    closeCodeOverlay();
-  }
-});
-
-/* ---------- Global Hotkeys ---------- */
-
-function isEditableTarget(el){
-  if(!el) return false;
-  const tag = el.tagName?.toLowerCase();
-  return tag === "input" || tag === "textarea" || el.isContentEditable;
-}
-
-document.addEventListener("keydown", (e)=>{
-  // Ctrl+K: 코드 선택창 열기
-  if(e.ctrlKey && (e.key === "k" || e.key === "K")){
-    e.preventDefault();
-
-    let origin = activeTabId;
-    if(!["steel","steelSub","support"].includes(origin)){
-      origin = "steel";
-    }
-    openCodeOverlay(origin);
-    return;
-  }
-
-  // Ctrl+Enter: 오버레이가 열려 있을 때 삽입
-  if(e.ctrlKey && e.key === "Enter"){
-    if(!$overlay.classList.contains("hidden")){
-      e.preventDefault();
-      insertSelectedCodeToOrigin();
-    }
-    return;
-  }
-
-  // (선택) 오버레이가 열려 있고 검색칸에 포커스일 때 Enter로 “선택한 행 삽입”을 막기 위해 아무 것도 안함
-});
-
-/* ---------- Toolbar button ---------- */
-document.getElementById("btnOpenPicker").addEventListener("click", ()=>{
-  let origin = activeTabId;
-  if(!["steel","steelSub","support"].includes(origin)){
-    origin = "steel";
-  }
-  openCodeOverlay(origin);
-});
-
-/* ---------- Export / Import / Reset ---------- */
-
-document.getElementById("btnExport").addEventListener("click", ()=>{
-  recalcAll(); saveState();
-  const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `FIN_WEB_${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-});
-
-document.getElementById("fileImport").addEventListener("change", async (e)=>{
-  const f = e.target.files?.[0];
-  if(!f) return;
-  const txt = await f.text();
-  try{
-    const parsed = JSON.parse(txt);
-    state = parsed;
-    recalcAll();
-    saveState();
-    go("steel");
-  }catch{
-    alert("JSON 파싱 실패: 파일 내용을 확인해 주세요.");
-  }finally{
-    e.target.value = "";
-  }
-});
-
-document.getElementById("btnReset").addEventListener("click", ()=>{
-  if(!confirm("정말 초기화할까요? (로컬 저장 데이터가 삭제됩니다)")) return;
-  localStorage.removeItem(STORAGE_KEY);
-  state = makeState();
-  recalcAll();
-  saveState();
-  go("steel");
-});

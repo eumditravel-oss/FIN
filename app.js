@@ -201,8 +201,12 @@ function wireCells(){
       saveState();
       go(activeTabId, {silentTabRender:true});
     };
-    el.addEventListener("change", handler);
-    el.addEventListener("blur", handler);
+// 즉시 반영(타이핑할 때)
+el.addEventListener("input", handler);
+
+// 포커스 나갈 때도 반영(안전)
+el.addEventListener("blur", handler);
+
   });
   cellRegistry.length = 0;
 }

@@ -211,6 +211,50 @@ el.addEventListener("input", handler);
 el.addEventListener("blur", handler);
 el.addEventListener("change", handler);
 
+    function wireCells(){
+  document.querySelectorAll("[data-cell]").forEach(el=>{
+    const id = el.getAttribute("data-cell");
+    const meta = cellRegistry.find(x=>x.id===id);
+    if(!meta) return;
+
+    const handler = (evt)=>{
+      meta.onChange(el.value);
+      recalcAll();
+      saveState();
+
+      // input 중엔 전체 재렌더 금지
+      if(evt && evt.type === "input") return;
+
+      // blur/change/enter일 때만 재렌더
+      go(activeTabId, {silentTabRender:true});
+    };
+
+    el.addEventListener("input", handler);
+    el.addEventListener("blur", handler);
+    el.addEventListener("change", handler);
+
+    // ✅ Enter로 계산 트리거
+    el.addEventListener("keydown", (e)=>{
+      if(e.key !== "Enter") return;
+
+      // textarea(비고)는 Enter가 줄바꿈이니까 제외
+      if(el.tagName.toLowerCase() === "textarea") return;
+
+      // 산출식 칸에서만 엔터로 계산되게 (data-col="1")
+      const col = Number(el.getAttribute("data-col") || -1);
+      if(col !== 1) return;
+
+      e.preventDefault();
+      handler({type:"enter"});      // 계산 + 재렌더
+      // (원하면) 다음 줄 산출식으로 이동:
+      moveGridFrom(el, +1, 0);
+    });
+  });
+
+  cellRegistry.length = 0;
+}
+
+
 
   });
   cellRegistry.length = 0;
@@ -475,8 +519,10 @@ function renderCodes(){
   wrap.appendChild(tableWrap);
   $view.appendChild(wrap);
 
-  wireCells();
-  wireFocusTracking();
+wireCells();
+wireFocusTracking();
+wireArrowNavigation();
+
   
 
   // 렌더 후 마지막 포커스 위치 복원

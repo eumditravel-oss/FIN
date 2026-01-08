@@ -12,7 +12,7 @@
       <div class="title">FIN 산출자료 (Web)</div>
       <div class="sub">산출식 → 물량 자동계산 · 자동환산/할증 · 자동집계 · 로컬저장</div>
       <div class="hint">
-        단축키: <b>Ctrl+.</b> 코드 선택창 · 더블클릭 선택 · <b>Ctrl+Enter</b> 현재 탭에 추가 · <b>Esc</b> 닫기
+        코드 선택 새 창: <b>Ctrl+.</b> · (새 창에서) <b>Ctrl+B</b> 다중선택 · <b>Ctrl+Enter</b> 삽입
       </div>
     </div>
 
@@ -32,47 +32,6 @@
   <main class="content">
     <section id="view"></section>
   </main>
-
-  <!-- Code Picker Overlay -->
-  <div id="codeOverlay" class="overlay hidden" aria-hidden="true">
-    <div class="overlay-card">
-      <div class="overlay-head">
-        <div>
-          <div class="overlay-title">0.코드(Code) 선택</div>
-          <div class="overlay-sub">더블클릭으로 선택 → Ctrl+Enter로 현재 탭에 추가</div>
-        </div>
-        <button id="btnCloseOverlay" class="smallbtn">닫기(Esc)</button>
-      </div>
-
-      <div class="overlay-tools">
-        <input id="codeSearch" class="cell" placeholder="검색: 코드 / 품명 / 규격" />
-        <div class="overlay-status" id="overlayStatus"></div>
-      </div>
-
-      <div class="table-wrap" style="max-height:60vh; overflow:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th style="min-width:160px;">코드</th>
-              <th style="min-width:220px;">품명</th>
-              <th style="min-width:220px;">규격</th>
-              <th style="min-width:90px;">단위</th>
-              <th style="min-width:110px;">할증(%)</th>
-              <th style="min-width:120px;">환산단위</th>
-              <th style="min-width:140px;">환산계수</th>
-              <th style="min-width:220px;">비고</th>
-            </tr>
-          </thead>
-          <tbody id="codeOverlayBody"></tbody>
-        </table>
-      </div>
-
-      <div class="overlay-foot">
-        <div class="badge" id="selectedBadge">선택: 없음</div>
-        <button id="btnInsert" class="btn">추가 (Ctrl+Enter)</button>
-      </div>
-    </div>
-  </div>
 
   <footer class="footer">
     <div>※ 철골/부자재 집계: “할증후수량” 합계 · 동바리 집계: “물량(Value)” 합계</div>

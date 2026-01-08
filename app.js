@@ -1,5 +1,6 @@
-const STORAGE_KEY = "FIN_WEB_V7";
+const STORAGE_KEY = "FIN_WEB_V8";
 
+/* ===== Seed ===== */
 const SEED_CODES = [
   {"code":"A0SM355150","name":"RH형강 / SM355","spec":"150*150*7*10","unit":"M","surcharge":7,"conv_unit":"TON","conv_factor":0.0315,"note":""},
   {"code":"A0SM355200","name":"RH형강 / SM355","spec":"200*100*5.5*8","unit":"M","surcharge":7,"conv_unit":"TON","conv_factor":0.0213,"note":""},
@@ -18,6 +19,10 @@ function makeEmptyCalcRow(){
     convQty: 0, finalQty: 0
   };
 }
+function makeEmptyCodeRow(){
+  return {code:"", name:"", spec:"", unit:"", surcharge:"", conv_unit:"", conv_factor:"", note:""};
+}
+
 function makeState(){
   return {
     codes: SEED_CODES,
@@ -26,6 +31,7 @@ function makeState(){
     support: Array.from({length: 20}, makeEmptyCalcRow),
   };
 }
+
 function loadState(){
   const raw = localStorage.getItem(STORAGE_KEY);
   if(!raw) return makeState();
@@ -43,6 +49,7 @@ function loadState(){
 let state = loadState();
 function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
+/* ===== Utils ===== */
 function num(v){
   const x = (v ?? "").toString().trim();
   if(x === "") return 0;
@@ -100,7 +107,7 @@ function recalcAll(){
   state.support.forEach(recalcRow);
 }
 
-/* Tabs */
+/* ===== Tabs ===== */
 const tabsDef = [
   { id:"codes", label:'코드(Ctrl+".")' },
   { id:"steel", label:"철골(Steel)" },
@@ -111,13 +118,20 @@ const tabsDef = [
 ];
 
 let activeTabId = "steel";
-const lastFocus = { steel:null, steelSub:null, support:null };
 
-/* DOM */
+/* ✅ 현재 포커스 셀(탭/행/열) 기억 */
+const lastFocusCell = {
+  codes: { row: 0, col: 0 },
+  steel: { row: 0, col: 0 },
+  steelSub: { row: 0, col: 0 },
+  support: { row: 0, col: 0 },
+};
+
+/* ===== DOM ===== */
 const $tabs = document.getElementById("tabs");
 const $view = document.getElementById("view");
 
-/* Helpers */
+/* ===== HTML helpers ===== */
 function escapeHtml(s){
   return (s ?? "").toString().replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
 }
@@ -133,6 +147,7 @@ function renderTabs(){
     $tabs.appendChild(b);
   }
 }
+
 function panel(title, desc){
   const wrap = document.createElement("div");
   wrap.className = "panel";
@@ -145,25 +160,41 @@ function panel(title, desc){
   return {wrap, header:h};
 }
 
-/* Cells */
+/* ===== Cells registry ===== */
 const cellRegistry = [];
-function inputCell(value, onChange, placeholder="", extraAttrs=""){
+
+/**
+ * gridAttrs = {tabId, rowIdx, colIdx}
+ * extraAttrs string can be appended
+ */
+function gridAttrString(gridAttrs){
+  if(!gridAttrs) return "";
+  const {tabId, rowIdx, colIdx} = gridAttrs;
+  return `data-grid="1" data-tab="${tabId}" data-row="${rowIdx}" data-col="${colIdx}"`;
+}
+
+function inputCell(value, onChange, placeholder="", gridAttrs=null, extraAttrs=""){
   const id = crypto.randomUUID();
   cellRegistry.push({id, onChange});
-  return `<input class="cell" data-cell="${id}" value="${escapeAttr(value ?? "")}" placeholder="${escapeAttr(placeholder)}" ${extraAttrs}/>`;
+  const g = gridAttrString(gridAttrs);
+  return `<input class="cell" data-cell="${id}" ${g} value="${escapeAttr(value ?? "")}" placeholder="${escapeAttr(placeholder)}" ${extraAttrs}/>`;
 }
-function textAreaCell(value, onChange){
+function textAreaCell(value, onChange, gridAttrs=null){
   const id = crypto.randomUUID();
   cellRegistry.push({id, onChange});
-  return `<textarea class="cell" data-cell="${id}">${escapeHtml(value ?? "")}</textarea>`;
+  const g = gridAttrString(gridAttrs);
+  return `<textarea class="cell" data-cell="${id}" ${g}>${escapeHtml(value ?? "")}</textarea>`;
 }
-function readonlyCell(value){ return `<input class="cell readonly" value="${escapeAttr(value ?? "")}" readonly />`; }
+function readonlyCell(value){
+  return `<input class="cell readonly" value="${escapeAttr(value ?? "")}" readonly />`;
+}
 
 function wireCells(){
   document.querySelectorAll("[data-cell]").forEach(el=>{
     const id = el.getAttribute("data-cell");
     const meta = cellRegistry.find(x=>x.id===id);
     if(!meta) return;
+
     const handler = ()=>{
       meta.onChange(el.value);
       recalcAll();
@@ -175,22 +206,139 @@ function wireCells(){
   });
   cellRegistry.length = 0;
 }
-function wireCodeCellFocusTracking(){
-  document.querySelectorAll('input[data-codecell="1"]').forEach(el=>{
+
+/* ===== Focus tracking for Ctrl+F3 insertion ===== */
+function wireFocusTracking(){
+  document.querySelectorAll('[data-grid="1"]').forEach(el=>{
     el.addEventListener("focus", ()=>{
       const tab = el.getAttribute("data-tab");
-      const row = Number(el.getAttribute("data-row"));
-      if(tab && Number.isFinite(row)) lastFocus[tab] = row;
+      const row = Number(el.getAttribute("data-row") || 0);
+      const col = Number(el.getAttribute("data-col") || 0);
+      if(tab && lastFocusCell[tab]){
+        lastFocusCell[tab] = { row, col };
+      }
     });
   });
 }
 
-/* =========================
-   ✅ Code Tab (with Excel Upload)
-========================= */
+/* ===== Excel-like arrow key navigation ===== */
+function getCaretPos(input){
+  try { return input.selectionStart ?? 0; } catch { return 0; }
+}
+function getCaretEnd(input){
+  try { return input.selectionEnd ?? 0; } catch { return 0; }
+}
+function focusGrid(tab, row, col){
+  const selector = `[data-grid="1"][data-tab="${tab}"][data-row="${row}"][data-col="${col}"]`;
+  const el = document.querySelector(selector);
+  if(el){
+    el.focus();
+    if(el.scrollIntoView) el.scrollIntoView({block:"nearest", inline:"nearest"});
+    return true;
+  }
+  return false;
+}
+
+function moveGridFrom(el, dRow, dCol){
+  const tab = el.getAttribute("data-tab");
+  const row = Number(el.getAttribute("data-row") || 0);
+  const col = Number(el.getAttribute("data-col") || 0);
+
+  const targetRow = row + dRow;
+  const targetCol = col + dCol;
+
+  // 우선 같은 col 시도, 없으면 가까운 col을 탐색
+  if(focusGrid(tab, targetRow, targetCol)) return true;
+
+  // col이 유동(열 수 다를 때)일 수 있으니 좌우로 탐색
+  for(let offset=1; offset<=6; offset++){
+    if(focusGrid(tab, targetRow, targetCol - offset)) return true;
+    if(focusGrid(tab, targetRow, targetCol + offset)) return true;
+  }
+  return false;
+}
+
+function wireArrowNavigation(){
+  document.querySelectorAll('[data-grid="1"]').forEach(el=>{
+    el.addEventListener("keydown", (e)=>{
+      // textarea는 기본 화살표(커서 이동)를 우선 보장
+      const isTextarea = el.tagName.toLowerCase() === "textarea";
+
+      if(e.key === "ArrowUp"){
+        if(isTextarea) return; // textarea는 위/아래가 라인 이동이라 방해하지 않음
+        e.preventDefault();
+        moveGridFrom(el, -1, 0);
+      }
+
+      if(e.key === "ArrowDown"){
+        if(isTextarea) return;
+        e.preventDefault();
+        moveGridFrom(el, +1, 0);
+      }
+
+      if(e.key === "ArrowLeft"){
+        if(isTextarea) return;
+        // 입력 중 커서가 왼쪽 끝일 때만 셀 이동
+        const caret = getCaretPos(el);
+        const end = getCaretEnd(el);
+        if(caret !== end) return; // 선택중이면 방해 X
+        if(caret > 0) return;     // 커서가 안쪽이면 글자 이동 유지
+        e.preventDefault();
+        moveGridFrom(el, 0, -1);
+      }
+
+      if(e.key === "ArrowRight"){
+        if(isTextarea) return;
+        const caret = getCaretPos(el);
+        const end = getCaretEnd(el);
+        if(caret !== end) return;
+        const len = (el.value ?? "").length;
+        if(caret < len) return;
+        e.preventDefault();
+        moveGridFrom(el, 0, +1);
+      }
+    });
+  });
+}
+
+/* ===== Row insert below focused row (Ctrl+F3) ===== */
+function getRowsByTab(tab){
+  if(tab==="steel") return state.steel;
+  if(tab==="steelSub") return state.steelSub;
+  if(tab==="support") return state.support;
+  return null;
+}
+
+function insertRowBelowActive(){
+  // totals 탭에서는 무시
+  if(!["codes","steel","steelSub","support"].includes(activeTabId)) return;
+
+  const {row, col} = lastFocusCell[activeTabId] ?? {row:0, col:0};
+
+  if(activeTabId === "codes"){
+    const insertAt = Math.min(row + 1, state.codes.length);
+    state.codes.splice(insertAt, 0, makeEmptyCodeRow());
+    saveState();
+    go("codes");
+    // 삽입된 행 같은 열로 포커스 이동
+    setTimeout(()=>focusGrid("codes", insertAt, col), 0);
+    return;
+  }
+
+  const rows = getRowsByTab(activeTabId);
+  if(!rows) return;
+
+  const insertAt = Math.min(row + 1, rows.length);
+  rows.splice(insertAt, 0, makeEmptyCalcRow());
+  saveState();
+  go(activeTabId);
+  setTimeout(()=>focusGrid(activeTabId, insertAt, col), 0);
+}
+
+/* ===== Views ===== */
 function renderCodes(){
   $view.innerHTML = "";
-  const {wrap, header} = panel('코드(Ctrl+".")', "코드 마스터(수정/추가 가능). 엑셀 업로드(.xlsx)로 한 번에 등록 가능.");
+  const {wrap, header} = panel('코드(Ctrl+".")', "코드 마스터(수정/추가). 엑셀 업로드(.xlsx)로 한 번에 등록 가능. (행 추가: Ctrl+F3)");
 
   const right = document.createElement("div");
   right.style.display="flex"; right.style.gap="8px"; right.style.flexWrap="wrap";
@@ -199,26 +347,24 @@ function renderCodes(){
   addBtn.className="smallbtn";
   addBtn.textContent="행 추가 (Ctrl+F3)";
   addBtn.onclick = ()=>{
-    state.codes.push({code:"",name:"",spec:"",unit:"",surcharge:"",conv_unit:"",conv_factor:"",note:""});
-    saveState(); go("codes");
+    // 현재 포커스 row 아래 삽입과 동일 동작으로 맞춤
+    insertRowBelowActive();
   };
 
-  // ✅ Excel upload
-  const label = document.createElement("label");
-  label.className="smallbtn";
-  label.style.cursor="pointer";
-  label.textContent="엑셀 업로드(.xlsx)";
-  const input = document.createElement("input");
-  input.type="file";
-  input.accept=".xlsx,.xls";
-  input.hidden = true;
-  label.appendChild(input);
+  // Excel upload
+  const uploadLabel = document.createElement("label");
+  uploadLabel.className="smallbtn";
+  uploadLabel.textContent="엑셀 업로드(.xlsx)";
+  const uploadInput = document.createElement("input");
+  uploadInput.type="file";
+  uploadInput.accept=".xlsx,.xls";
+  uploadInput.hidden = true;
+  uploadLabel.appendChild(uploadInput);
 
-  input.addEventListener("change", async (e)=>{
+  uploadInput.addEventListener("change", async (e)=>{
     const file = e.target.files?.[0];
     if(!file) return;
 
-    // SheetJS must exist
     if(!window.XLSX){
       alert("엑셀 업로드 라이브러리(XLSX)가 로드되지 않았습니다.\nindex.html에 SheetJS 스크립트를 추가해 주세요.");
       e.target.value = "";
@@ -229,9 +375,8 @@ function renderCodes(){
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, {type:"array"});
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, {defval:""}); // header from first row
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:""});
 
-      // header mapping (KR/EN)
       const mapRow = (r) => ({
         code: (r["코드"] ?? r["code"] ?? "").toString().trim(),
         name: (r["품명"] ?? r["name"] ?? "").toString().trim(),
@@ -255,7 +400,6 @@ function renderCodes(){
         return;
       }
 
-      // 덮어쓰기
       state.codes = mapped;
       saveState();
       go("codes");
@@ -268,7 +412,7 @@ function renderCodes(){
   });
 
   right.appendChild(addBtn);
-  right.appendChild(label);
+  right.appendChild(uploadLabel);
   header.appendChild(right);
 
   const tableWrap = document.createElement("div");
@@ -293,17 +437,19 @@ function renderCodes(){
   `;
   const tbody = tableWrap.querySelector("tbody");
 
+  // col index definition (codes tab)
+  // 0 code,1 name,2 spec,3 unit,4 surcharge,5 conv_unit,6 conv_factor,7 note
   state.codes.forEach((r, idx)=>{
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${inputCell(r.code, v=>{ r.code=v; })}</td>
-      <td>${inputCell(r.name, v=>{ r.name=v; })}</td>
-      <td>${inputCell(r.spec, v=>{ r.spec=v; })}</td>
-      <td>${inputCell(r.unit, v=>{ r.unit=v; })}</td>
-      <td>${inputCell(r.surcharge, v=>{ r.surcharge=v; }, "예: 7")}</td>
-      <td>${inputCell(r.conv_unit, v=>{ r.conv_unit=v; })}</td>
-      <td>${inputCell(r.conv_factor, v=>{ r.conv_factor=v; })}</td>
-      <td>${textAreaCell(r.note, v=>{ r.note=v; })}</td>
+      <td>${inputCell(r.code, v=>{ r.code=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:0})}</td>
+      <td>${inputCell(r.name, v=>{ r.name=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:1})}</td>
+      <td>${inputCell(r.spec, v=>{ r.spec=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:2})}</td>
+      <td>${inputCell(r.unit, v=>{ r.unit=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:3})}</td>
+      <td>${inputCell(r.surcharge, v=>{ r.surcharge=v; }, "예: 7", {tabId:"codes", rowIdx:idx, colIdx:4})}</td>
+      <td>${inputCell(r.conv_unit, v=>{ r.conv_unit=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:5})}</td>
+      <td>${inputCell(r.conv_factor, v=>{ r.conv_factor=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:6})}</td>
+      <td>${textAreaCell(r.note, v=>{ r.note=v; }, {tabId:"codes", rowIdx:idx, colIdx:7})}</td>
       <td></td>
     `;
     const tdAct = tr.lastElementChild;
@@ -319,15 +465,19 @@ function renderCodes(){
 
   wrap.appendChild(tableWrap);
   $view.appendChild(wrap);
+
   wireCells();
+  wireFocusTracking();
+  wireArrowNavigation();
+
+  // 렌더 후 마지막 포커스 위치 복원
+  const {row, col} = lastFocusCell.codes;
+  setTimeout(()=>focusGrid("codes", row, col), 0);
 }
 
-/* =========================
-   Sheets
-========================= */
 function renderCalcSheet(title, rows, tabId, mode){
   $view.innerHTML = "";
-  const desc = '산출식 입력 → 물량 자동 계산. (코드 선택 새 창: Ctrl+.)';
+  const desc = '산출식 입력 → 물량(Value) 자동 계산. 코드 선택 새 창: Ctrl+.  | 행 추가: Ctrl+F3';
   const {wrap, header} = panel(title, desc);
 
   const right = document.createElement("div");
@@ -336,7 +486,7 @@ function renderCalcSheet(title, rows, tabId, mode){
   const addBtn = document.createElement("button");
   addBtn.className="smallbtn";
   addBtn.textContent="행 추가 (Ctrl+F3)";
-  addBtn.onclick=()=>{ rows.push(makeEmptyCalcRow()); saveState(); go(tabId); };
+  addBtn.onclick=()=>insertRowBelowActive();
 
   const add10Btn = document.createElement("button");
   add10Btn.className="smallbtn";
@@ -374,23 +524,24 @@ function renderCalcSheet(title, rows, tabId, mode){
   `;
   const tbody = tableWrap.querySelector("tbody");
 
+  // col index definition (calc tabs)
+  // 0 code, 1 formulaExpr, 2 note, 3 convFactor
   rows.forEach((r, idx)=>{
     recalcRow(r);
-    const codeAttrs = `data-codecell="1" data-tab="${tabId}" data-row="${idx}"`;
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${idx+1}</td>
-      <td>${inputCell(r.code, v=>{ r.code=v; }, "코드 입력", codeAttrs)}</td>
+      <td>${inputCell(r.code, v=>{ r.code=v; }, "코드 입력", {tabId, rowIdx:idx, colIdx:0})}</td>
       <td>${readonlyCell(r.name)}</td>
       <td>${readonlyCell(r.spec)}</td>
       <td>${readonlyCell(r.unit)}</td>
-      <td>${inputCell(r.formulaExpr, v=>{ r.formulaExpr=v; }, "예: (0.5+0.3)/2")}</td>
+      <td>${inputCell(r.formulaExpr, v=>{ r.formulaExpr=v; }, "예: (0.5+0.3)/2", {tabId, rowIdx:idx, colIdx:1})}</td>
       <td>${readonlyCell(String(roundUp3(r.value)))}</td>
-      <td>${textAreaCell(r.note, v=>{ r.note=v; })}</td>
+      <td>${textAreaCell(r.note, v=>{ r.note=v; }, {tabId, rowIdx:idx, colIdx:2})}</td>
       <td>${readonlyCell(r.surchargeMul === "" ? "" : String(r.surchargeMul))}</td>
       <td>${readonlyCell(r.convUnit)}</td>
-      <td>${inputCell(r.convFactor, v=>{ r.convFactor=v; }, "비워도 됨")}</td>
+      <td>${inputCell(r.convFactor, v=>{ r.convFactor=v; }, "비워도 됨", {tabId, rowIdx:idx, colIdx:3})}</td>
       <td>${readonlyCell(String(roundUp3(r.convQty)))}</td>
       <td>${readonlyCell(String(roundUp3(r.finalQty)))}</td>
       <td></td>
@@ -411,6 +562,7 @@ function renderCalcSheet(title, rows, tabId, mode){
     act.appendChild(dup);
     act.appendChild(del);
     tdAct.appendChild(act);
+
     tbody.appendChild(tr);
   });
 
@@ -427,7 +579,11 @@ function renderCalcSheet(title, rows, tabId, mode){
   $view.appendChild(wrap);
 
   wireCells();
-  wireCodeCellFocusTracking();
+  wireFocusTracking();
+  wireArrowNavigation();
+
+  const last = lastFocusCell[tabId] ?? {row:0,col:0};
+  setTimeout(()=>focusGrid(tabId, last.row, last.col), 0);
 }
 
 function groupSum(rows, valueSelector){
@@ -526,15 +682,13 @@ function go(id, opts={silentTabRender:false}){
 renderTabs();
 go(activeTabId);
 
-/* =========================
-   Code Picker window (Ctrl+.)
-========================= */
+/* ===== Code Picker window (Ctrl+.) ===== */
 let pickerWin = null;
 
 function openPickerWindow(){
   let origin = activeTabId;
   if(!["steel","steelSub","support"].includes(origin)) origin = "steel";
-  const focusRow = (lastFocus[origin] ?? 0) ?? 0;
+  const focusRow = (lastFocusCell[origin]?.row ?? 0);
 
   const w = 1100, h = 720;
   const x = Math.max(0, (window.screenX || 0) + (window.outerWidth - w) / 2);
@@ -564,13 +718,6 @@ function openPickerWindow(){
   setTimeout(sendInit, 600);
 }
 
-function getRowsByTab(tab){
-  if(tab==="steel") return state.steel;
-  if(tab==="steelSub") return state.steelSub;
-  if(tab==="support") return state.support;
-  return null;
-}
-
 function insertCodesBelow(tab, focusRow, codeList){
   const rows = getRowsByTab(tab);
   if(!rows) return;
@@ -588,6 +735,8 @@ function insertCodesBelow(tab, focusRow, codeList){
   recalcAll();
   saveState();
   go(tab);
+  // 삽입 후 코드칸(col=0) 첫 줄 포커스
+  setTimeout(()=>focusGrid(tab, insertAt, 0), 0);
 }
 
 window.addEventListener("message", (event)=>{
@@ -608,7 +757,7 @@ window.addEventListener("message", (event)=>{
   }
 });
 
-/* Hotkeys */
+/* ===== Hotkeys ===== */
 document.addEventListener("keydown", (e)=>{
   // Ctrl+. : open picker
   if(e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "." || e.code === "Period")){
@@ -616,44 +765,16 @@ document.addEventListener("keydown", (e)=>{
     openPickerWindow();
   }
 
-  // ✅ Ctrl+F3 : add row in current tab
+  // Ctrl+F3 : insert row below focused row (all editable tabs)
   if(e.ctrlKey && !e.altKey && !e.metaKey && e.code === "F3"){
     e.preventDefault();
-    addRowByActiveTab();
+    insertRowBelowActive();
   }
 }, true);
 
-function addRowByActiveTab(){
-  if(activeTabId === "codes"){
-    state.codes.push({code:"",name:"",spec:"",unit:"",surcharge:"",conv_unit:"",conv_factor:"",note:""});
-    saveState();
-    go("codes");
-    return;
-  }
-  if(activeTabId === "steel"){
-    state.steel.push(makeEmptyCalcRow());
-    saveState();
-    go("steel");
-    return;
-  }
-  if(activeTabId === "steelSub"){
-    state.steelSub.push(makeEmptyCalcRow());
-    saveState();
-    go("steelSub");
-    return;
-  }
-  if(activeTabId === "support"){
-    state.support.push(makeEmptyCalcRow());
-    saveState();
-    go("support");
-    return;
-  }
-  // total tabs: ignore
-}
-
 document.getElementById("btnOpenPicker").addEventListener("click", openPickerWindow);
 
-/* Export/Import/Reset */
+/* ===== Export/Import/Reset ===== */
 document.getElementById("btnExport").addEventListener("click", ()=>{
   recalcAll(); saveState();
   const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});

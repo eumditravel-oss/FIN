@@ -94,9 +94,11 @@ function recalcRow(row){
     if((row.convFactor ?? "").toString().trim() === "") row.convFactor = (m.conv_factor ?? "");
   }
   row.value = evalExpr(row.formulaExpr);
+
   const E = num(row.value);
   const K = num(row.convFactor);
   const I = num(row.surchargeMul);
+
   row.convQty = (K === 0 ? E : E*K);
   row.finalQty = (I === 0 ? row.convQty : row.convQty * I);
 }
@@ -133,7 +135,11 @@ const $view = document.getElementById("view");
 
 /* ===== HTML helpers ===== */
 function escapeHtml(s){
-  return (s ?? "").toString().replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+  return (s ?? "").toString()
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;");
 }
 function escapeAttr(s){ return escapeHtml(s).replaceAll("\n","&#10;"); }
 
@@ -165,7 +171,6 @@ const cellRegistry = [];
 
 /**
  * gridAttrs = {tabId, rowIdx, colIdx}
- * extraAttrs string can be appended
  */
 function gridAttrString(gridAttrs){
   if(!gridAttrs) return "";
@@ -189,29 +194,8 @@ function readonlyCell(value){
   return `<input class="cell readonly" value="${escapeAttr(value ?? "")}" readonly />`;
 }
 
+/* ✅ 핵심: 이벤트 바인딩(Enter 계산 포함) */
 function wireCells(){
-  document.querySelectorAll("[data-cell]").forEach(el=>{
-    const id = el.getAttribute("data-cell");
-    const meta = cellRegistry.find(x=>x.id===id);
-    if(!meta) return;
-
-const handler = (evt)=>{
-  meta.onChange(el.value);
-  recalcAll();
-  saveState();
-
-  // input 중엔 전체 재렌더 금지(커서 튐 방지)
-  if(evt && evt.type === "input") return;
-
-  // blur/change일 때만 재렌더
-  go(activeTabId, {silentTabRender:true});
-};
-
-el.addEventListener("input", handler);
-el.addEventListener("blur", handler);
-el.addEventListener("change", handler);
-
-    function wireCells(){
   document.querySelectorAll("[data-cell]").forEach(el=>{
     const id = el.getAttribute("data-cell");
     const meta = cellRegistry.find(x=>x.id===id);
@@ -222,41 +206,31 @@ el.addEventListener("change", handler);
       recalcAll();
       saveState();
 
-      // input 중엔 전체 재렌더 금지
+      // input 중엔 전체 재렌더 금지(커서 튐 방지)
       if(evt && evt.type === "input") return;
 
       // blur/change/enter일 때만 재렌더
-      go(activeTabId, {silentTabRender:true});
+      go(activeTabId, { silentTabRender:true });
     };
 
     el.addEventListener("input", handler);
     el.addEventListener("blur", handler);
     el.addEventListener("change", handler);
 
-    // ✅ Enter로 계산 트리거
+    // ✅ 산출식(col=1) Enter = 계산 + 아래행 이동
     el.addEventListener("keydown", (e)=>{
       if(e.key !== "Enter") return;
+      if(el.tagName.toLowerCase() === "textarea") return; // 비고는 줄바꿈 유지
 
-      // textarea(비고)는 Enter가 줄바꿈이니까 제외
-      if(el.tagName.toLowerCase() === "textarea") return;
-
-      // 산출식 칸에서만 엔터로 계산되게 (data-col="1")
       const col = Number(el.getAttribute("data-col") || -1);
       if(col !== 1) return;
 
       e.preventDefault();
-      handler({type:"enter"});      // 계산 + 재렌더
-      // (원하면) 다음 줄 산출식으로 이동:
+      handler({ type:"enter" });
       moveGridFrom(el, +1, 0);
     });
   });
 
-  cellRegistry.length = 0;
-}
-
-
-
-  });
   cellRegistry.length = 0;
 }
 
@@ -274,13 +248,7 @@ function wireFocusTracking(){
   });
 }
 
-/* ===== Excel-like arrow key navigation ===== */
-function getCaretPos(input){
-  try { return input.selectionStart ?? 0; } catch { return 0; }
-}
-function getCaretEnd(input){
-  try { return input.selectionEnd ?? 0; } catch { return 0; }
-}
+/* ===== Excel-like navigation helpers ===== */
 function focusGrid(tab, row, col){
   const selector = `[data-grid="1"][data-tab="${tab}"][data-row="${row}"][data-col="${col}"]`;
   const el = document.querySelector(selector);
@@ -300,58 +268,14 @@ function moveGridFrom(el, dRow, dCol){
   const targetRow = row + dRow;
   const targetCol = col + dCol;
 
-  // 우선 같은 col 시도, 없으면 가까운 col을 탐색
   if(focusGrid(tab, targetRow, targetCol)) return true;
 
-  // col이 유동(열 수 다를 때)일 수 있으니 좌우로 탐색
+  // col 유동 대비 좌우 탐색
   for(let offset=1; offset<=6; offset++){
     if(focusGrid(tab, targetRow, targetCol - offset)) return true;
     if(focusGrid(tab, targetRow, targetCol + offset)) return true;
   }
   return false;
-}
-
-function wireArrowNavigation(){
-  document.querySelectorAll('[data-grid="1"]').forEach(el=>{
-    el.addEventListener("keydown", (e)=>{
-      // textarea는 기본 화살표(커서 이동)를 우선 보장
-      const isTextarea = el.tagName.toLowerCase() === "textarea";
-
-      if(e.key === "ArrowUp"){
-        if(isTextarea) return; // textarea는 위/아래가 라인 이동이라 방해하지 않음
-        e.preventDefault();
-        moveGridFrom(el, -1, 0);
-      }
-
-      if(e.key === "ArrowDown"){
-        if(isTextarea) return;
-        e.preventDefault();
-        moveGridFrom(el, +1, 0);
-      }
-
-      if(e.key === "ArrowLeft"){
-        if(isTextarea) return;
-        // 입력 중 커서가 왼쪽 끝일 때만 셀 이동
-        const caret = getCaretPos(el);
-        const end = getCaretEnd(el);
-        if(caret !== end) return; // 선택중이면 방해 X
-        if(caret > 0) return;     // 커서가 안쪽이면 글자 이동 유지
-        e.preventDefault();
-        moveGridFrom(el, 0, -1);
-      }
-
-      if(e.key === "ArrowRight"){
-        if(isTextarea) return;
-        const caret = getCaretPos(el);
-        const end = getCaretEnd(el);
-        if(caret !== end) return;
-        const len = (el.value ?? "").length;
-        if(caret < len) return;
-        e.preventDefault();
-        moveGridFrom(el, 0, +1);
-      }
-    });
-  });
 }
 
 /* ===== Row insert below focused row (Ctrl+F3) ===== */
@@ -363,7 +287,6 @@ function getRowsByTab(tab){
 }
 
 function insertRowBelowActive(){
-  // totals 탭에서는 무시
   if(!["codes","steel","steelSub","support"].includes(activeTabId)) return;
 
   const {row, col} = lastFocusCell[activeTabId] ?? {row:0, col:0};
@@ -373,7 +296,6 @@ function insertRowBelowActive(){
     state.codes.splice(insertAt, 0, makeEmptyCodeRow());
     saveState();
     go("codes");
-    // 삽입된 행 같은 열로 포커스 이동
     setTimeout(()=>focusGrid("codes", insertAt, col), 0);
     return;
   }
@@ -399,10 +321,7 @@ function renderCodes(){
   const addBtn = document.createElement("button");
   addBtn.className="smallbtn";
   addBtn.textContent="행 추가 (Ctrl+F3)";
-  addBtn.onclick = ()=>{
-    // 현재 포커스 row 아래 삽입과 동일 동작으로 맞춤
-    insertRowBelowActive();
-  };
+  addBtn.onclick = ()=> insertRowBelowActive();
 
   // Excel upload
   const uploadLabel = document.createElement("label");
@@ -490,8 +409,6 @@ function renderCodes(){
   `;
   const tbody = tableWrap.querySelector("tbody");
 
-  // col index definition (codes tab)
-  // 0 code,1 name,2 spec,3 unit,4 surcharge,5 conv_unit,6 conv_factor,7 note
   state.codes.forEach((r, idx)=>{
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -519,20 +436,16 @@ function renderCodes(){
   wrap.appendChild(tableWrap);
   $view.appendChild(wrap);
 
-wireCells();
-wireFocusTracking();
-wireArrowNavigation();
+  wireCells();
+  wireFocusTracking();
 
-  
-
-  // 렌더 후 마지막 포커스 위치 복원
   const {row, col} = lastFocusCell.codes;
   setTimeout(()=>focusGrid("codes", row, col), 0);
 }
 
 function renderCalcSheet(title, rows, tabId, mode){
   $view.innerHTML = "";
-  const desc = '산출식 입력 → 물량(Value) 자동 계산. 코드 선택 새 창: Ctrl+.  | 행 추가: Ctrl+F3';
+  const desc = '산출식 입력 → 물량(Value) 자동 계산(Enter). 코드 선택 새 창: Ctrl+.  | 행 추가: Ctrl+F3';
   const {wrap, header} = panel(title, desc);
 
   const right = document.createElement("div");
@@ -579,8 +492,6 @@ function renderCalcSheet(title, rows, tabId, mode){
   `;
   const tbody = tableWrap.querySelector("tbody");
 
-  // col index definition (calc tabs)
-  // 0 code, 1 formulaExpr, 2 note, 3 convFactor
   rows.forEach((r, idx)=>{
     recalcRow(r);
 
@@ -606,13 +517,13 @@ function renderCalcSheet(title, rows, tabId, mode){
     const act = document.createElement("div");
     act.className="row-actions";
 
-    const del = document.createElement("button");
-    del.className="smallbtn"; del.textContent="삭제";
-    del.onclick=()=>{ rows.splice(idx,1); saveState(); go(tabId); };
-
     const dup = document.createElement("button");
     dup.className="smallbtn"; dup.textContent="복제";
     dup.onclick=()=>{ rows.splice(idx+1,0, JSON.parse(JSON.stringify(r))); saveState(); go(tabId); };
+
+    const del = document.createElement("button");
+    del.className="smallbtn"; del.textContent="삭제";
+    del.onclick=()=>{ rows.splice(idx,1); saveState(); go(tabId); };
 
     act.appendChild(dup);
     act.appendChild(del);
@@ -633,7 +544,9 @@ function renderCalcSheet(title, rows, tabId, mode){
 
   $view.appendChild(wrap);
 
-
+  // ✅ calc sheet에서도 반드시 wiring
+  wireCells();
+  wireFocusTracking();
 
   const last = lastFocusCell[tabId] ?? {row:0,col:0};
   setTimeout(()=>focusGrid(tabId, last.row, last.col), 0);
@@ -788,7 +701,6 @@ function insertCodesBelow(tab, focusRow, codeList){
   recalcAll();
   saveState();
   go(tab);
-  // 삽입 후 코드칸(col=0) 첫 줄 포커스
   setTimeout(()=>focusGrid(tab, insertAt, 0), 0);
 }
 
@@ -816,60 +728,60 @@ document.addEventListener("keydown", (e)=>{
   if(e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "." || e.code === "Period")){
     e.preventDefault();
     openPickerWindow();
-  }
-
-  function deleteRowAtActiveFocus(){
-  if(!["codes","steel","steelSub","support"].includes(activeTabId)) return;
-
-  const { row } = lastFocusCell[activeTabId] ?? { row: 0 };
-  const r = Math.max(0, Number(row) || 0);
-
-  const ok = confirm("선택된 행을 정말 삭제할까요?");
-  if(!ok) return;
-
-  if(activeTabId === "codes"){
-    if(state.codes.length === 0) return;
-    if(r >= state.codes.length) return;
-    state.codes.splice(r, 1);
-    saveState();
-    go("codes");
-    // 삭제 후 같은 row로 포커스 복원(가능한 범위로)
-    const newRow = Math.min(r, state.codes.length - 1);
-    if(newRow >= 0) setTimeout(()=>focusGrid("codes", newRow, 0), 0);
     return;
   }
 
-  const rows = getRowsByTab(activeTabId);
-  if(!rows || rows.length === 0) return;
-  if(r >= rows.length) return;
+  function deleteRowAtActiveFocus(){
+    if(!["codes","steel","steelSub","support"].includes(activeTabId)) return;
 
-  rows.splice(r, 1);
-  saveState();
-  go(activeTabId);
+    const { row } = lastFocusCell[activeTabId] ?? { row: 0 };
+    const r = Math.max(0, Number(row) || 0);
 
-  const newRow = Math.min(r, rows.length - 1);
-  if(newRow >= 0) setTimeout(()=>focusGrid(activeTabId, newRow, 0), 0);
-}
-// Ctrl + Delete : delete current row (with confirm)
-if(e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "Delete" || e.code === "Delete")){
-  e.preventDefault();
-  deleteRowAtActiveFocus();
-  return;
-}
+    const ok = confirm("선택된 행을 정말 삭제할까요?");
+    if(!ok) return;
 
+    if(activeTabId === "codes"){
+      if(state.codes.length === 0) return;
+      if(r >= state.codes.length) return;
+      state.codes.splice(r, 1);
+      saveState();
+      go("codes");
+      const newRow = Math.min(r, state.codes.length - 1);
+      if(newRow >= 0) setTimeout(()=>focusGrid("codes", newRow, 0), 0);
+      return;
+    }
 
+    const rows = getRowsByTab(activeTabId);
+    if(!rows || rows.length === 0) return;
+    if(r >= rows.length) return;
 
-  // Ctrl+F3 : insert row below focused row (all editable tabs)
+    rows.splice(r, 1);
+    saveState();
+    go(activeTabId);
+
+    const newRow = Math.min(r, rows.length - 1);
+    if(newRow >= 0) setTimeout(()=>focusGrid(activeTabId, newRow, 0), 0);
+  }
+
+  // Ctrl + Delete : delete current row (with confirm)
+  if(e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "Delete" || e.code === "Delete")){
+    e.preventDefault();
+    deleteRowAtActiveFocus();
+    return;
+  }
+
+  // Ctrl+F3 : insert row below focused row
   if(e.ctrlKey && !e.altKey && !e.metaKey && e.code === "F3"){
     e.preventDefault();
     insertRowBelowActive();
+    return;
   }
 }, false);
 
-document.getElementById("btnOpenPicker").addEventListener("click", openPickerWindow);
+document.getElementById("btnOpenPicker")?.addEventListener("click", openPickerWindow);
 
 /* ===== Export/Import/Reset ===== */
-document.getElementById("btnExport").addEventListener("click", ()=>{
+document.getElementById("btnExport")?.addEventListener("click", ()=>{
   recalcAll(); saveState();
   const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
@@ -880,7 +792,7 @@ document.getElementById("btnExport").addEventListener("click", ()=>{
   URL.revokeObjectURL(url);
 });
 
-document.getElementById("fileImport").addEventListener("change", async (e)=>{
+document.getElementById("fileImport")?.addEventListener("change", async (e)=>{
   const f = e.target.files?.[0];
   if(!f) return;
   const txt = await f.text();
@@ -897,10 +809,7 @@ document.getElementById("fileImport").addEventListener("change", async (e)=>{
   }
 });
 
-/* ===== Excel-like arrow key navigation (GLOBAL) =====
-   - Only works when the focused element has data-grid="1"
-   - Prevents the "focus stuck" problem caused by per-cell handlers
-*/
+/* ===== GLOBAL Arrow navigation (textarea 지원) ===== */
 function isGridEl(el){
   return el && el.getAttribute && el.getAttribute("data-grid") === "1";
 }
@@ -911,7 +820,6 @@ function caretInfo(el){
     return { start: 0, end: 0, len: 0 };
   }
 }
-
 function textareaAtTop(el){
   const v = el.value ?? "";
   const pos = el.selectionStart ?? 0;
@@ -965,9 +873,7 @@ document.addEventListener("keydown", (e)=>{
   }
 }, false);
 
-
-
-document.getElementById("btnReset").addEventListener("click", ()=>{
+document.getElementById("btnReset")?.addEventListener("click", ()=>{
   if(!confirm("정말 초기화할까요? (로컬 저장 데이터가 삭제됩니다)")) return;
   localStorage.removeItem(STORAGE_KEY);
   state = makeState();

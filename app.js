@@ -1,4 +1,4 @@
-const STORAGE_KEY = "FIN_WEB_V6";
+const STORAGE_KEY = "FIN_WEB_V7";
 
 const SEED_CODES = [
   {"code":"A0SM355150","name":"RH형강 / SM355","spec":"150*150*7*10","unit":"M","surcharge":7,"conv_unit":"TON","conv_factor":0.0315,"note":""},
@@ -18,7 +18,6 @@ function makeEmptyCalcRow(){
     convQty: 0, finalQty: 0
   };
 }
-
 function makeState(){
   return {
     codes: SEED_CODES,
@@ -27,7 +26,6 @@ function makeState(){
     support: Array.from({length: 20}, makeEmptyCalcRow),
   };
 }
-
 function loadState(){
   const raw = localStorage.getItem(STORAGE_KEY);
   if(!raw) return makeState();
@@ -42,7 +40,6 @@ function loadState(){
     return makeState();
   }
 }
-
 let state = loadState();
 function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
@@ -96,6 +93,7 @@ function recalcRow(row){
   row.convQty = (K === 0 ? E : E*K);
   row.finalQty = (I === 0 ? row.convQty : row.convQty * I);
 }
+
 function recalcAll(){
   state.steel.forEach(recalcRow);
   state.steelSub.forEach(recalcRow);
@@ -112,10 +110,7 @@ const tabsDef = [
   { id:"supportTotal", label:"동바리_집계" }
 ];
 
-
 let activeTabId = "steel";
-
-/** ✅ “현재 커서/포커스 행”을 기억 */
 const lastFocus = { steel:null, steelSub:null, support:null };
 
 /* DOM */
@@ -138,7 +133,6 @@ function renderTabs(){
     $tabs.appendChild(b);
   }
 }
-
 function panel(title, desc){
   const wrap = document.createElement("div");
   wrap.className = "panel";
@@ -181,7 +175,6 @@ function wireCells(){
   });
   cellRegistry.length = 0;
 }
-
 function wireCodeCellFocusTracking(){
   document.querySelectorAll('input[data-codecell="1"]').forEach(el=>{
     el.addEventListener("focus", ()=>{
@@ -192,21 +185,90 @@ function wireCodeCellFocusTracking(){
   });
 }
 
-/* Views */
+/* =========================
+   ✅ Code Tab (with Excel Upload)
+========================= */
 function renderCodes(){
   $view.innerHTML = "";
-  const {wrap, header} = panel("0.코드(Code)", "코드 마스터(수정/추가 가능).");
+  const {wrap, header} = panel('코드(Ctrl+".")', "코드 마스터(수정/추가 가능). 엑셀 업로드(.xlsx)로 한 번에 등록 가능.");
 
   const right = document.createElement("div");
-  right.style.display="flex"; right.style.gap="8px";
+  right.style.display="flex"; right.style.gap="8px"; right.style.flexWrap="wrap";
 
   const addBtn = document.createElement("button");
-  addBtn.className="smallbtn"; addBtn.textContent="행 추가";
+  addBtn.className="smallbtn";
+  addBtn.textContent="행 추가 (Ctrl+F3)";
   addBtn.onclick = ()=>{
     state.codes.push({code:"",name:"",spec:"",unit:"",surcharge:"",conv_unit:"",conv_factor:"",note:""});
     saveState(); go("codes");
   };
+
+  // ✅ Excel upload
+  const label = document.createElement("label");
+  label.className="smallbtn";
+  label.style.cursor="pointer";
+  label.textContent="엑셀 업로드(.xlsx)";
+  const input = document.createElement("input");
+  input.type="file";
+  input.accept=".xlsx,.xls";
+  input.hidden = true;
+  label.appendChild(input);
+
+  input.addEventListener("change", async (e)=>{
+    const file = e.target.files?.[0];
+    if(!file) return;
+
+    // SheetJS must exist
+    if(!window.XLSX){
+      alert("엑셀 업로드 라이브러리(XLSX)가 로드되지 않았습니다.\nindex.html에 SheetJS 스크립트를 추가해 주세요.");
+      e.target.value = "";
+      return;
+    }
+
+    try{
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, {type:"array"});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:""}); // header from first row
+
+      // header mapping (KR/EN)
+      const mapRow = (r) => ({
+        code: (r["코드"] ?? r["code"] ?? "").toString().trim(),
+        name: (r["품명"] ?? r["name"] ?? "").toString().trim(),
+        spec: (r["규격"] ?? r["spec"] ?? "").toString().trim(),
+        unit: (r["단위"] ?? r["unit"] ?? "").toString().trim(),
+        surcharge: (r["할증"] ?? r["surcharge"] ?? "").toString().trim(),
+        conv_unit: (r["환산단위"] ?? r["conv_unit"] ?? "").toString().trim(),
+        conv_factor: (r["환산계수"] ?? r["conv_factor"] ?? "").toString().trim(),
+        note: (r["비고"] ?? r["note"] ?? "").toString().trim(),
+      });
+
+      const mapped = rows.map(mapRow).filter(x=>x.code);
+      if(mapped.length === 0){
+        alert("엑셀에서 유효한 '코드' 행을 찾지 못했습니다.\n헤더(코드/품명/규격/단위/할증/환산단위/환산계수/비고)를 확인해 주세요.");
+        e.target.value = "";
+        return;
+      }
+
+      if(!confirm(`엑셀에서 ${mapped.length}개 코드를 불러옵니다.\n기존 코드 마스터를 엑셀 값으로 덮어쓸까요?`)){
+        e.target.value = "";
+        return;
+      }
+
+      // 덮어쓰기
+      state.codes = mapped;
+      saveState();
+      go("codes");
+    }catch(err){
+      console.error(err);
+      alert("엑셀 업로드 처리 중 오류가 발생했습니다.\n콘솔 로그를 확인해 주세요.");
+    }finally{
+      e.target.value = "";
+    }
+  });
+
   right.appendChild(addBtn);
+  right.appendChild(label);
   header.appendChild(right);
 
   const tableWrap = document.createElement("div");
@@ -219,7 +281,7 @@ function renderCodes(){
           <th style="min-width:220px;">품명</th>
           <th style="min-width:220px;">규격</th>
           <th style="min-width:90px;">단위</th>
-          <th style="min-width:110px;">할증(%)</th>
+          <th style="min-width:110px;">할증</th>
           <th style="min-width:120px;">환산단위</th>
           <th style="min-width:140px;">환산계수</th>
           <th style="min-width:260px;">비고</th>
@@ -260,20 +322,25 @@ function renderCodes(){
   wireCells();
 }
 
+/* =========================
+   Sheets
+========================= */
 function renderCalcSheet(title, rows, tabId, mode){
   $view.innerHTML = "";
-  const desc = '산출식 입력 → 물량 자동 계산. (코드 선택은 Ctrl+. 로 새 창 열기)';
+  const desc = '산출식 입력 → 물량 자동 계산. (코드 선택 새 창: Ctrl+.)';
   const {wrap, header} = panel(title, desc);
 
   const right = document.createElement("div");
-  right.style.display="flex"; right.style.gap="8px";
+  right.style.display="flex"; right.style.gap="8px"; right.style.flexWrap="wrap";
 
   const addBtn = document.createElement("button");
-  addBtn.className="smallbtn"; addBtn.textContent="행 추가";
+  addBtn.className="smallbtn";
+  addBtn.textContent="행 추가 (Ctrl+F3)";
   addBtn.onclick=()=>{ rows.push(makeEmptyCalcRow()); saveState(); go(tabId); };
 
   const add10Btn = document.createElement("button");
-  add10Btn.className="smallbtn"; add10Btn.textContent="+10행";
+  add10Btn.className="smallbtn";
+  add10Btn.textContent="+10행";
   add10Btn.onclick=()=>{ for(let i=0;i<10;i++) rows.push(makeEmptyCalcRow()); saveState(); go(tabId); };
 
   right.appendChild(addBtn);
@@ -460,16 +527,13 @@ renderTabs();
 go(activeTabId);
 
 /* =========================
-   ✅ 새 창 Code Picker
+   Code Picker window (Ctrl+.)
 ========================= */
 let pickerWin = null;
 
 function openPickerWindow(){
-  // origin 탭은 철골/부자재/동바리 중 하나여야 삽입 가능
   let origin = activeTabId;
   if(!["steel","steelSub","support"].includes(origin)) origin = "steel";
-
-  // “현재 포커스 행”이 없으면 0으로
   const focusRow = (lastFocus[origin] ?? 0) ?? 0;
 
   const w = 1100, h = 720;
@@ -487,7 +551,6 @@ function openPickerWindow(){
     return;
   }
 
-  // 새 창이 로드되면 데이터 전송
   const payload = {
     type: "INIT",
     originTab: origin,
@@ -495,10 +558,7 @@ function openPickerWindow(){
     codes: state.codes
   };
 
-  // 로드 타이밍 보강: 약간 딜레이 후 여러 번 전송(실패 방지)
-  const sendInit = () => {
-    try { pickerWin.postMessage(payload, window.location.origin); } catch {}
-  };
+  const sendInit = () => { try { pickerWin.postMessage(payload, window.location.origin); } catch {} };
   setTimeout(sendInit, 80);
   setTimeout(sendInit, 250);
   setTimeout(sendInit, 600);
@@ -511,28 +571,25 @@ function getRowsByTab(tab){
   return null;
 }
 
-/** ✅ 삽입: “현재 행 아래로 행 추가(splice)” */
 function insertCodesBelow(tab, focusRow, codeList){
   const rows = getRowsByTab(tab);
   if(!rows) return;
 
-  const idx = Math.min(Math.max(0, Number(focusRow) || 0), rows.length); // 안전
+  const idx = Math.min(Math.max(0, Number(focusRow) || 0), rows.length);
   const insertAt = Math.min(idx + 1, rows.length);
 
-  // 코드 개수만큼 새 행 생성 후 splice 삽입
   const newRows = codeList.map(code=>{
     const r = makeEmptyCalcRow();
     r.code = code;
     return r;
   });
 
-  rows.splice(insertAt, 0, ...newRows); // 아래 데이터는 밀림(유지)
+  rows.splice(insertAt, 0, ...newRows);
   recalcAll();
   saveState();
   go(tab);
 }
 
-/* ✅ 새 창에서 보내는 메시지 수신 */
 window.addEventListener("message", (event)=>{
   if(event.origin !== window.location.origin) return;
   const msg = event.data;
@@ -551,13 +608,48 @@ window.addEventListener("message", (event)=>{
   }
 });
 
-/* Hotkey: Ctrl+. */
+/* Hotkeys */
 document.addEventListener("keydown", (e)=>{
+  // Ctrl+. : open picker
   if(e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "." || e.code === "Period")){
     e.preventDefault();
     openPickerWindow();
   }
+
+  // ✅ Ctrl+F3 : add row in current tab
+  if(e.ctrlKey && !e.altKey && !e.metaKey && e.code === "F3"){
+    e.preventDefault();
+    addRowByActiveTab();
+  }
 }, true);
+
+function addRowByActiveTab(){
+  if(activeTabId === "codes"){
+    state.codes.push({code:"",name:"",spec:"",unit:"",surcharge:"",conv_unit:"",conv_factor:"",note:""});
+    saveState();
+    go("codes");
+    return;
+  }
+  if(activeTabId === "steel"){
+    state.steel.push(makeEmptyCalcRow());
+    saveState();
+    go("steel");
+    return;
+  }
+  if(activeTabId === "steelSub"){
+    state.steelSub.push(makeEmptyCalcRow());
+    saveState();
+    go("steelSub");
+    return;
+  }
+  if(activeTabId === "support"){
+    state.support.push(makeEmptyCalcRow());
+    saveState();
+    go("support");
+    return;
+  }
+  // total tabs: ignore
+}
 
 document.getElementById("btnOpenPicker").addEventListener("click", openPickerWindow);
 

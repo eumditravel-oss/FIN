@@ -104,13 +104,14 @@ function recalcAll(){
 
 /* Tabs */
 const tabsDef = [
-  { id:"codes", label:"0.코드(Code)" },
+  { id:"codes", label:'코드(Ctrl+".")' },
   { id:"steel", label:"철골(Steel)" },
   { id:"steelTotal", label:"철골_집계" },
   { id:"steelSub", label:"철골_부자재" },
   { id:"support", label:"동바리(support)" },
   { id:"supportTotal", label:"동바리_집계" }
 ];
+
 
 let activeTabId = "steel";
 

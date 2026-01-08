@@ -468,7 +468,7 @@ function renderCodes(){
 
   wireCells();
   wireFocusTracking();
-  wireArrowNavigation();
+  
 
   // 렌더 후 마지막 포커스 위치 복원
   const {row, col} = lastFocusCell.codes;
@@ -802,6 +802,63 @@ document.getElementById("fileImport").addEventListener("change", async (e)=>{
     e.target.value = "";
   }
 });
+
+/* ===== Excel-like arrow key navigation (GLOBAL) =====
+   - Only works when the focused element has data-grid="1"
+   - Prevents the "focus stuck" problem caused by per-cell handlers
+*/
+function isGridEl(el){
+  return el && el.getAttribute && el.getAttribute("data-grid") === "1";
+}
+function caretInfo(el){
+  try{
+    return { start: el.selectionStart ?? 0, end: el.selectionEnd ?? 0, len: (el.value ?? "").length };
+  }catch{
+    return { start: 0, end: 0, len: 0 };
+  }
+}
+
+document.addEventListener("keydown", (e)=>{
+  const el = document.activeElement;
+  if(!isGridEl(el)) return;
+
+  const tag = (el.tagName || "").toLowerCase();
+  const isTextarea = tag === "textarea";
+
+  // textarea는 방향키로 줄 이동/커서 이동이 많아서 방해 최소화
+  if(isTextarea){
+    // Ctrl+F3은 textarea에서도 동작해야 하니 아래는 통과
+  }
+
+  // 방향키 이동
+  if(e.key === "ArrowUp" && !isTextarea){
+    e.preventDefault();
+    moveGridFrom(el, -1, 0);
+    return;
+  }
+  if(e.key === "ArrowDown" && !isTextarea){
+    e.preventDefault();
+    moveGridFrom(el, +1, 0);
+    return;
+  }
+  if(e.key === "ArrowLeft" && !isTextarea){
+    const {start,end} = caretInfo(el);
+    if(start !== end) return;
+    if(start > 0) return; // 커서가 안쪽이면 텍스트 이동 유지
+    e.preventDefault();
+    moveGridFrom(el, 0, -1);
+    return;
+  }
+  if(e.key === "ArrowRight" && !isTextarea){
+    const {start,end,len} = caretInfo(el);
+    if(start !== end) return;
+    if(start < len) return;
+    e.preventDefault();
+    moveGridFrom(el, 0, +1);
+    return;
+  }
+}, false);
+
 
 document.getElementById("btnReset").addEventListener("click", ()=>{
   if(!confirm("정말 초기화할까요? (로컬 저장 데이터가 삭제됩니다)")) return;

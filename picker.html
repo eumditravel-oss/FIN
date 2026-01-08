@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0.코드(Code) 선택</title>
+  <style>
+    :root{
+      --bg:#f6f1e6;
+      --paper:#fffaf0;
+      --ink:#1d1d1f;
+      --muted:#5a5a61;
+      --line:rgba(0,0,0,.10);
+      --shadow:0 10px 26px rgba(0,0,0,.08);
+      --radius:16px;
+      --accent:#1a3d7c;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", Arial;
+      color:var(--ink);
+      background:
+        radial-gradient(1200px 600px at 20% 0%, rgba(26,61,124,.08), transparent 55%),
+        radial-gradient(900px 500px at 90% 20%, rgba(214,178,94,.12), transparent 50%),
+        var(--bg);
+    }
+    header{
+      position: sticky; top:0; z-index:10;
+      background: rgba(246,241,230,.86);
+      backdrop-filter: blur(10px);
+      border-bottom:1px solid var(--line);
+      padding: 12px 14px;
+      display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+    }
+    .title{ font-weight:900; font-size:16px; }
+    .sub{ font-size:12px; color:var(--muted); margin-top:4px; line-height:1.4; }
+    .right{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    button{
+      border:1px solid var(--line);
+      background:var(--paper);
+      border-radius:12px;
+      padding:10px 12px;
+      cursor:pointer;
+      box-shadow: var(--shadow);
+      font-weight:900;
+    }
+    main{ padding: 12px 14px 16px; }
+    .panel{
+      background: rgba(255,250,240,.86);
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding:12px;
+    }
+    .tools{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+    select, input{
+      border:1px solid rgba(0,0,0,.12);
+      background:rgba(255,255,255,.8);
+      border-radius:10px;
+      padding:9px 10px;
+      outline:none;
+      font-size:12px;
+    }
+    .status{ margin-left:auto; font-size:12px; color:var(--muted); }
+    .tablewrap{
+      border:1px solid var(--line);
+      border-radius: 14px;
+      overflow:auto;
+      background: rgba(255,255,255,.55);
+      max-height: 68vh;
+    }
+    table{ width:max-content; min-width:100%; border-collapse:separate; border-spacing:0; font-size:12px; }
+    thead th{
+      position:sticky; top:0;
+      background: rgba(255,250,240,.95);
+      border-bottom: 1px solid var(--line);
+      padding: 9px 8px;
+      text-align:left;
+      font-weight:900;
+    }
+    tbody td{ border-bottom:1px solid rgba(0,0,0,.06); padding:6px 8px; }
+    tr.cursor td{ background: rgba(26,61,124,.10) !important; }
+    tr.sel td{ outline: 2px solid rgba(26,61,124,.35); outline-offset:-2px; }
+    .foot{
+      display:flex; gap:10px; align-items:center; justify-content:space-between;
+      margin-top:10px;
+    }
+    .badge{
+      display:inline-flex; align-items:center; gap:6px;
+      border-radius:999px;
+      padding:6px 10px;
+      background:rgba(26,61,124,.08);
+      border:1px solid rgba(26,61,124,.18);
+      font-weight:900;
+      font-size:12px;
+    }
+    .kbd{ font-weight:900; color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="title">0.코드(Code) 선택</div>
+      <div class="sub">
+        검색어 입력 후 <span class="kbd">Enter</span> → 결과 리스트<br/>
+        <span class="kbd">↑/↓</span> 커서 이동 · <span class="kbd">Ctrl+B</span> 다중선택 · <span class="kbd">Ctrl+Enter</span> 삽입
+      </div>
+    </div>
+    <div class="right">
+      <button id="btnInsert">삽입 (Ctrl+Enter)</button>
+      <button id="btnClose">닫기</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="panel">
+      <div class="tools">
+        <select id="searchMode">
+          <option value="code">코드</option>
+          <option value="name">품명</option>
+          <option value="spec">규격</option>
+          <option value="name_spec">품명+규격</option>
+        </select>
+        <input id="q" placeholder="검색어 입력 후 Enter" style="min-width:320px;" />
+        <div class="status" id="status">대기중…</div>
+      </div>
+
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="min-width:160px;">코드</th>
+              <th style="min-width:220px;">품명</th>
+              <th style="min-width:220px;">규격</th>
+              <th style="min-width:90px;">단위</th>
+              <th style="min-width:110px;">할증(%)</th>
+              <th style="min-width:120px;">환산단위</th>
+              <th style="min-width:140px;">환산계수</th>
+              <th style="min-width:220px;">비고</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="foot">
+        <div class="badge" id="pickInfo">선택 0개</div>
+        <div class="badge" id="originInfo">대상: -</div>
+      </div>
+    </div>
+  </main>
+
+  <script src="picker.js"></script>
+</body>
+</html>

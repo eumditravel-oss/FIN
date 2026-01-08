@@ -578,9 +578,7 @@ function renderCalcSheet(title, rows, tabId, mode){
 
   $view.appendChild(wrap);
 
-  wireCells();
-  wireFocusTracking();
-  wireArrowNavigation();
+
 
   const last = lastFocusCell[tabId] ?? {row:0,col:0};
   setTimeout(()=>focusGrid(tabId, last.row, last.col), 0);
@@ -770,7 +768,7 @@ document.addEventListener("keydown", (e)=>{
     e.preventDefault();
     insertRowBelowActive();
   }
-}, true);
+}, false);
 
 document.getElementById("btnOpenPicker").addEventListener("click", openPickerWindow);
 

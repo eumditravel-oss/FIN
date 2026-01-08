@@ -1,19 +1,16 @@
 /* =========================================================
-   FIN 산출자료 (Web) - Full Version
+   FIN 산출자료 (Web) - Ctrl+K / Ctrl+Enter 버전
    ✅ 산출식(formulaExpr) 입력 → 물량(value) 자동 계산
-   ✅ 물량은 산출식 우측에 위치(읽기전용 표시)
-   ✅ 철골/부자재 집계: 할증후수량 합계
-   ✅ 동바리 집계: 물량(Value) 합계
-   ✅ F5: 코드 선택 오버레이 열기(현재 탭 기준)
+   ✅ 산출식 → 물량(Value) 순서로 배치
+   ✅ Ctrl+K: 코드 선택 오버레이 (현재 탭 기준)
    ✅ 더블클릭: 코드 선택
-   ✅ F10: 선택 코드를 F5를 실행했던 탭(철골/부자재/동바리)에 추가
-      - 마지막으로 포커스했던 코드 셀 행이 있으면 그 행에 입력
-      - 없으면 새 행 추가
+   ✅ Ctrl+Enter: 선택 코드를 원래 탭(철골/부자재/동바리)에 추가
+   ✅ Esc: 닫기
    ========================================================= */
 
-const STORAGE_KEY = "FIN_WEB_V2";
+const STORAGE_KEY = "FIN_WEB_V3";
 
-/** 코드 마스터(예시 + 사용자 수정 가능) */
+/** 코드 마스터(초기값: 필요 시 더 넣으세요) */
 const SEED_CODES = [
   {"code":"A0SM355150","name":"RH형강 / SM355","spec":"150*150*7*10","unit":"M","surcharge":7,"conv_unit":"TON","conv_factor":0.0315,"note":""},
   {"code":"A0SM355200","name":"RH형강 / SM355","spec":"200*100*5.5*8","unit":"M","surcharge":7,"conv_unit":"TON","conv_factor":0.0213,"note":""},
@@ -31,8 +28,8 @@ function makeEmptyCalcRow(){
     name: "",
     spec: "",
     unit: "",
-    formulaExpr: "",   // ✅ 사용자가 입력
-    value: 0,          // ✅ 계산 결과(읽기 전용 표시)
+    formulaExpr: "",   // 사용자가 입력: (0.5+0.3)/2
+    value: 0,          // 자동 계산 결과(읽기 전용)
     note: "",
     surchargeMul: "",  // 배수(예: 1.07)
     convUnit: "",
@@ -88,14 +85,10 @@ function roundUp3(x){
   return Math.ceil(n * p) / p;
 }
 
-// ✅ 산출식 평가: (0.5+0.3)/2 같은 표현을 계산
 function evalExpr(exprRaw){
   const s = (exprRaw ?? "").toString().trim();
   if(!s) return 0;
-
-  // 숫자/연산자/괄호/공백/콤마만 허용
   if(!/^[0-9+\-*/().\s,]+$/.test(s)) return 0;
-
   try{
     // eslint-disable-next-line no-new-func
     const f = new Function(`return (${s.replaceAll(",","")});`);
@@ -128,13 +121,12 @@ function recalcRow(row){
     const mul = surchargeToMul(m.surcharge);
     row.surchargeMul = mul === "" ? "" : mul;
     row.convUnit = m.conv_unit ?? "";
-    // 환산계수는 코드값이 있더라도 사용자가 수정할 수 있게: 비어있으면만 채움
     if((row.convFactor ?? "").toString().trim() === ""){
       row.convFactor = (m.conv_factor ?? "");
     }
   }
 
-  // ✅ 산출식 입력값으로 물량 자동 계산
+  // 산출식 → 물량
   row.value = evalExpr(row.formulaExpr);
 
   const E = num(row.value);
@@ -164,30 +156,25 @@ const tabsDef = [
 
 let activeTabId = "steel";
 
-/* ✅ 단축키 F5/F10을 “어느 탭에서 열었는지” 기억 */
+// 오버레이를 어느 탭에서 열었는지(삽입 대상)
 let codePickerOriginTabId = null;
-/* ✅ 마지막으로 포커스된 코드 셀(행) 기억: 탭별로 저장 */
-const lastFocus = {
-  steel: null,
-  steelSub: null,
-  support: null,
-};
+
+// 마지막으로 포커스된 “코드 셀” 행 기억(탭별)
+const lastFocus = { steel:null, steelSub:null, support:null };
 
 /* ---------- DOM ---------- */
 
 const $tabs = document.getElementById("tabs");
 const $view = document.getElementById("view");
 
-/* Overlay DOM */
 const $overlay = document.getElementById("codeOverlay");
 const $overlayBody = document.getElementById("codeOverlayBody");
 const $codeSearch = document.getElementById("codeSearch");
 const $overlayStatus = document.getElementById("overlayStatus");
 const $selectedBadge = document.getElementById("selectedBadge");
 const $btnCloseOverlay = document.getElementById("btnCloseOverlay");
-const $btnInsertF10 = document.getElementById("btnInsertF10");
+const $btnInsert = document.getElementById("btnInsert");
 
-/* Overlay selection */
 let overlaySelectedCode = null;
 
 /* ---------- Render helpers ---------- */
@@ -222,12 +209,11 @@ function escapeHtml(s){
     .replaceAll(">","&gt;")
     .replaceAll('"',"&quot;");
 }
-
 function escapeAttr(s){
   return escapeHtml(s).replaceAll("\n","&#10;");
 }
 
-/* ---------- Cells wiring ---------- */
+/* ---------- Cells ---------- */
 
 const cellRegistry = [];
 function inputCell(value, onChange, placeholder="", extraAttrs=""){
@@ -243,7 +229,6 @@ function textAreaCell(value, onChange){
 function readonlyCell(value){
   return `<input class="cell readonly" value="${escapeAttr(value ?? "")}" readonly />`;
 }
-
 function wireCells(){
   document.querySelectorAll("[data-cell]").forEach(el=>{
     const id = el.getAttribute("data-cell");
@@ -254,7 +239,6 @@ function wireCells(){
       meta.onChange(el.value);
       recalcAll();
       saveState();
-      // 현재 탭 유지 재렌더
       go(activeTabId, {silentTabRender:true});
     };
 
@@ -268,7 +252,7 @@ function wireCells(){
 
 function renderCodes(){
   $view.innerHTML = "";
-  const {wrap, header} = panel("0.코드(Code)", "코드 마스터(수정/추가 가능). F5로 선택창도 열 수 있어요.");
+  const {wrap, header} = panel("0.코드(Code)", "코드 마스터(수정/추가 가능). Ctrl+K로 선택창을 열 수 있어요.");
 
   const right = document.createElement("div");
   right.style.display="flex";
@@ -341,11 +325,10 @@ function renderCodes(){
 }
 
 function renderCalcSheet(title, rows, tabId, mode){
-  // mode: "steel" or "support"
   $view.innerHTML = "";
   const desc = (mode==="steel")
-    ? '산출식에 예: (0.5+0.3)/2 입력 → 물량(Value) 자동 계산. (F5 코드 선택창 / F10 추가)'
-    : '동바리도 산출식 기반으로 물량 자동 계산. 집계는 물량(Value) 합계로 표시. (F5/F10 지원)';
+    ? '산출식에 예: (0.5+0.3)/2 입력 → 물량(Value) 자동 계산. (Ctrl+K 코드 선택 / Ctrl+Enter 추가)'
+    : '동바리도 산출식 기반으로 물량 자동 계산. 집계는 물량(Value) 합계. (Ctrl+K/Ctrl+Enter)';
 
   const {wrap, header} = panel(title, desc);
 
@@ -385,9 +368,7 @@ function renderCalcSheet(title, rows, tabId, mode){
           <th style="min-width:220px;">규격(자동)</th>
           <th style="min-width:90px;">단위(자동)</th>
 
-          <!-- ✅ 산출식 먼저 -->
           <th style="min-width:220px;">산출식</th>
-          <!-- ✅ 물량(Value)은 결과값(읽기전용) -->
           <th style="min-width:150px;">물량(Value)</th>
 
           <th style="min-width:220px;">비고</th>
@@ -407,8 +388,6 @@ function renderCalcSheet(title, rows, tabId, mode){
 
   rows.forEach((r, idx)=>{
     recalcRow(r);
-
-    // ✅ 코드 셀에 포커스되면 lastFocus 저장할 수 있도록 data-attrs 부여
     const codeAttrs = `data-codecell="1" data-tab="${tabId}" data-row="${idx}"`;
 
     const tr = document.createElement("tr");
@@ -459,14 +438,11 @@ function renderCalcSheet(title, rows, tabId, mode){
 
   wrap.appendChild(tableWrap);
 
-  // ✅ 합계 배지
   const sumBox = document.createElement("div");
   sumBox.style.marginTop="10px";
-
   const sumVal = (mode==="steel")
     ? rows.reduce((a,b)=> a + roundUp3(b.finalQty), 0)
     : rows.reduce((a,b)=> a + num(b.value), 0);
-
   sumBox.innerHTML = `<span class="badge">합계: ${roundUp3(sumVal)}</span>`;
   wrap.appendChild(sumBox);
 
@@ -584,7 +560,6 @@ function go(id, opts={silentTabRender:false}){
   activeTabId = id;
   recalcAll();
   saveState();
-
   if(!opts.silentTabRender) renderTabs();
 
   if(id==="codes") renderCodes();
@@ -598,9 +573,8 @@ function go(id, opts={silentTabRender:false}){
 renderTabs();
 go(activeTabId);
 
-/* ---------- Focus tracking for F10 insert position ---------- */
+/* ---------- Focus tracking ---------- */
 function wireCodeCellFocusTracking(){
-  // 코드 셀에 포커스 들어오면 마지막 행 기억
   document.querySelectorAll('input[data-codecell="1"]').forEach(el=>{
     el.addEventListener("focus", ()=>{
       const tab = el.getAttribute("data-tab");
@@ -613,7 +587,7 @@ function wireCodeCellFocusTracking(){
 }
 
 /* =========================================================
-   ✅ F5 / F10 Code Picker Overlay
+   Code Picker Overlay (Ctrl+K / Ctrl+Enter)
    ========================================================= */
 
 function openCodeOverlay(originTabId){
@@ -626,7 +600,6 @@ function openCodeOverlay(originTabId){
   $overlay.classList.remove("hidden");
   $overlay.setAttribute("aria-hidden","false");
 
-  // 상태 표시
   $overlayStatus.textContent = `대상 탭: ${tabsDef.find(t=>t.id===originTabId)?.label || originTabId}`;
   setTimeout(()=> $codeSearch.focus(), 0);
 }
@@ -662,9 +635,7 @@ function renderCodeOverlayList(){
     `;
 
     tr.addEventListener("dblclick", ()=>{
-      // 선택
       overlaySelectedCode = (item.code ?? "").toString().trim();
-      // 하이라이트
       $overlayBody.querySelectorAll("tr").forEach(r=>r.classList.remove("pick-selected"));
       tr.classList.add("pick-selected");
       $selectedBadge.textContent = `선택: ${overlaySelectedCode}`;
@@ -673,7 +644,6 @@ function renderCodeOverlayList(){
     $overlayBody.appendChild(tr);
   });
 
-  // 목록 수 표시
   $overlayStatus.textContent =
     `대상 탭: ${tabsDef.find(t=>t.id===codePickerOriginTabId)?.label || codePickerOriginTabId} · 결과 ${list.length}건`;
 }
@@ -687,7 +657,6 @@ function insertSelectedCodeToOrigin(){
 
   const tab = codePickerOriginTabId;
 
-  // 대상 rows 얻기
   let rows = null;
   if(tab === "steel") rows = state.steel;
   else if(tab === "steelSub") rows = state.steelSub;
@@ -712,22 +681,18 @@ function insertSelectedCodeToOrigin(){
   recalcAll();
   saveState();
   closeCodeOverlay();
-
-  // 원래 탭으로 이동 + 반영
   go(tab);
 }
 
-/* Overlay events */
+/* Overlay UI events */
 $btnCloseOverlay.addEventListener("click", closeCodeOverlay);
-$btnInsertF10.addEventListener("click", insertSelectedCodeToOrigin);
+$btnInsert.addEventListener("click", insertSelectedCodeToOrigin);
 $codeSearch.addEventListener("input", renderCodeOverlayList);
 
-// overlay 바깥 클릭 시 닫기
 $overlay.addEventListener("click", (e)=>{
   if(e.target === $overlay) closeCodeOverlay();
 });
 
-// Esc 닫기
 document.addEventListener("keydown", (e)=>{
   if(e.key === "Escape" && !$overlay.classList.contains("hidden")){
     e.preventDefault();
@@ -735,17 +700,19 @@ document.addEventListener("keydown", (e)=>{
   }
 });
 
-/* =========================================================
-   ✅ Global Hotkeys: F5 / F10
-   ========================================================= */
+/* ---------- Global Hotkeys ---------- */
+
+function isEditableTarget(el){
+  if(!el) return false;
+  const tag = el.tagName?.toLowerCase();
+  return tag === "input" || tag === "textarea" || el.isContentEditable;
+}
 
 document.addEventListener("keydown", (e)=>{
-  // F5: 코드 선택창 열기
-  if(e.key === "F5"){
+  // Ctrl+K: 코드 선택창 열기
+  if(e.ctrlKey && (e.key === "k" || e.key === "K")){
     e.preventDefault();
 
-    // 현재 탭이 코드탭/집계탭이면 의미 없으니, "가장 최근 입력 탭"을 우선
-    // 여기서는 activeTabId 기준으로 열되, steel/steelSub/support가 아니면 steel로 fallback
     let origin = activeTabId;
     if(!["steel","steelSub","support"].includes(origin)){
       origin = "steel";
@@ -754,15 +721,25 @@ document.addEventListener("keydown", (e)=>{
     return;
   }
 
-  // F10: 선택 코드 삽입
-  if(e.key === "F10"){
-    // 오버레이가 열려 있을 때만 동작
+  // Ctrl+Enter: 오버레이가 열려 있을 때 삽입
+  if(e.ctrlKey && e.key === "Enter"){
     if(!$overlay.classList.contains("hidden")){
       e.preventDefault();
       insertSelectedCodeToOrigin();
     }
     return;
   }
+
+  // (선택) 오버레이가 열려 있고 검색칸에 포커스일 때 Enter로 “선택한 행 삽입”을 막기 위해 아무 것도 안함
+});
+
+/* ---------- Toolbar button ---------- */
+document.getElementById("btnOpenPicker").addEventListener("click", ()=>{
+  let origin = activeTabId;
+  if(!["steel","steelSub","support"].includes(origin)){
+    origin = "steel";
+  }
+  openCodeOverlay(origin);
 });
 
 /* ---------- Export / Import / Reset ---------- */

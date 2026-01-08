@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FIN 산출자료 (Web)</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="title">FIN 산출자료 (Web)</div>
+      <div class="sub">엑셀 탭 구조 그대로 · 자동환산/할증 · 자동집계 · 로컬저장</div>
+    </div>
+
+    <div class="actions">
+      <button id="btnExport" class="btn">내보내기(JSON)</button>
+      <label class="btn ghost">
+        가져오기(JSON)
+        <input id="fileImport" type="file" accept="application/json" hidden />
+      </label>
+      <button id="btnReset" class="btn danger">초기화</button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs"></nav>
+
+  <main class="content">
+    <section id="view"></section>
+  </main>
+
+  <footer class="footer">
+    <div>※ 엑셀 로직 반영: 철골/부자재 집계는 “할증후수량”, 동바리는 “물량(Value)” 합계 기준</div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

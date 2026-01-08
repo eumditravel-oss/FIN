@@ -857,6 +857,19 @@ function caretInfo(el){
   }
 }
 
+function textareaAtTop(el){
+  const v = el.value ?? "";
+  const pos = el.selectionStart ?? 0;
+  const before = v.slice(0, pos);
+  return !before.includes("\n");
+}
+function textareaAtBottom(el){
+  const v = el.value ?? "";
+  const pos = el.selectionStart ?? 0;
+  const after = v.slice(pos);
+  return !after.includes("\n");
+}
+
 document.addEventListener("keydown", (e)=>{
   const el = document.activeElement;
   if(!isGridEl(el)) return;
@@ -864,31 +877,30 @@ document.addEventListener("keydown", (e)=>{
   const tag = (el.tagName || "").toLowerCase();
   const isTextarea = tag === "textarea";
 
-  // textarea는 방향키로 줄 이동/커서 이동이 많아서 방해 최소화
-  if(isTextarea){
-    // Ctrl+F3은 textarea에서도 동작해야 하니 아래는 통과
-  }
-
-  // 방향키 이동
-  if(e.key === "ArrowUp" && !isTextarea){
+  if(e.key === "ArrowUp"){
+    if(isTextarea && !textareaAtTop(el)) return;
     e.preventDefault();
     moveGridFrom(el, -1, 0);
     return;
   }
-  if(e.key === "ArrowDown" && !isTextarea){
+
+  if(e.key === "ArrowDown"){
+    if(isTextarea && !textareaAtBottom(el)) return;
     e.preventDefault();
     moveGridFrom(el, +1, 0);
     return;
   }
-  if(e.key === "ArrowLeft" && !isTextarea){
+
+  if(e.key === "ArrowLeft"){
     const {start,end} = caretInfo(el);
     if(start !== end) return;
-    if(start > 0) return; // 커서가 안쪽이면 텍스트 이동 유지
+    if(start > 0) return;
     e.preventDefault();
     moveGridFrom(el, 0, -1);
     return;
   }
-  if(e.key === "ArrowRight" && !isTextarea){
+
+  if(e.key === "ArrowRight"){
     const {start,end,len} = caretInfo(el);
     if(start !== end) return;
     if(start < len) return;
@@ -897,6 +909,7 @@ document.addEventListener("keydown", (e)=>{
     return;
   }
 }, false);
+
 
 
 document.getElementById("btnReset").addEventListener("click", ()=>{

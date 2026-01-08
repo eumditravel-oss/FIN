@@ -145,7 +145,7 @@ tbody td{
 }
 tbody tr:hover td{ background:rgba(26,61,124,.05); }
 
-input.cell, textarea.cell, select.cell{
+input.cell, textarea.cell{
   width: 100%;
   border:1px solid rgba(0,0,0,.12);
   background:rgba(255,255,255,.75);

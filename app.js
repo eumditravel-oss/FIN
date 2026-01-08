@@ -763,6 +763,47 @@ document.addEventListener("keydown", (e)=>{
     openPickerWindow();
   }
 
+  function deleteRowAtActiveFocus(){
+  if(!["codes","steel","steelSub","support"].includes(activeTabId)) return;
+
+  const { row } = lastFocusCell[activeTabId] ?? { row: 0 };
+  const r = Math.max(0, Number(row) || 0);
+
+  const ok = confirm("선택된 행을 정말 삭제할까요?");
+  if(!ok) return;
+
+  if(activeTabId === "codes"){
+    if(state.codes.length === 0) return;
+    if(r >= state.codes.length) return;
+    state.codes.splice(r, 1);
+    saveState();
+    go("codes");
+    // 삭제 후 같은 row로 포커스 복원(가능한 범위로)
+    const newRow = Math.min(r, state.codes.length - 1);
+    if(newRow >= 0) setTimeout(()=>focusGrid("codes", newRow, 0), 0);
+    return;
+  }
+
+  const rows = getRowsByTab(activeTabId);
+  if(!rows || rows.length === 0) return;
+  if(r >= rows.length) return;
+
+  rows.splice(r, 1);
+  saveState();
+  go(activeTabId);
+
+  const newRow = Math.min(r, rows.length - 1);
+  if(newRow >= 0) setTimeout(()=>focusGrid(activeTabId, newRow, 0), 0);
+}
+// Ctrl + Delete : delete current row (with confirm)
+if(e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "Delete" || e.code === "Delete")){
+  e.preventDefault();
+  deleteRowAtActiveFocus();
+  return;
+}
+
+
+
   // Ctrl+F3 : insert row below focused row (all editable tabs)
   if(e.ctrlKey && !e.altKey && !e.metaKey && e.code === "F3"){
     e.preventDefault();

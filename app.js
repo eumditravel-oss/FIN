@@ -195,17 +195,22 @@ function wireCells(){
     const meta = cellRegistry.find(x=>x.id===id);
     if(!meta) return;
 
-    const handler = ()=>{
-      meta.onChange(el.value);
-      recalcAll();
-      saveState();
-      go(activeTabId, {silentTabRender:true});
-    };
-// 즉시 반영(타이핑할 때)
-el.addEventListener("input", handler);
+const handler = (evt)=>{
+  meta.onChange(el.value);
+  recalcAll();
+  saveState();
 
-// 포커스 나갈 때도 반영(안전)
+  // input 중엔 전체 재렌더 금지(커서 튐 방지)
+  if(evt && evt.type === "input") return;
+
+  // blur/change일 때만 재렌더
+  go(activeTabId, {silentTabRender:true});
+};
+
+el.addEventListener("input", handler);
 el.addEventListener("blur", handler);
+el.addEventListener("change", handler);
+
 
   });
   cellRegistry.length = 0;

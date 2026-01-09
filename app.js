@@ -114,9 +114,14 @@ function roundUp3(x){
   return Math.ceil(n * 1000) / 1000;
 }
 function evalExpr(exprRaw){
-  const s = (exprRaw ?? "").toString().trim();
+  // ✅ <...> 안은 주석 처리(계산 제외)
+  const withoutTags = (exprRaw ?? "").toString().replace(/<[^>]*>/g, "");
+  const s = withoutTags.trim();
   if(!s) return 0;
+
+  // 숫자/연산자만 허용
   if(!/^[0-9+\-*/().\s,]+$/.test(s)) return 0;
+
   try{
     // eslint-disable-next-line no-new-func
     const f = new Function(`return (${s.replaceAll(",","")});`);
@@ -126,6 +131,7 @@ function evalExpr(exprRaw){
     return 0;
   }
 }
+
 function surchargeToMul(p){ const x = num(p); return x ? (1 + x/100) : ""; }
 
 function findCode(code){
@@ -181,18 +187,19 @@ function refreshReadonlyInSameRow(activeEl){
   const tr = activeEl.closest("tr");
   if(!tr) return;
 
-  const ro = tr.querySelectorAll("input.cell.readonly");
-  // renderCalcSheet 구조 기준: [name, spec, unit, value, surchargeMul, convUnit, convQty, finalQty]
-  if(ro.length < 8) return;
+  // renderCalcSheet readonly 순서: [name, spec, unit, value, surchargeMul, convUnit, convFactor, convQty, finalQty]
+const ro = tr.querySelectorAll("input.cell.readonly");
+if(ro.length < 9) return;
 
-  ro[0].value = r.name ?? "";
-  ro[1].value = r.spec ?? "";
-  ro[2].value = r.unit ?? "";
-  ro[3].value = String(roundUp3(r.value));
-  ro[4].value = (r.surchargeMul === "" ? "" : String(r.surchargeMul));
-  ro[5].value = r.convUnit ?? "";
-  ro[6].value = String(roundUp3(r.convQty));
-  ro[7].value = String(roundUp3(r.finalQty));
+ro[0].value = r.name ?? "";
+ro[1].value = r.spec ?? "";
+ro[2].value = r.unit ?? "";
+ro[3].value = String(roundUp3(r.value));
+ro[4].value = (r.surchargeMul === "" ? "" : String(r.surchargeMul));
+ro[5].value = r.convUnit ?? "";
+ro[6].value = (r.convFactor ?? "").toString();
+ro[7].value = String(roundUp3(r.convQty));
+ro[8].value = String(roundUp3(r.finalQty));
 }
 
 
@@ -473,39 +480,66 @@ function renderCodes(){
 
   const tableWrap = document.createElement("div");
   tableWrap.className="table-wrap";
-  tableWrap.innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th style="min-width:160px;">코드</th>
-          <th style="min-width:220px;">품명</th>
-          <th style="min-width:220px;">규격</th>
-          <th style="min-width:90px;">단위</th>
-          <th style="min-width:110px;">할증</th>
-          <th style="min-width:120px;">환산단위</th>
-          <th style="min-width:140px;">환산계수</th>
-          <th style="min-width:260px;">비고</th>
-          <th style="min-width:120px;">작업</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  `;
+tableWrap.innerHTML = `
+  <table>
+    <thead>
+      <tr>
+        <th style="min-width:60px;">No</th>
+        <th style="min-width:140px;">코드</th>
+        <th style="min-width:180px;">품명(자동)</th>
+        <th style="min-width:180px;">규격(자동)</th>
+        <th style="min-width:70px;">단위(자동)</th>
+
+        <!-- ✅ 산출식: 기존보다 크게(2.5배 느낌) -->
+        <th style="min-width:550px;">산출식</th>
+
+        <!-- ✅ 물량(Value): 기존보다 작게(0.5배 느낌) -->
+        <th style="min-width:80px;">물량(Value)</th>
+
+        <!-- ✅ 할증/환산 관련: 더 좁게 -->
+        <th style="min-width:90px;">할증(배수)</th>
+        <th style="min-width:90px;">환산단위</th>
+        <th style="min-width:90px;">환산계수</th>
+        <th style="min-width:110px;">환산수량</th>
+        <th style="min-width:120px;">할증후수량</th>
+
+        <th style="min-width:110px;">작업</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+`;
+
   const tbody = tableWrap.querySelector("tbody");
 
   state.codes.forEach((r, idx)=>{
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${inputCell(r.code, v=>{ r.code=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:0})}</td>
-      <td>${inputCell(r.name, v=>{ r.name=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:1})}</td>
-      <td>${inputCell(r.spec, v=>{ r.spec=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:2})}</td>
-      <td>${inputCell(r.unit, v=>{ r.unit=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:3})}</td>
-      <td>${inputCell(r.surcharge, v=>{ r.surcharge=v; }, "예: 7", {tabId:"codes", rowIdx:idx, colIdx:4})}</td>
-      <td>${inputCell(r.conv_unit, v=>{ r.conv_unit=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:5})}</td>
-      <td>${inputCell(r.conv_factor, v=>{ r.conv_factor=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:6})}</td>
-      <td>${textAreaCell(r.note, v=>{ r.note=v; }, {tabId:"codes", rowIdx:idx, colIdx:7})}</td>
-      <td></td>
-    `;
+  <td>${idx+1}</td>
+
+  <td>${inputCell(r.code, v=>{ r.code=v; }, "코드 입력", {tabId, rowIdx:idx, colIdx:0})}</td>
+
+  <td>${readonlyCell(r.name)}</td>
+  <td>${readonlyCell(r.spec)}</td>
+  <td>${readonlyCell(r.unit)}</td>
+
+  <!-- ✅ 산출식(넓게) -->
+  <td>${inputCell(r.formulaExpr, v=>{ r.formulaExpr=v; }, "예: (0.5+0.3)/2 <메모>", {tabId, rowIdx:idx, colIdx:1})}</td>
+
+  <!-- 물량(Value) -->
+  <td>${readonlyCell(String(roundUp3(r.value)))}</td>
+
+  <!-- ✅ 할증/환산: 전부 입력 불가 -->
+  <td>${readonlyCell(r.surchargeMul === "" ? "" : String(r.surchargeMul))}</td>
+  <td>${readonlyCell(r.convUnit)}</td>
+  <td>${readonlyCell((r.convFactor ?? "").toString())}</td>
+
+  <td>${readonlyCell(String(roundUp3(r.convQty)))}</td>
+  <td>${readonlyCell(String(roundUp3(r.finalQty)))}</td>
+
+  <td></td>
+`;
+
     const tdAct = tr.lastElementChild;
     const act = document.createElement("div");
     act.className="row-actions";

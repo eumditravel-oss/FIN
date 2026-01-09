@@ -251,7 +251,8 @@ textarea.cell{
 
 /* ===== F2 편집모드 셀 강조 ===== */
 .cell.editing{
-  outline: 2px solid var(--accent);
-  box-shadow: 0 0 0 3px rgba(26, 61, 124, 0.18);
+  outline: 2px solid rgba(26,61,124,0.9);
+  box-shadow: 0 0 0 3px rgba(26,61,124,0.15);
 }
+
 

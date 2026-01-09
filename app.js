@@ -21,9 +21,9 @@ const SEED_CODES = [
 let suppressRerenderOnce = false;
 
 /* =========================
-   ✅ Mouse click -> focus cell (delegation, once)  [전역]
-   - capture에서 무조건 preventDefault 금지
-   - td 클릭일 때만, 그리고 focus는 setTimeout(0)으로 충돌 방지
+   ✅ Mouse click -> focus cell (delegation, once)
+   - click 단계에서만 처리 (mousedown ❌)
+   - preventDefault ❌ (브라우저 기본 포커스 허용)
    ========================= */
 let mouseFocusWired = false;
 
@@ -31,29 +31,24 @@ function wireMouseFocus(){
   if(mouseFocusWired) return;
   mouseFocusWired = true;
 
-  document.addEventListener("mousedown", (e)=>{
+  document.addEventListener("click", (e)=>{
     const t = e.target;
 
-    // input/textarea 자체 클릭은 그대로 두기
+    // input/textarea 직접 클릭은 그대로 둠
     if(t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
 
-    // td가 아니면 무시
+    // td 클릭만 처리
     const td = t?.closest?.("td");
     if(!td) return;
 
-    // td 안의 cell 찾기
     const cell = td.querySelector("input.cell:not(.readonly), textarea.cell");
     if(!cell) return;
 
-    // ✅ 여기서 무조건 preventDefault 하면 키보드/포커스 흐름이 꼬일 수 있음
-    // 대신 selection 방지만 살짝:
-    // (드래그 선택을 막고 싶으면 아래 한 줄만)
-    e.preventDefault();
-
-    // 포커스는 tick 뒤에(브라우저 기본 처리와 충돌 방지)
-    setTimeout(()=>cell.focus(), 0);
-  }, true); // capture
+    // 기본 동작을 막지 않고 포커스만 이동
+    cell.focus();
+  });
 }
+
 
 function makeEmptyCalcRow(){
   return {

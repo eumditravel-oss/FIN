@@ -1,3 +1,10 @@
+/* =========================
+   FIN 산출자료(Web) picker.js (수정 통합본)
+   - ✅ Ctrl+. 열면 검색 없이 전체 코드 즉시 표시
+   - ✅ 드롭다운 기본 검색모드 = "품명+규격(name_spec)"
+   - ✅ INIT 변수 중복/꼬임 제거 (originTab/focusRow/codes를 실제로 사용)
+   ========================= */
+
 let originTab = "steel";
 let focusRow = 0;
 let codes = [];
@@ -17,7 +24,10 @@ const $btnClose = document.getElementById("btnClose");
 
 function esc(s){
   return (s ?? "").toString()
-    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;");
 }
 
 function setStatus(t){ $status.textContent = t; }
@@ -30,7 +40,7 @@ function normalize(s){ return (s ?? "").toString().toLowerCase(); }
 
 function matchItem(item, mode, q){
   const qq = normalize(q);
-  if(!qq) return true;
+  if(!qq) return true; // ✅ 검색어 없으면 전부 매칭(= 전체 표시)
 
   const c = normalize(item.code);
   const n = normalize(item.name);
@@ -39,11 +49,14 @@ function matchItem(item, mode, q){
   if(mode === "code") return c.includes(qq);
   if(mode === "name") return n.includes(qq);
   if(mode === "spec") return sp.includes(qq);
-  return (n + " " + sp).includes(qq); // name_spec
+
+  // name_spec (기본)
+  return (n + " " + sp).includes(qq);
 }
 
 function render(){
   $tbody.innerHTML = "";
+
   results.forEach((it, i)=>{
     const tr = document.createElement("tr");
 
@@ -92,7 +105,6 @@ function runSearch(){
   const mode = $mode.value;
   results = codes.filter(it => matchItem(it, mode, q));
   cursorIndex = results.length ? 0 : -1;
-  setStatus(`결과 ${results.length}건`);
   render();
   ensureVisible();
 }
@@ -140,18 +152,47 @@ function closeMe(){
   window.close();
 }
 
+/* ✅ 드롭박스 기본값/순서 보정 */
+function ensureModeDefault(){
+  // 기본값은 name_spec(품명+규격)
+  const want = "name_spec";
+
+  // 옵션이 존재하면 value만 설정
+  const has = Array.from($mode?.options ?? []).some(o => o.value === want);
+  if(has){
+    $mode.value = want;
+
+    // ✅ 가능하면 name_spec 옵션을 맨 앞으로 이동(“드롭박스 첫번째” 요구 대응)
+    // (HTML을 안 바꿔도 되게 JS에서 재배치)
+    const opts = Array.from($mode.options);
+    const idx = opts.findIndex(o => o.value === want);
+    if(idx > 0){
+      const opt = opts[idx];
+      $mode.remove(idx);
+      $mode.insertBefore(opt, $mode.firstChild);
+    }
+  }
+}
+
 /* INIT from opener */
-window.addEventListener("message", (event)=>{
-  if(event.origin !== window.location.origin) return;
+window.addEventListener("message", (event) => {
+  if (event.origin !== window.location.origin) return;
   const msg = event.data;
-  if(!msg || typeof msg !== "object") return;
-  if(msg.type === "INIT"){
-    originTab = msg.originTab ?? "steel";
-    focusRow = msg.focusRow ?? 0;
+  if (!msg || typeof msg !== "object") return;
+
+  if (msg.type === "INIT") {
+    // ✅ 실제로 쓰는 변수에 세팅
+    originTab = msg.originTab || "steel";
+    focusRow = Number(msg.focusRow || 0);
     codes = Array.isArray(msg.codes) ? msg.codes : [];
-    setStatus("데이터 로드 완료. 검색어 입력 후 Enter");
-    updateBadges();
-    // 기본 전체 리스트는 비워두고, 사용자가 Enter로 검색 실행하는 방식
+
+    // 기본 검색모드 설정
+    ensureModeDefault();
+
+    // ✅ 검색어 없어도 전체 바로 표시
+    $q.value = "";
+    selected.clear();
+    runSearch();
   }
 });
 

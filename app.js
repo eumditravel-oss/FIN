@@ -572,7 +572,14 @@ function groupSum(rows, valueSelector){
     const code = (r.code ?? "").toString().trim();
     if(!code) continue;
     const m = findCode(code);
-    const cur = map.get(code) ?? { code, name:m?.name ?? r.name ?? "", spec:m?.spec ?? r.spec ?? "", unit:m?.unit ?? r.unit ?? "", sum:0 };
+    const cur = map.get(code) ?? {
+  code,
+  name: m?.name ?? r.name ?? "",
+  spec: m?.spec ?? r.spec ?? "",
+  unit: ((m?.conv_unit ?? "").toString().trim() !== "" ? m.conv_unit : (m?.unit ?? r.unit ?? "")),
+  sum: 0
+};
+
     cur.sum += valueSelector(r);
     map.set(code, cur);
   }

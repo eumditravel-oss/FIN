@@ -478,63 +478,41 @@ function renderCodes(){
   right.appendChild(uploadLabel);
   header.appendChild(right);
 
-  const tableWrap = document.createElement("div");
+    const tableWrap = document.createElement("div");
   tableWrap.className="table-wrap";
-tableWrap.innerHTML = `
-  <table>
-    <thead>
-      <tr>
-        <th style="min-width:70px;">No</th>
-        <th style="min-width:170px;">코드</th>
-        <th style="min-width:220px;">품명(자동)</th>
-        <th style="min-width:220px;">규격(자동)</th>
-        <th style="min-width:90px;">단위(자동)</th>
-
-        <!-- ✅ 노란색: 산출식 2.5배(넓게) -->
-        <th style="min-width:550px;">산출식</th>
-
-        <!-- ✅ 초록색: 물량(Value) 0.5배(좁게) -->
-        <th style="min-width:80px;">물량(Value)</th>
-
-        <th style="min-width:120px;">할증(배수)</th>
-        <th style="min-width:120px;">환산단위</th>
-        <th style="min-width:140px;">환산계수</th>
-        <th style="min-width:140px;">환산수량</th>
-        <th style="min-width:160px;">할증후수량</th>
-        <th style="min-width:120px;">작업</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-`;
-
-
+  tableWrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th style="min-width:160px;">코드</th>
+          <th style="min-width:220px;">품명</th>
+          <th style="min-width:220px;">규격</th>
+          <th style="min-width:90px;">단위</th>
+          <th style="min-width:110px;">할증</th>
+          <th style="min-width:120px;">환산단위</th>
+          <th style="min-width:140px;">환산계수</th>
+          <th style="min-width:260px;">비고</th>
+          <th style="min-width:120px;">작업</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  `;
   const tbody = tableWrap.querySelector("tbody");
 
   state.codes.forEach((r, idx)=>{
     const tr = document.createElement("tr");
     tr.innerHTML = `
-  <td>${idx+1}</td>
-  <td>${inputCell(r.code, v=>{ r.code=v; }, "코드 입력", {tabId, rowIdx:idx, colIdx:0})}</td>
-  <td>${readonlyCell(r.name)}</td>
-  <td>${readonlyCell(r.spec)}</td>
-  <td>${readonlyCell(r.unit)}</td>
-
-  <!-- ✅ 노란색: 산출식 -->
-  <td>${inputCell(r.formulaExpr, v=>{ r.formulaExpr=v; }, "예: (0.5+0.3)/2", {tabId, rowIdx:idx, colIdx:1})}</td>
-
-  <!-- ✅ 초록색: 물량(Value) -->
-  <td>${readonlyCell(String(roundUp3(r.value)))}</td>
-
-  <td>${readonlyCell(r.surchargeMul === "" ? "" : String(r.surchargeMul))}</td>
-  <td>${readonlyCell(r.convUnit)}</td>
-  <td>${inputCell(r.convFactor, v=>{ r.convFactor=v; }, "비워도 됨", {tabId, rowIdx:idx, colIdx:3})}</td>
-  <td>${readonlyCell(String(roundUp3(r.convQty)))}</td>
-  <td>${readonlyCell(String(roundUp3(r.finalQty)))}</td>
-  <td></td>
-`;
-
-
+      <td>${inputCell(r.code, v=>{ r.code=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:0})}</td>
+      <td>${inputCell(r.name, v=>{ r.name=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:1})}</td>
+      <td>${inputCell(r.spec, v=>{ r.spec=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:2})}</td>
+      <td>${inputCell(r.unit, v=>{ r.unit=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:3})}</td>
+      <td>${inputCell(r.surcharge, v=>{ r.surcharge=v; }, "예: 7", {tabId:"codes", rowIdx:idx, colIdx:4})}</td>
+      <td>${inputCell(r.conv_unit, v=>{ r.conv_unit=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:5})}</td>
+      <td>${inputCell(r.conv_factor, v=>{ r.conv_factor=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:6})}</td>
+      <td>${textAreaCell(r.note, v=>{ r.note=v; }, {tabId:"codes", rowIdx:idx, colIdx:7})}</td>
+      <td></td>
+    `;
     const tdAct = tr.lastElementChild;
     const act = document.createElement("div");
     act.className="row-actions";
@@ -547,6 +525,7 @@ tableWrap.innerHTML = `
   });
 
   wrap.appendChild(tableWrap);
+
   $view.appendChild(wrap);
 
   wireCells();
@@ -581,7 +560,7 @@ function renderCalcSheet(title, rows, tabId, mode){
 
   const tableWrap = document.createElement("div");
   tableWrap.className="table-wrap";
-  tableWrap.innerHTML = `
+    tableWrap.innerHTML = `
     <table>
       <thead>
         <tr>
@@ -590,42 +569,52 @@ function renderCalcSheet(title, rows, tabId, mode){
           <th style="min-width:220px;">품명(자동)</th>
           <th style="min-width:220px;">규격(자동)</th>
           <th style="min-width:90px;">단위(자동)</th>
-          <th style="min-width:220px;">산출식</th>
-          <th style="min-width:150px;">물량(Value)</th>
-          <th style="min-width:220px;">비고</th>
-          <th style="min-width:120px;">할증(배수)</th>
-          <th style="min-width:120px;">환산단위</th>
-          <th style="min-width:140px;">환산계수</th>
-          <th style="min-width:140px;">환산수량</th>
-          <th style="min-width:160px;">할증후수량</th>
+
+          <!-- ✅ 노란색: 2.5배 -->
+          <th style="min-width:550px;">산출식</th>
+
+          <!-- ✅ 초록색: 0.5배 -->
+          <th style="min-width:80px;">물량(Value)</th>
+
+          <th style="min-width:90px;">할증(배수)</th>
+          <th style="min-width:90px;">환산단위</th>
+          <th style="min-width:110px;">환산계수</th>
+          <th style="min-width:120px;">환산수량</th>
+          <th style="min-width:130px;">할증후수량</th>
           <th style="min-width:120px;">작업</th>
         </tr>
       </thead>
       <tbody></tbody>
     </table>
   `;
+
   const tbody = tableWrap.querySelector("tbody");
 
   rows.forEach((r, idx)=>{
     recalcRow(r);
 
     const tr = document.createElement("tr");
-    tr.innerHTML = `
+        tr.innerHTML = `
       <td>${idx+1}</td>
       <td>${inputCell(r.code, v=>{ r.code=v; }, "코드 입력", {tabId, rowIdx:idx, colIdx:0})}</td>
       <td>${readonlyCell(r.name)}</td>
       <td>${readonlyCell(r.spec)}</td>
       <td>${readonlyCell(r.unit)}</td>
+
       <td>${inputCell(r.formulaExpr, v=>{ r.formulaExpr=v; }, "예: (0.5+0.3)/2", {tabId, rowIdx:idx, colIdx:1})}</td>
       <td>${readonlyCell(String(roundUp3(r.value)))}</td>
-      <td>${textAreaCell(r.note, v=>{ r.note=v; }, {tabId, rowIdx:idx, colIdx:2})}</td>
+
       <td>${readonlyCell(r.surchargeMul === "" ? "" : String(r.surchargeMul))}</td>
       <td>${readonlyCell(r.convUnit)}</td>
-      <td>${inputCell(r.convFactor, v=>{ r.convFactor=v; }, "비워도 됨", {tabId, rowIdx:idx, colIdx:3})}</td>
+
+      <!-- ✅ 환산계수도 입력 막기 -->
+      <td>${readonlyCell((r.convFactor ?? "").toString())}</td>
+
       <td>${readonlyCell(String(roundUp3(r.convQty)))}</td>
       <td>${readonlyCell(String(roundUp3(r.finalQty)))}</td>
       <td></td>
     `;
+
 
     const tdAct = tr.lastElementChild;
     const act = document.createElement("div");

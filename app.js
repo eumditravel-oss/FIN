@@ -451,24 +451,38 @@ function renderCodes(){
   wrap.appendChild(tableWrap);
   $view.appendChild(wrap);
 
-  wireCells();
-  wireFocusTracking();
+wireCells();
+wireFocusTracking();
+wireMouseFocus();   // ✅ 추가(호출만)
 
-   function wireMouseFocus(){
-  // td 클릭해도 input/textarea로 포커스 이동
-  document.querySelectorAll("td").forEach(td=>{
-    td.addEventListener("mousedown", (e)=>{
-      // 이미 input/textarea 눌렀으면 그대로
-      if(e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
 
-      const el = td.querySelector('input.cell, textarea.cell');
-      if(el){
-        e.preventDefault(); // td가 먼저 잡아먹는 selection 방지
-        el.focus();
-      }
-    }, true); // capture
-  });
+   /* ===== Mouse click -> focus cell (delegation, once) ===== */
+let mouseFocusWired = false;
+
+function wireMouseFocus(){
+  if(mouseFocusWired) return;
+  mouseFocusWired = true;
+
+  // ✅ td 눌러도 내부 input/textarea로 포커스 이동
+  //    매 렌더마다 리스너 중복으로 안 붙고, 딱 1번만 동작
+  document.addEventListener("mousedown", (e)=>{
+    // input/textarea 자체를 눌렀으면 그대로
+    const t = e.target;
+    if(t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+
+    // td를 눌렀으면 그 안의 cell로 포커스
+    const td = t?.closest?.("td");
+    if(!td) return;
+
+    const cell = td.querySelector("input.cell, textarea.cell");
+    if(!cell) return;
+
+    // ✅ td가 드래그/선택 잡아먹는 것 방지
+    e.preventDefault();
+    cell.focus();
+  }, true); // capture
 }
+
 
 
   const {row, col} = lastFocusCell.codes;
@@ -576,9 +590,10 @@ function renderCalcSheet(title, rows, tabId, mode){
 
   $view.appendChild(wrap);
 
-  wireCells();
-  wireFocusTracking();
-   wireMouseFocus();
+wireCells();
+wireFocusTracking();
+wireMouseFocus();   // ✅ 추가(호출만)
+
 
 
   const last = lastFocusCell[tabId] ?? {row:0,col:0};

@@ -44,10 +44,10 @@ function wireMouseFocus(){
     const cell = td.querySelector("input.cell:not(.readonly), textarea.cell");
     if(!cell) return;
 
-    // 기본 동작을 막지 않고 포커스만 이동
     cell.focus();
   });
 }
+
 
 
 function makeEmptyCalcRow(){

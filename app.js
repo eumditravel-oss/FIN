@@ -818,6 +818,20 @@ window.addEventListener("message", (event)=>{
   const msg = event.data;
   if(!msg || typeof msg !== "object") return;
 
+     if(msg.type === "CODES_UPDATE"){
+    // picker에서 코드 마스터 전체를 갱신해 달라는 요청
+    if(Array.isArray(msg.codes)){
+      state.codes = msg.codes;
+      recalcAll();
+      saveState();
+
+      // 현재 탭이 steel/steelSub/support면 readonly 자동 갱신이 필요할 수 있으니 리렌더 1회
+      go(activeTabId);
+    }
+    return;
+  }
+
+
   if(msg.type === "INSERT_SELECTED"){
     const { originTab, focusRow, selectedCodes } = msg;
     if(Array.isArray(selectedCodes) && selectedCodes.length){

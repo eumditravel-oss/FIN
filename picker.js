@@ -206,11 +206,27 @@ document.addEventListener("keydown", (e)=>{
     }
   }
 
+     // ✅ Shift + ArrowDown/Up : 커서 이동 + 다중선택 토글(Ctrl+B와 동일)
+  if(e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "ArrowDown" || e.key === "ArrowUp")){
+    e.preventDefault();
+
+    // 먼저 커서 이동
+    moveCursor(e.key === "ArrowDown" ? 1 : -1);
+
+    // 이동한 커서 행을 토글 선택 (Ctrl+B 효과)
+    toggleSelectCursor();
+
+    return;
+  }
+
+
   // 방향키: 커서 이동(리스트 있을 때)
   if(e.key === "ArrowDown"){
     e.preventDefault();
     moveCursor(1);
   }
+
+   
   if(e.key === "ArrowUp"){
     e.preventDefault();
     moveCursor(-1);

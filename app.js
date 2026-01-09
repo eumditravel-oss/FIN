@@ -929,15 +929,7 @@ document.addEventListener("keydown", (e)=>{
 
 
 
-let editMode = false; // F2 편집모드 여부
 
-function setEditingClass(on){
-  document.querySelectorAll('.cell.editing').forEach(x=>x.classList.remove('editing'));
-  if(on){
-    const el = document.activeElement;
-    if(el && el.classList && el.classList.contains("cell")) el.classList.add("editing");
-  }
-}
 
 
 

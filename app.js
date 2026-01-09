@@ -18,6 +18,9 @@ const SEED_CODES = [
   {"code":"Z0ETC001","name":"기타","spec":"(사용자 입력)","unit":"","surcharge":"","conv_unit":"","conv_factor":"","note":""},
 ];
 
+let suppressRerenderOnce = false;
+
+
 function makeEmptyCalcRow(){
   return {
     code: "", name: "", spec: "", unit: "",
@@ -210,16 +213,20 @@ function wireCells(){
     if(!meta) return;
 
     const handler = (evt)=>{
-      meta.onChange(el.value);
-      recalcAll();
-      saveState();
+  meta.onChange(el.value);
+  recalcAll();
+  saveState();
 
-      // input 중엔 전체 재렌더 금지(커서 튐 방지)
-      if(evt && evt.type === "input") return;
+  // input 중엔 전체 재렌더 금지(커서 튐 방지)
+  if(evt && evt.type === "input") return;
 
-      // blur/change/enter일 때만 재렌더
-      go(activeTabId, { silentTabRender:true });
-    };
+  // ✅ 방향키 이동으로 blur가 발생한 경우: 재렌더 금지(포커스 튕김 방지)
+  if(suppressRerenderOnce) return;
+
+  // blur/change/enter일 때만 재렌더
+  go(activeTabId, { silentTabRender:true });
+};
+
 
     el.addEventListener("input", handler);
     el.addEventListener("blur", handler);
@@ -870,12 +877,16 @@ document.addEventListener("keydown", (e)=>{
     if(e.key === "ArrowUp"){
       if(!textareaAtTop(el)) return;
       e.preventDefault();
+         suppressRerenderOnce = true;                 // ✅ 추가
+  setTimeout(()=>suppressRerenderOnce=false,0);// ✅ 추가
       moveGridFrom(el, -1, 0);
       return;
     }
     if(e.key === "ArrowDown"){
       if(!textareaAtBottom(el)) return;
       e.preventDefault();
+         suppressRerenderOnce = true;                 // ✅ 추가
+  setTimeout(()=>suppressRerenderOnce=false,0);// ✅ 추가
       moveGridFrom(el, +1, 0);
       return;
     }
@@ -883,12 +894,16 @@ document.addEventListener("keydown", (e)=>{
     if(e.key === "ArrowLeft"){
       if(!caretAtStart(el)) return;
       e.preventDefault();
+         suppressRerenderOnce = true;                 // ✅ 추가
+  setTimeout(()=>suppressRerenderOnce=false,0);// ✅ 추가
       moveGridFrom(el, 0, -1);
       return;
     }
     if(e.key === "ArrowRight"){
       if(!caretAtEnd(el)) return;
       e.preventDefault();
+         suppressRerenderOnce = true;                 // ✅ 추가
+  setTimeout(()=>suppressRerenderOnce=false,0);// ✅ 추가
       moveGridFrom(el, 0, +1);
       return;
     }

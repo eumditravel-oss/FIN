@@ -12,6 +12,8 @@ let codes = [];
 let results = [];
 let cursorIndex = -1;
 const selected = new Set(); // code string
+let shiftSelecting = false; // Shift로 범위선택 시작 여부
+
 
 const $q = document.getElementById("q");
 const $mode = document.getElementById("searchMode");
@@ -206,16 +208,32 @@ document.addEventListener("keydown", (e)=>{
     }
   }
 
-     // ✅ Shift + ArrowDown/Up : 커서 이동 + 다중선택 토글(Ctrl+B와 동일)
+       // ✅ Shift + ArrowDown/Up : 시작행부터 선택 + 이동한 행도 선택
   if(e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "ArrowDown" || e.key === "ArrowUp")){
     e.preventDefault();
 
-    // 먼저 커서 이동
+    // ✅ Shift 선택이 "처음 시작"될 때: 현재 커서 행을 먼저 선택(시작행 포함)
+    if(!shiftSelecting){
+      shiftSelecting = true;
+      if(cursorIndex >= 0){
+        const cur = results[cursorIndex];
+        if(cur && !selected.has(cur.code)){
+          selected.add(cur.code);
+        }
+      }
+    }
+
+    // 커서 이동
     moveCursor(e.key === "ArrowDown" ? 1 : -1);
 
-    // 이동한 커서 행을 토글 선택 (Ctrl+B 효과)
-    toggleSelectCursor();
+    // 이동한 커서 행도 선택(토글 X, 무조건 add)
+    if(cursorIndex >= 0){
+      const it = results[cursorIndex];
+      if(it) selected.add(it.code);
+    }
 
+    render();
+    ensureVisible();
     return;
   }
 

@@ -1,9 +1,9 @@
 /* =========================
-   FIN 산출자료(Web) app.js (통합본)
-   - ✅ 방향키 이동(Excel-like) 100% 동작 (capture 단계에서 가로채기)
-   - ✅ F2 편집모드(커서 이동) + Esc/Enter로 편집모드 종료
-   - ✅ 편집 중 셀 테두리 변경(.cell.editing 클래스)
-   - ✅ 중복 선언/중복 리스너 정리
+   FIN 산출자료(Web) app.js (통합본) - FIXED
+   - ✅ 방향키 이동(Excel-like) (capture)
+   - ✅ F2 편집모드
+   - ✅ 마우스로 td 클릭해도 셀 포커스 가능 (이벤트 위임 1회)
+   - ✅ wireMouseFocus 전역화 + preventDefault 최소화 (키보드 막힘 해결)
    ========================= */
 
 const STORAGE_KEY = "FIN_WEB_V8";
@@ -20,6 +20,40 @@ const SEED_CODES = [
 
 let suppressRerenderOnce = false;
 
+/* =========================
+   ✅ Mouse click -> focus cell (delegation, once)  [전역]
+   - capture에서 무조건 preventDefault 금지
+   - td 클릭일 때만, 그리고 focus는 setTimeout(0)으로 충돌 방지
+   ========================= */
+let mouseFocusWired = false;
+
+function wireMouseFocus(){
+  if(mouseFocusWired) return;
+  mouseFocusWired = true;
+
+  document.addEventListener("mousedown", (e)=>{
+    const t = e.target;
+
+    // input/textarea 자체 클릭은 그대로 두기
+    if(t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+
+    // td가 아니면 무시
+    const td = t?.closest?.("td");
+    if(!td) return;
+
+    // td 안의 cell 찾기
+    const cell = td.querySelector("input.cell:not(.readonly), textarea.cell");
+    if(!cell) return;
+
+    // ✅ 여기서 무조건 preventDefault 하면 키보드/포커스 흐름이 꼬일 수 있음
+    // 대신 selection 방지만 살짝:
+    // (드래그 선택을 막고 싶으면 아래 한 줄만)
+    e.preventDefault();
+
+    // 포커스는 tick 뒤에(브라우저 기본 처리와 충돌 방지)
+    setTimeout(()=>cell.focus(), 0);
+  }, true); // capture
+}
 
 function makeEmptyCalcRow(){
   return {
@@ -180,9 +214,6 @@ function panel(title, desc){
 /* ===== Cells registry ===== */
 const cellRegistry = [];
 
-/**
- * gridAttrs = {tabId, rowIdx, colIdx}
- */
 function gridAttrString(gridAttrs){
   if(!gridAttrs) return "";
   const {tabId, rowIdx, colIdx} = gridAttrs;
@@ -213,20 +244,15 @@ function wireCells(){
     if(!meta) return;
 
     const handler = (evt)=>{
-  meta.onChange(el.value);
-  recalcAll();
-  saveState();
+      meta.onChange(el.value);
+      recalcAll();
+      saveState();
 
-  // input 중엔 전체 재렌더 금지(커서 튐 방지)
-  if(evt && evt.type === "input") return;
+      if(evt && evt.type === "input") return;
+      if(suppressRerenderOnce) return;
 
-  // ✅ 방향키 이동으로 blur가 발생한 경우: 재렌더 금지(포커스 튕김 방지)
-  if(suppressRerenderOnce) return;
-
-  // blur/change/enter일 때만 재렌더
-  go(activeTabId, { silentTabRender:true });
-};
-
+      go(activeTabId, { silentTabRender:true });
+    };
 
     el.addEventListener("input", handler);
     el.addEventListener("blur", handler);
@@ -235,7 +261,7 @@ function wireCells(){
     // ✅ 산출식(col=1) Enter = 계산 + 아래행 이동
     el.addEventListener("keydown", (e)=>{
       if(e.key !== "Enter") return;
-      if(el.tagName.toLowerCase() === "textarea") return; // 비고는 줄바꿈 유지
+      if(el.tagName.toLowerCase() === "textarea") return;
 
       const col = Number(el.getAttribute("data-col") || -1);
       if(col !== 1) return;
@@ -249,7 +275,7 @@ function wireCells(){
   cellRegistry.length = 0;
 }
 
-/* ===== Focus tracking for Ctrl+F3 insertion ===== */
+/* ===== Focus tracking ===== */
 function wireFocusTracking(){
   document.querySelectorAll('[data-grid="1"]').forEach(el=>{
     el.addEventListener("focus", ()=>{
@@ -285,7 +311,6 @@ function moveGridFrom(el, dRow, dCol){
 
   if(focusGrid(tab, targetRow, targetCol)) return true;
 
-  // col 유동 대비 좌우 탐색
   for(let offset=1; offset<=6; offset++){
     if(focusGrid(tab, targetRow, targetCol - offset)) return true;
     if(focusGrid(tab, targetRow, targetCol + offset)) return true;
@@ -451,39 +476,9 @@ function renderCodes(){
   wrap.appendChild(tableWrap);
   $view.appendChild(wrap);
 
-wireCells();
-wireFocusTracking();
-wireMouseFocus();   // ✅ 추가(호출만)
-
-
-   /* ===== Mouse click -> focus cell (delegation, once) ===== */
-let mouseFocusWired = false;
-
-function wireMouseFocus(){
-  if(mouseFocusWired) return;
-  mouseFocusWired = true;
-
-  // ✅ td 눌러도 내부 input/textarea로 포커스 이동
-  //    매 렌더마다 리스너 중복으로 안 붙고, 딱 1번만 동작
-  document.addEventListener("mousedown", (e)=>{
-    // input/textarea 자체를 눌렀으면 그대로
-    const t = e.target;
-    if(t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
-
-    // td를 눌렀으면 그 안의 cell로 포커스
-    const td = t?.closest?.("td");
-    if(!td) return;
-
-    const cell = td.querySelector("input.cell, textarea.cell");
-    if(!cell) return;
-
-    // ✅ td가 드래그/선택 잡아먹는 것 방지
-    e.preventDefault();
-    cell.focus();
-  }, true); // capture
-}
-
-
+  wireCells();
+  wireFocusTracking();
+  wireMouseFocus(); // ✅ 전역 위임 1회만
 
   const {row, col} = lastFocusCell.codes;
   setTimeout(()=>focusGrid("codes", row, col), 0);
@@ -590,11 +585,9 @@ function renderCalcSheet(title, rows, tabId, mode){
 
   $view.appendChild(wrap);
 
-wireCells();
-wireFocusTracking();
-wireMouseFocus();   // ✅ 추가(호출만)
-
-
+  wireCells();
+  wireFocusTracking();
+  wireMouseFocus(); // ✅ 전역 위임 1회만
 
   const last = lastFocusCell[tabId] ?? {row:0,col:0};
   setTimeout(()=>focusGrid(tabId, last.row, last.col), 0);
@@ -607,13 +600,12 @@ function groupSum(rows, valueSelector){
     if(!code) continue;
     const m = findCode(code);
     const cur = map.get(code) ?? {
-  code,
-  name: m?.name ?? r.name ?? "",
-  spec: m?.spec ?? r.spec ?? "",
-  unit: ((m?.conv_unit ?? "").toString().trim() !== "" ? m.conv_unit : (m?.unit ?? r.unit ?? "")),
-  sum: 0
-};
-
+      code,
+      name: m?.name ?? r.name ?? "",
+      spec: m?.spec ?? r.spec ?? "",
+      unit: ((m?.conv_unit ?? "").toString().trim() !== "" ? m.conv_unit : (m?.unit ?? r.unit ?? "")),
+      sum: 0
+    };
     cur.sum += valueSelector(r);
     map.set(code, cur);
   }
@@ -778,11 +770,9 @@ window.addEventListener("message", (event)=>{
 });
 
 /* =========================
-   ✅ HOTKEYS + ✅ 방향키/편집모드
-   - 핵심: capture 단계에서 키를 먼저 가로채서
-     input/textarea 내부 커서이동보다 "셀 이동"을 우선시킴
+   ✅ HOTKEYS + ✅ 방향키/편집모드 (capture)
    ========================= */
-let editMode = false; // F2 편집모드 여부
+let editMode = false;
 
 function setEditingClass(on){
   document.querySelectorAll('.cell.editing').forEach(x=>x.classList.remove('editing'));
@@ -795,11 +785,9 @@ function setEditingClass(on){
 function isGridEl(el){
   return el && el.getAttribute && el.getAttribute("data-grid") === "1";
 }
-
 function isTextareaEl(el){
   return (el?.tagName || "").toLowerCase() === "textarea";
 }
-
 function caretAtStart(el){
   try{ return (el.selectionStart ?? 0) === 0 && (el.selectionEnd ?? 0) === 0; }catch{ return false; }
 }
@@ -809,7 +797,6 @@ function caretAtEnd(el){
     return (el.selectionStart ?? 0) === len && (el.selectionEnd ?? 0) === len;
   }catch{ return false; }
 }
-
 function textareaAtTop(el){
   const v = el.value ?? "";
   const pos = el.selectionStart ?? 0;
@@ -854,37 +841,31 @@ function deleteRowAtActiveFocus(){
 }
 
 document.addEventListener("keydown", (e)=>{
-  // ✅ Ctrl+. : picker
   if(e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "." || e.code === "Period")){
     e.preventDefault();
     openPickerWindow();
     return;
   }
 
-  // ✅ Ctrl+Delete : delete row
   if(e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "Delete" || e.code === "Delete")){
     e.preventDefault();
     deleteRowAtActiveFocus();
     return;
   }
 
-  // ✅ Ctrl+F3 : insert row
   if(e.ctrlKey && !e.altKey && !e.metaKey && e.code === "F3"){
     e.preventDefault();
     insertRowBelowActive();
     return;
   }
 
-  // ===== 아래부터는 "그리드 포커스"일 때만 동작 =====
   const el = document.activeElement;
   if(!isGridEl(el)) return;
 
-  // ✅ F2 : 편집모드 ON
   if(e.key === "F2"){
     e.preventDefault();
     editMode = true;
     setEditingClass(true);
-    // 커서를 맨 뒤로
     if(el.setSelectionRange){
       const len = (el.value ?? "").length;
       el.setSelectionRange(len, len);
@@ -892,7 +873,6 @@ document.addEventListener("keydown", (e)=>{
     return;
   }
 
-  // ✅ Esc : 편집모드 OFF
   if(editMode && e.key === "Escape"){
     e.preventDefault();
     editMode = false;
@@ -900,7 +880,6 @@ document.addEventListener("keydown", (e)=>{
     return;
   }
 
-  // ✅ Enter : (편집모드일 때) 편집 OFF + 아래로 이동 (textarea 제외)
   if(editMode && e.key === "Enter" && !isTextareaEl(el)){
     e.preventDefault();
     editMode = false;
@@ -909,80 +888,63 @@ document.addEventListener("keydown", (e)=>{
     return;
   }
 
-  // ✅ 편집모드면: 방향키는 "입력 커서 이동"을 존중
   if(editMode) return;
 
-  // ===== 기본모드: 방향키 = 셀 이동(Excel 느낌) =====
-  // textarea는 내부 줄 이동이 있으니, 위/아래는 맨 위/아래에서만 셀 이동.
+  function beginNav(){
+    suppressRerenderOnce = true;
+    setTimeout(()=>suppressRerenderOnce=false, 0);
+  }
+
   if(isTextareaEl(el)){
     if(e.key === "ArrowUp"){
       if(!textareaAtTop(el)) return;
-      e.preventDefault();
-         suppressRerenderOnce = true;                 // ✅ 추가
-  setTimeout(()=>suppressRerenderOnce=false,0);// ✅ 추가
+      e.preventDefault(); beginNav();
       moveGridFrom(el, -1, 0);
       return;
     }
     if(e.key === "ArrowDown"){
       if(!textareaAtBottom(el)) return;
-      e.preventDefault();
-         suppressRerenderOnce = true;                 // ✅ 추가
-  setTimeout(()=>suppressRerenderOnce=false,0);// ✅ 추가
+      e.preventDefault(); beginNav();
       moveGridFrom(el, +1, 0);
       return;
     }
-    // 좌/우는: 커서가 맨 앞/뒤일 때만 셀 이동(아니면 textarea 커서 이동)
     if(e.key === "ArrowLeft"){
       if(!caretAtStart(el)) return;
-      e.preventDefault();
-         suppressRerenderOnce = true;                 // ✅ 추가
-  setTimeout(()=>suppressRerenderOnce=false,0);// ✅ 추가
+      e.preventDefault(); beginNav();
       moveGridFrom(el, 0, -1);
       return;
     }
     if(e.key === "ArrowRight"){
       if(!caretAtEnd(el)) return;
-      e.preventDefault();
-         suppressRerenderOnce = true;                 // ✅ 추가
-  setTimeout(()=>suppressRerenderOnce=false,0);// ✅ 추가
+      e.preventDefault(); beginNav();
       moveGridFrom(el, 0, +1);
       return;
     }
     return;
   }
 
-function beginNav(){
-  suppressRerenderOnce = true;
-  setTimeout(()=>suppressRerenderOnce=false, 0);
-}
+  if(e.key === "ArrowUp"){
+    e.preventDefault(); beginNav();
+    moveGridFrom(el, -1, 0);
+    return;
+  }
+  if(e.key === "ArrowDown"){
+    e.preventDefault(); beginNav();
+    moveGridFrom(el, +1, 0);
+    return;
+  }
+  if(e.key === "ArrowLeft"){
+    e.preventDefault(); beginNav();
+    moveGridFrom(el, 0, -1);
+    return;
+  }
+  if(e.key === "ArrowRight"){
+    e.preventDefault(); beginNav();
+    moveGridFrom(el, 0, +1);
+    return;
+  }
 
-// input은 무조건 셀 이동
-if(e.key === "ArrowUp"){
-  e.preventDefault();
-  beginNav();
-  moveGridFrom(el, -1, 0);
-  return;
-}
-if(e.key === "ArrowDown"){
-  e.preventDefault();
-  beginNav();
-  moveGridFrom(el, +1, 0);
-  return;
-}
-if(e.key === "ArrowLeft"){
-  e.preventDefault();
-  beginNav();
-  moveGridFrom(el, 0, -1);
-  return;
-}
-if(e.key === "ArrowRight"){
-  e.preventDefault();
-  beginNav();
-  moveGridFrom(el, 0, +1);
-  return;
-}
-
-}, true); // ✅ 핵심: capture=true (여기 때문에 "방향키가 안 먹는" 문제가 해결됨)
+}, true); // capture
 
 /* ===== 버튼들 ===== */
 document.getElementById("btnOpenPicker")?.addEventListener("click", openPickerWindow);
@@ -1023,9 +985,3 @@ document.getElementById("btnReset")?.addEventListener("click", ()=>{
   saveState();
   go("steel");
 });
-
-/* =========================
-   ✅ CSS 추가 필요(편집 테두리)
-   style.css 또는 <style>에 아래 추가:
-   .cell.editing{ outline:2px solid rgba(26,61,124,.9); box-shadow:0 0 0 3px rgba(26,61,124,.15); }
-   ========================= */

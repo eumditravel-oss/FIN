@@ -454,6 +454,23 @@ function renderCodes(){
   wireCells();
   wireFocusTracking();
 
+   function wireMouseFocus(){
+  // td 클릭해도 input/textarea로 포커스 이동
+  document.querySelectorAll("td").forEach(td=>{
+    td.addEventListener("mousedown", (e)=>{
+      // 이미 input/textarea 눌렀으면 그대로
+      if(e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+
+      const el = td.querySelector('input.cell, textarea.cell');
+      if(el){
+        e.preventDefault(); // td가 먼저 잡아먹는 selection 방지
+        el.focus();
+      }
+    }, true); // capture
+  });
+}
+
+
   const {row, col} = lastFocusCell.codes;
   setTimeout(()=>focusGrid("codes", row, col), 0);
 }
@@ -561,6 +578,8 @@ function renderCalcSheet(title, rows, tabId, mode){
 
   wireCells();
   wireFocusTracking();
+   wireMouseFocus();
+
 
   const last = lastFocusCell[tabId] ?? {row:0,col:0};
   setTimeout(()=>focusGrid(tabId, last.row, last.col), 0);

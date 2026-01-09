@@ -32,7 +32,14 @@ function wireMouseFocus(){
   mouseFocusWired = true;
 
   document.addEventListener("click", (e)=>{
+    // ✅ 1) 드래그 선택(텍스트 selection)이 존재하면 아무것도 하지 않음
+    const sel = window.getSelection?.();
+    if(sel && !sel.isCollapsed) return;
+
     const t = e.target;
+
+    // ✅ 2) 버튼/링크/라벨 등 UI 클릭은 셀 포커스 강제 이동 금지
+    if(t?.closest?.("button,a,label,select,option")) return;
 
     // input/textarea 직접 클릭은 그대로 둠
     if(t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
@@ -44,9 +51,14 @@ function wireMouseFocus(){
     const cell = td.querySelector("input.cell:not(.readonly), textarea.cell");
     if(!cell) return;
 
+    // ✅ 3) 클릭으로 셀 이동 시 편집모드 해제(선택)
+    editMode = false;
+    setEditingClass(false);
+
     cell.focus();
   });
 }
+
 
 
 

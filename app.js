@@ -810,6 +810,16 @@ document.getElementById("fileImport")?.addEventListener("change", async (e)=>{
 });
 
 /* ===== GLOBAL Arrow navigation (Excel + F2 Edit Mode) ===== */
+let editMode = false; // F2 편집모드 여부
+
+function setEditingClass(on){
+  document.querySelectorAll('.cell.editing').forEach(x=>x.classList.remove('editing'));
+  if(on){
+    const el = document.activeElement;
+    if(el && el.classList && el.classList.contains("cell")) el.classList.add("editing");
+  }
+}
+
 function isGridEl(el){
   return el && el.getAttribute && el.getAttribute("data-grid") === "1";
 }
@@ -833,62 +843,89 @@ document.addEventListener("keydown", (e)=>{
   const isTextarea = tag === "textarea";
 
   /* ===== F2 : 편집모드 ON ===== */
-if(e.key === "F2"){
-  e.preventDefault();
-  editMode = true;
-  setEditingClass(true);
+  if(e.key === "F2"){
+    e.preventDefault();
+    editMode = true;
+    setEditingClass(true);
 
-  if(el.setSelectionRange){
-    const len = (el.value ?? "").length;
-    el.setSelectionRange(len, len);
+    // 커서를 맨 뒤로
+    if(el.setSelectionRange){
+      const len = (el.value ?? "").length;
+      el.setSelectionRange(len, len);
+    }
+    return;
   }
-  return;
-}
 
+  /* ===== Esc : 편집모드 OFF ===== */
+  if(editMode && e.key === "Escape"){
+    e.preventDefault();
+    editMode = false;
+    setEditingClass(false);
+    el.blur();
+    el.focus();
+    return;
+  }
 
-  /* ===== Enter / Esc : 편집모드 종료 ===== */
-if(editMode && (e.key === "Enter" || e.key === "Escape")){
-  e.preventDefault();
-  editMode = false;
-  setEditingClass(false);
+  /* ===== Enter : 편집모드 OFF + 아래로 이동 ===== */
+  if(editMode && e.key === "Enter"){
+    // textarea는 Enter가 줄바꿈이므로 제외
+    if(isTextarea) return;
 
-  if(e.key === "Enter"){
+    e.preventDefault();
+    editMode = false;
+    setEditingClass(false);
     moveGridFrom(el, +1, 0);
+    return;
   }
-  return;
-}
 
-  
+  /* ===== 편집모드면 방향키는 "셀 이동" 막고, 입력 커서 이동 유지 ===== */
+  if(editMode) return;
 
-
-  /* ===== textarea는 기존 동작 유지 ===== */
+  /* ===== textarea는 라인 이동 우선, 맨 위/아래에서만 셀 이동 ===== */
   if(isTextarea){
     if(e.key === "ArrowUp"){
       if(!textareaAtTop(el)) return;
       e.preventDefault();
       moveGridFrom(el, -1, 0);
+      return;
     }
     if(e.key === "ArrowDown"){
       if(!textareaAtBottom(el)) return;
       e.preventDefault();
       moveGridFrom(el, +1, 0);
+      return;
     }
+    // 좌우는 textarea 내부 커서 이동을 존중
     return;
   }
 
-  /* ===== input 처리 ===== */
-  if(editMode){
-    // 편집모드면 input 안에서 커서 이동 허용
+  /* ===== 기본 모드: 방향키 = 무조건 셀 이동 ===== */
+  if(e.key === "ArrowUp"){
+    e.preventDefault();
+    setEditingClass(false);
+    moveGridFrom(el, -1, 0);
     return;
   }
-
-  // 🔥 기본 모드 = 무조건 셀 이동
-  if(e.key === "ArrowUp"){ e.preventDefault(); setEditingClass(false); moveGridFrom(el, -1, 0); }
-  if(e.key === "ArrowDown"){ e.preventDefault(); setEditingClass(false); moveGridFrom(el, -1, 0); }
-  if(e.key === "ArrowLeft"){ e.preventDefault(); setEditingClass(false); moveGridFrom(el, -1, 0); }
-  if(e.key === "ArrowRight"){ e.preventDefault(); setEditingClass(false); moveGridFrom(el, -1, 0); }
-
+  if(e.key === "ArrowDown"){
+    e.preventDefault();
+    setEditingClass(false);
+    moveGridFrom(el, +1, 0);
+    return;
+  }
+  if(e.key === "ArrowLeft"){
+    e.preventDefault();
+    setEditingClass(false);
+    moveGridFrom(el, 0, -1);
+    return;
+  }
+  if(e.key === "ArrowRight"){
+    e.preventDefault();
+    setEditingClass(false);
+    moveGridFrom(el, 0, +1);
+    return;
+  }
 }, false);
+
 
 
 

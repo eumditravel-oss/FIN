@@ -253,6 +253,29 @@ textarea.cell{
 .cell.editing{
   outline: 2px solid rgba(26,61,124,0.9);
   box-shadow: 0 0 0 3px rgba(26,61,124,0.15);
+
+  
 }
 
+
+
+/* ✅ 셀 마우스 클릭/드래그 선택 강제 허용 */
+.cell{
+  pointer-events: auto !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text;
+}
+
+/* ✅ 테이블 위에 덮는 레이어가 있다면 클릭 가로채지 않게 */
+.table-wrap,
+.table-wrap *{
+  pointer-events: auto;
+}
+
+/* ✅ 혹시 tr/td에 overlay가 올라가 있으면 td도 클릭 가능 */
+.table-wrap td,
+.table-wrap th{
+  pointer-events: auto !important;
+}
 

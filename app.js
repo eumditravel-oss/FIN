@@ -484,31 +484,30 @@ tableWrap.innerHTML = `
   <table>
     <thead>
       <tr>
-        <th style="min-width:60px;">No</th>
-        <th style="min-width:140px;">코드</th>
-        <th style="min-width:180px;">품명(자동)</th>
-        <th style="min-width:180px;">규격(자동)</th>
-        <th style="min-width:70px;">단위(자동)</th>
+        <th style="min-width:70px;">No</th>
+        <th style="min-width:170px;">코드</th>
+        <th style="min-width:220px;">품명(자동)</th>
+        <th style="min-width:220px;">규격(자동)</th>
+        <th style="min-width:90px;">단위(자동)</th>
 
-        <!-- ✅ 산출식: 기존보다 크게(2.5배 느낌) -->
+        <!-- ✅ 노란색: 산출식 2.5배(넓게) -->
         <th style="min-width:550px;">산출식</th>
 
-        <!-- ✅ 물량(Value): 기존보다 작게(0.5배 느낌) -->
+        <!-- ✅ 초록색: 물량(Value) 0.5배(좁게) -->
         <th style="min-width:80px;">물량(Value)</th>
 
-        <!-- ✅ 할증/환산 관련: 더 좁게 -->
-        <th style="min-width:90px;">할증(배수)</th>
-        <th style="min-width:90px;">환산단위</th>
-        <th style="min-width:90px;">환산계수</th>
-        <th style="min-width:110px;">환산수량</th>
-        <th style="min-width:120px;">할증후수량</th>
-
-        <th style="min-width:110px;">작업</th>
+        <th style="min-width:120px;">할증(배수)</th>
+        <th style="min-width:120px;">환산단위</th>
+        <th style="min-width:140px;">환산계수</th>
+        <th style="min-width:140px;">환산수량</th>
+        <th style="min-width:160px;">할증후수량</th>
+        <th style="min-width:120px;">작업</th>
       </tr>
     </thead>
     <tbody></tbody>
   </table>
 `;
+
 
   const tbody = tableWrap.querySelector("tbody");
 
@@ -516,29 +515,25 @@ tableWrap.innerHTML = `
     const tr = document.createElement("tr");
     tr.innerHTML = `
   <td>${idx+1}</td>
-
   <td>${inputCell(r.code, v=>{ r.code=v; }, "코드 입력", {tabId, rowIdx:idx, colIdx:0})}</td>
-
   <td>${readonlyCell(r.name)}</td>
   <td>${readonlyCell(r.spec)}</td>
   <td>${readonlyCell(r.unit)}</td>
 
-  <!-- ✅ 산출식(넓게) -->
-  <td>${inputCell(r.formulaExpr, v=>{ r.formulaExpr=v; }, "예: (0.5+0.3)/2 <메모>", {tabId, rowIdx:idx, colIdx:1})}</td>
+  <!-- ✅ 노란색: 산출식 -->
+  <td>${inputCell(r.formulaExpr, v=>{ r.formulaExpr=v; }, "예: (0.5+0.3)/2", {tabId, rowIdx:idx, colIdx:1})}</td>
 
-  <!-- 물량(Value) -->
+  <!-- ✅ 초록색: 물량(Value) -->
   <td>${readonlyCell(String(roundUp3(r.value)))}</td>
 
-  <!-- ✅ 할증/환산: 전부 입력 불가 -->
   <td>${readonlyCell(r.surchargeMul === "" ? "" : String(r.surchargeMul))}</td>
   <td>${readonlyCell(r.convUnit)}</td>
-  <td>${readonlyCell((r.convFactor ?? "").toString())}</td>
-
+  <td>${inputCell(r.convFactor, v=>{ r.convFactor=v; }, "비워도 됨", {tabId, rowIdx:idx, colIdx:3})}</td>
   <td>${readonlyCell(String(roundUp3(r.convQty)))}</td>
   <td>${readonlyCell(String(roundUp3(r.finalQty)))}</td>
-
   <td></td>
 `;
+
 
     const tdAct = tr.lastElementChild;
     const act = document.createElement("div");

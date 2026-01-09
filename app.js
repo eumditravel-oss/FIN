@@ -809,28 +809,20 @@ document.getElementById("fileImport")?.addEventListener("change", async (e)=>{
   }
 });
 
-/* ===== GLOBAL Arrow navigation (textarea 지원) ===== */
+/* ===== GLOBAL Arrow navigation (Excel + F2 Edit Mode) ===== */
 function isGridEl(el){
   return el && el.getAttribute && el.getAttribute("data-grid") === "1";
 }
-function caretInfo(el){
-  try{
-    return { start: el.selectionStart ?? 0, end: el.selectionEnd ?? 0, len: (el.value ?? "").length };
-  }catch{
-    return { start: 0, end: 0, len: 0 };
-  }
-}
+
 function textareaAtTop(el){
   const v = el.value ?? "";
   const pos = el.selectionStart ?? 0;
-  const before = v.slice(0, pos);
-  return !before.includes("\n");
+  return !v.slice(0, pos).includes("\n");
 }
 function textareaAtBottom(el){
   const v = el.value ?? "";
   const pos = el.selectionStart ?? 0;
-  const after = v.slice(pos);
-  return !after.includes("\n");
+  return !v.slice(pos).includes("\n");
 }
 
 document.addEventListener("keydown", (e)=>{
@@ -840,38 +832,78 @@ document.addEventListener("keydown", (e)=>{
   const tag = (el.tagName || "").toLowerCase();
   const isTextarea = tag === "textarea";
 
-  if(e.key === "ArrowUp"){
-    if(isTextarea && !textareaAtTop(el)) return;
-    e.preventDefault();
-    moveGridFrom(el, -1, 0);
-    return;
-  }
+  /* ===== F2 : 편집모드 ON ===== */
+if(e.key === "F2"){
+  e.preventDefault();
+  editMode = true;
+  setEditingClass(true);
 
-  if(e.key === "ArrowDown"){
-    if(isTextarea && !textareaAtBottom(el)) return;
-    e.preventDefault();
+  if(el.setSelectionRange){
+    const len = (el.value ?? "").length;
+    el.setSelectionRange(len, len);
+  }
+  return;
+}
+
+
+  /* ===== Enter / Esc : 편집모드 종료 ===== */
+if(editMode && (e.key === "Enter" || e.key === "Escape")){
+  e.preventDefault();
+  editMode = false;
+  setEditingClass(false);
+
+  if(e.key === "Enter"){
     moveGridFrom(el, +1, 0);
+  }
+  return;
+}
+
+  
+
+
+  /* ===== textarea는 기존 동작 유지 ===== */
+  if(isTextarea){
+    if(e.key === "ArrowUp"){
+      if(!textareaAtTop(el)) return;
+      e.preventDefault();
+      moveGridFrom(el, -1, 0);
+    }
+    if(e.key === "ArrowDown"){
+      if(!textareaAtBottom(el)) return;
+      e.preventDefault();
+      moveGridFrom(el, +1, 0);
+    }
     return;
   }
 
-  if(e.key === "ArrowLeft"){
-    const {start,end} = caretInfo(el);
-    if(start !== end) return;
-    if(start > 0) return;
-    e.preventDefault();
-    moveGridFrom(el, 0, -1);
+  /* ===== input 처리 ===== */
+  if(editMode){
+    // 편집모드면 input 안에서 커서 이동 허용
     return;
   }
 
-  if(e.key === "ArrowRight"){
-    const {start,end,len} = caretInfo(el);
-    if(start !== end) return;
-    if(start < len) return;
-    e.preventDefault();
-    moveGridFrom(el, 0, +1);
-    return;
-  }
+  // 🔥 기본 모드 = 무조건 셀 이동
+  if(e.key === "ArrowUp"){ e.preventDefault(); setEditingClass(false); moveGridFrom(el, -1, 0); }
+  if(e.key === "ArrowDown"){ e.preventDefault(); setEditingClass(false); moveGridFrom(el, -1, 0); }
+  if(e.key === "ArrowLeft"){ e.preventDefault(); setEditingClass(false); moveGridFrom(el, -1, 0); }
+  if(e.key === "ArrowRight"){ e.preventDefault(); setEditingClass(false); moveGridFrom(el, -1, 0); }
+
 }, false);
+
+
+
+let editMode = false; // F2 편집모드 여부
+
+function setEditingClass(on){
+  document.querySelectorAll('.cell.editing').forEach(x=>x.classList.remove('editing'));
+  if(on){
+    const el = document.activeElement;
+    if(el && el.classList && el.classList.contains("cell")) el.classList.add("editing");
+  }
+}
+
+
+
 
 document.getElementById("btnReset")?.addEventListener("click", ()=>{
   if(!confirm("정말 초기화할까요? (로컬 저장 데이터가 삭제됩니다)")) return;

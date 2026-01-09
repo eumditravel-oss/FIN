@@ -910,27 +910,37 @@ document.addEventListener("keydown", (e)=>{
     return;
   }
 
-  // input은 무조건 셀 이동
-  if(e.key === "ArrowUp"){
-    e.preventDefault();
-    moveGridFrom(el, -1, 0);
-    return;
-  }
-  if(e.key === "ArrowDown"){
-    e.preventDefault();
-    moveGridFrom(el, +1, 0);
-    return;
-  }
-  if(e.key === "ArrowLeft"){
-    e.preventDefault();
-    moveGridFrom(el, 0, -1);
-    return;
-  }
-  if(e.key === "ArrowRight"){
-    e.preventDefault();
-    moveGridFrom(el, 0, +1);
-    return;
-  }
+function beginNav(){
+  suppressRerenderOnce = true;
+  setTimeout(()=>suppressRerenderOnce=false, 0);
+}
+
+// input은 무조건 셀 이동
+if(e.key === "ArrowUp"){
+  e.preventDefault();
+  beginNav();
+  moveGridFrom(el, -1, 0);
+  return;
+}
+if(e.key === "ArrowDown"){
+  e.preventDefault();
+  beginNav();
+  moveGridFrom(el, +1, 0);
+  return;
+}
+if(e.key === "ArrowLeft"){
+  e.preventDefault();
+  beginNav();
+  moveGridFrom(el, 0, -1);
+  return;
+}
+if(e.key === "ArrowRight"){
+  e.preventDefault();
+  beginNav();
+  moveGridFrom(el, 0, +1);
+  return;
+}
+
 }, true); // ✅ 핵심: capture=true (여기 때문에 "방향키가 안 먹는" 문제가 해결됨)
 
 /* ===== 버튼들 ===== */

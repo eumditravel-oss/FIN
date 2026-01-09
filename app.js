@@ -161,6 +161,42 @@ function recalcAll(){
   state.support.forEach(recalcRow);
 }
 
+// ✅ 현재 편집중인 행의 readonly 셀만 즉시 갱신 (리렌더(go) 없이)
+function refreshReadonlyInSameRow(activeEl){
+  const tabId = activeEl?.getAttribute?.("data-tab");
+  if(!tabId) return;
+
+  // codes 탭은 readonly 갱신 대상 없음
+  if(tabId === "codes") return;
+
+  const rowIdx = Number(activeEl.getAttribute("data-row") || -1);
+  if(rowIdx < 0) return;
+
+  const rows = getRowsByTab(tabId);
+  if(!rows || !rows[rowIdx]) return;
+
+  const r = rows[rowIdx];
+
+  // 현재 요소가 들어있는 tr 기준으로 readonly input들을 찾아서 갱신
+  const tr = activeEl.closest("tr");
+  if(!tr) return;
+
+  const ro = tr.querySelectorAll("input.cell.readonly");
+  // renderCalcSheet 구조 기준: [name, spec, unit, value, surchargeMul, convUnit, convQty, finalQty]
+  if(ro.length < 8) return;
+
+  ro[0].value = r.name ?? "";
+  ro[1].value = r.spec ?? "";
+  ro[2].value = r.unit ?? "";
+  ro[3].value = String(roundUp3(r.value));
+  ro[4].value = (r.surchargeMul === "" ? "" : String(r.surchargeMul));
+  ro[5].value = r.convUnit ?? "";
+  ro[6].value = String(roundUp3(r.convQty));
+  ro[7].value = String(roundUp3(r.finalQty));
+}
+
+
+
 /* ===== Tabs ===== */
 const tabsDef = [
   { id:"codes", label:'코드(Ctrl+".")' },
@@ -251,15 +287,16 @@ function wireCells(){
     if(!meta) return;
 
     const handler = (evt)=>{
-      meta.onChange(el.value);
-      recalcAll();
-      saveState();
+  meta.onChange(el.value);
 
-      if(evt && evt.type === "input") return;
-      if(suppressRerenderOnce) return;
+  // ✅ 계산 갱신
+  recalcAll();
+  saveState();
 
-      go(activeTabId, { silentTabRender:true });
-    };
+  // ✅ 리렌더(go) 하지 말고, 같은 행 readonly만 즉시 업데이트
+  refreshReadonlyInSameRow(el);
+};
+
 
     el.addEventListener("input", handler);
     el.addEventListener("blur", handler);

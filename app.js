@@ -1,3 +1,11 @@
+/* =========================
+   FIN 산출자료(Web) app.js (통합본)
+   - ✅ 방향키 이동(Excel-like) 100% 동작 (capture 단계에서 가로채기)
+   - ✅ F2 편집모드(커서 이동) + Esc/Enter로 편집모드 종료
+   - ✅ 편집 중 셀 테두리 변경(.cell.editing 클래스)
+   - ✅ 중복 선언/중복 리스너 정리
+   ========================= */
+
 const STORAGE_KEY = "FIN_WEB_V8";
 
 /* ===== Seed ===== */
@@ -544,7 +552,6 @@ function renderCalcSheet(title, rows, tabId, mode){
 
   $view.appendChild(wrap);
 
-  // ✅ calc sheet에서도 반드시 wiring
   wireCells();
   wireFocusTracking();
 
@@ -722,65 +729,198 @@ window.addEventListener("message", (event)=>{
   }
 });
 
-/* ===== Hotkeys ===== */
+/* =========================
+   ✅ HOTKEYS + ✅ 방향키/편집모드
+   - 핵심: capture 단계에서 키를 먼저 가로채서
+     input/textarea 내부 커서이동보다 "셀 이동"을 우선시킴
+   ========================= */
+let editMode = false; // F2 편집모드 여부
+
+function setEditingClass(on){
+  document.querySelectorAll('.cell.editing').forEach(x=>x.classList.remove('editing'));
+  if(on){
+    const el = document.activeElement;
+    if(el && el.classList && el.classList.contains("cell")) el.classList.add("editing");
+  }
+}
+
+function isGridEl(el){
+  return el && el.getAttribute && el.getAttribute("data-grid") === "1";
+}
+
+function isTextareaEl(el){
+  return (el?.tagName || "").toLowerCase() === "textarea";
+}
+
+function caretAtStart(el){
+  try{ return (el.selectionStart ?? 0) === 0 && (el.selectionEnd ?? 0) === 0; }catch{ return false; }
+}
+function caretAtEnd(el){
+  try{
+    const len = (el.value ?? "").length;
+    return (el.selectionStart ?? 0) === len && (el.selectionEnd ?? 0) === len;
+  }catch{ return false; }
+}
+
+function textareaAtTop(el){
+  const v = el.value ?? "";
+  const pos = el.selectionStart ?? 0;
+  return !v.slice(0, pos).includes("\n");
+}
+function textareaAtBottom(el){
+  const v = el.value ?? "";
+  const pos = el.selectionStart ?? 0;
+  return !v.slice(pos).includes("\n");
+}
+
+function deleteRowAtActiveFocus(){
+  if(!["codes","steel","steelSub","support"].includes(activeTabId)) return;
+
+  const { row } = lastFocusCell[activeTabId] ?? { row: 0 };
+  const r = Math.max(0, Number(row) || 0);
+
+  const ok = confirm("선택된 행을 정말 삭제할까요?");
+  if(!ok) return;
+
+  if(activeTabId === "codes"){
+    if(state.codes.length === 0) return;
+    if(r >= state.codes.length) return;
+    state.codes.splice(r, 1);
+    saveState();
+    go("codes");
+    const newRow = Math.min(r, state.codes.length - 1);
+    if(newRow >= 0) setTimeout(()=>focusGrid("codes", newRow, 0), 0);
+    return;
+  }
+
+  const rows = getRowsByTab(activeTabId);
+  if(!rows || rows.length === 0) return;
+  if(r >= rows.length) return;
+
+  rows.splice(r, 1);
+  saveState();
+  go(activeTabId);
+
+  const newRow = Math.min(r, rows.length - 1);
+  if(newRow >= 0) setTimeout(()=>focusGrid(activeTabId, newRow, 0), 0);
+}
+
 document.addEventListener("keydown", (e)=>{
-  // Ctrl+. : open picker
+  // ✅ Ctrl+. : picker
   if(e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "." || e.code === "Period")){
     e.preventDefault();
     openPickerWindow();
     return;
   }
 
-  function deleteRowAtActiveFocus(){
-    if(!["codes","steel","steelSub","support"].includes(activeTabId)) return;
-
-    const { row } = lastFocusCell[activeTabId] ?? { row: 0 };
-    const r = Math.max(0, Number(row) || 0);
-
-    const ok = confirm("선택된 행을 정말 삭제할까요?");
-    if(!ok) return;
-
-    if(activeTabId === "codes"){
-      if(state.codes.length === 0) return;
-      if(r >= state.codes.length) return;
-      state.codes.splice(r, 1);
-      saveState();
-      go("codes");
-      const newRow = Math.min(r, state.codes.length - 1);
-      if(newRow >= 0) setTimeout(()=>focusGrid("codes", newRow, 0), 0);
-      return;
-    }
-
-    const rows = getRowsByTab(activeTabId);
-    if(!rows || rows.length === 0) return;
-    if(r >= rows.length) return;
-
-    rows.splice(r, 1);
-    saveState();
-    go(activeTabId);
-
-    const newRow = Math.min(r, rows.length - 1);
-    if(newRow >= 0) setTimeout(()=>focusGrid(activeTabId, newRow, 0), 0);
-  }
-
-  // Ctrl + Delete : delete current row (with confirm)
+  // ✅ Ctrl+Delete : delete row
   if(e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "Delete" || e.code === "Delete")){
     e.preventDefault();
     deleteRowAtActiveFocus();
     return;
   }
 
-  // Ctrl+F3 : insert row below focused row
+  // ✅ Ctrl+F3 : insert row
   if(e.ctrlKey && !e.altKey && !e.metaKey && e.code === "F3"){
     e.preventDefault();
     insertRowBelowActive();
     return;
   }
-}, false);
 
+  // ===== 아래부터는 "그리드 포커스"일 때만 동작 =====
+  const el = document.activeElement;
+  if(!isGridEl(el)) return;
+
+  // ✅ F2 : 편집모드 ON
+  if(e.key === "F2"){
+    e.preventDefault();
+    editMode = true;
+    setEditingClass(true);
+    // 커서를 맨 뒤로
+    if(el.setSelectionRange){
+      const len = (el.value ?? "").length;
+      el.setSelectionRange(len, len);
+    }
+    return;
+  }
+
+  // ✅ Esc : 편집모드 OFF
+  if(editMode && e.key === "Escape"){
+    e.preventDefault();
+    editMode = false;
+    setEditingClass(false);
+    return;
+  }
+
+  // ✅ Enter : (편집모드일 때) 편집 OFF + 아래로 이동 (textarea 제외)
+  if(editMode && e.key === "Enter" && !isTextareaEl(el)){
+    e.preventDefault();
+    editMode = false;
+    setEditingClass(false);
+    moveGridFrom(el, +1, 0);
+    return;
+  }
+
+  // ✅ 편집모드면: 방향키는 "입력 커서 이동"을 존중
+  if(editMode) return;
+
+  // ===== 기본모드: 방향키 = 셀 이동(Excel 느낌) =====
+  // textarea는 내부 줄 이동이 있으니, 위/아래는 맨 위/아래에서만 셀 이동.
+  if(isTextareaEl(el)){
+    if(e.key === "ArrowUp"){
+      if(!textareaAtTop(el)) return;
+      e.preventDefault();
+      moveGridFrom(el, -1, 0);
+      return;
+    }
+    if(e.key === "ArrowDown"){
+      if(!textareaAtBottom(el)) return;
+      e.preventDefault();
+      moveGridFrom(el, +1, 0);
+      return;
+    }
+    // 좌/우는: 커서가 맨 앞/뒤일 때만 셀 이동(아니면 textarea 커서 이동)
+    if(e.key === "ArrowLeft"){
+      if(!caretAtStart(el)) return;
+      e.preventDefault();
+      moveGridFrom(el, 0, -1);
+      return;
+    }
+    if(e.key === "ArrowRight"){
+      if(!caretAtEnd(el)) return;
+      e.preventDefault();
+      moveGridFrom(el, 0, +1);
+      return;
+    }
+    return;
+  }
+
+  // input은 무조건 셀 이동
+  if(e.key === "ArrowUp"){
+    e.preventDefault();
+    moveGridFrom(el, -1, 0);
+    return;
+  }
+  if(e.key === "ArrowDown"){
+    e.preventDefault();
+    moveGridFrom(el, +1, 0);
+    return;
+  }
+  if(e.key === "ArrowLeft"){
+    e.preventDefault();
+    moveGridFrom(el, 0, -1);
+    return;
+  }
+  if(e.key === "ArrowRight"){
+    e.preventDefault();
+    moveGridFrom(el, 0, +1);
+    return;
+  }
+}, true); // ✅ 핵심: capture=true (여기 때문에 "방향키가 안 먹는" 문제가 해결됨)
+
+/* ===== 버튼들 ===== */
 document.getElementById("btnOpenPicker")?.addEventListener("click", openPickerWindow);
 
-/* ===== Export/Import/Reset ===== */
 document.getElementById("btnExport")?.addEventListener("click", ()=>{
   recalcAll(); saveState();
   const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
@@ -809,131 +949,6 @@ document.getElementById("fileImport")?.addEventListener("change", async (e)=>{
   }
 });
 
-/* ===== GLOBAL Arrow navigation (Excel + F2 Edit Mode) ===== */
-let editMode = false; // F2 편집모드 여부
-
-function setEditingClass(on){
-  document.querySelectorAll('.cell.editing').forEach(x=>x.classList.remove('editing'));
-  if(on){
-    const el = document.activeElement;
-    if(el && el.classList && el.classList.contains("cell")) el.classList.add("editing");
-  }
-}
-
-function isGridEl(el){
-  return el && el.getAttribute && el.getAttribute("data-grid") === "1";
-}
-
-function textareaAtTop(el){
-  const v = el.value ?? "";
-  const pos = el.selectionStart ?? 0;
-  return !v.slice(0, pos).includes("\n");
-}
-function textareaAtBottom(el){
-  const v = el.value ?? "";
-  const pos = el.selectionStart ?? 0;
-  return !v.slice(pos).includes("\n");
-}
-
-document.addEventListener("keydown", (e)=>{
-  const el = document.activeElement;
-  if(!isGridEl(el)) return;
-
-  const tag = (el.tagName || "").toLowerCase();
-  const isTextarea = tag === "textarea";
-
-  /* ===== F2 : 편집모드 ON ===== */
-  if(e.key === "F2"){
-    e.preventDefault();
-    editMode = true;
-    setEditingClass(true);
-
-    // 커서를 맨 뒤로
-    if(el.setSelectionRange){
-      const len = (el.value ?? "").length;
-      el.setSelectionRange(len, len);
-    }
-    return;
-  }
-
-  /* ===== Esc : 편집모드 OFF ===== */
-  if(editMode && e.key === "Escape"){
-    e.preventDefault();
-    editMode = false;
-    setEditingClass(false);
-    el.blur();
-    el.focus();
-    return;
-  }
-
-  /* ===== Enter : 편집모드 OFF + 아래로 이동 ===== */
-  if(editMode && e.key === "Enter"){
-    // textarea는 Enter가 줄바꿈이므로 제외
-    if(isTextarea) return;
-
-    e.preventDefault();
-    editMode = false;
-    setEditingClass(false);
-    moveGridFrom(el, +1, 0);
-    return;
-  }
-
-  /* ===== 편집모드면 방향키는 "셀 이동" 막고, 입력 커서 이동 유지 ===== */
-  if(editMode) return;
-
-  /* ===== textarea는 라인 이동 우선, 맨 위/아래에서만 셀 이동 ===== */
-  if(isTextarea){
-    if(e.key === "ArrowUp"){
-      if(!textareaAtTop(el)) return;
-      e.preventDefault();
-      moveGridFrom(el, -1, 0);
-      return;
-    }
-    if(e.key === "ArrowDown"){
-      if(!textareaAtBottom(el)) return;
-      e.preventDefault();
-      moveGridFrom(el, +1, 0);
-      return;
-    }
-    // 좌우는 textarea 내부 커서 이동을 존중
-    return;
-  }
-
-  /* ===== 기본 모드: 방향키 = 무조건 셀 이동 ===== */
-  if(e.key === "ArrowUp"){
-    e.preventDefault();
-    setEditingClass(false);
-    moveGridFrom(el, -1, 0);
-    return;
-  }
-  if(e.key === "ArrowDown"){
-    e.preventDefault();
-    setEditingClass(false);
-    moveGridFrom(el, +1, 0);
-    return;
-  }
-  if(e.key === "ArrowLeft"){
-    e.preventDefault();
-    setEditingClass(false);
-    moveGridFrom(el, 0, -1);
-    return;
-  }
-  if(e.key === "ArrowRight"){
-    e.preventDefault();
-    setEditingClass(false);
-    moveGridFrom(el, 0, +1);
-    return;
-  }
-}, false);
-
-
-
-
-
-
-
-
-
 document.getElementById("btnReset")?.addEventListener("click", ()=>{
   if(!confirm("정말 초기화할까요? (로컬 저장 데이터가 삭제됩니다)")) return;
   localStorage.removeItem(STORAGE_KEY);
@@ -942,3 +957,9 @@ document.getElementById("btnReset")?.addEventListener("click", ()=>{
   saveState();
   go("steel");
 });
+
+/* =========================
+   ✅ CSS 추가 필요(편집 테두리)
+   style.css 또는 <style>에 아래 추가:
+   .cell.editing{ outline:2px solid rgba(26,61,124,.9); box-shadow:0 0 0 3px rgba(26,61,124,.15); }
+   ========================= */

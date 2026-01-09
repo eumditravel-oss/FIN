@@ -1,9 +1,10 @@
 /* =========================
-   FIN 산출자료(Web) picker.js (수정 통합본 - 적용 안정판)
-   - ✅ Ctrl+. 열면 검색 없이 전체 코드 즉시 표시 (INIT 수신 즉시)
-   - ✅ 드롭다운 기본 검색모드 = "품명+규격(name_spec)"
-   - ✅ Shift+↑/↓ = 시작행 포함 누적 다중선택(엑셀 느낌)
-   - ✅ 렌더 중복/타이밍 꼬임 제거(Shift 이동은 NoRender 이동)
+   FIN 산출자료(Web) picker.js (검증/안정화판)
+   - ✅ INIT 수신 즉시 전체 표시
+   - ✅ 기본 검색모드 = "품명+규격(name_spec)"
+   - ✅ Shift+↑/↓ 누적 다중선택(시작행 포함)
+   - ✅ tbody 이벤트 위임(렌더 반복에도 안정)
+   - ✅ note 컬럼 제거(현재 UI 스크린샷 기준)
    ========================= */
 
 let originTab = "steel";
@@ -13,7 +14,7 @@ let codes = [];
 let results = [];
 let cursorIndex = -1;
 const selected = new Set();
-let shiftSelecting = false; // Shift 선택 진행중 여부
+let shiftSelecting = false;
 
 const $q = document.getElementById("q");
 const $mode = document.getElementById("searchMode");
@@ -33,6 +34,7 @@ function esc(s){
 }
 
 function setStatus(t){ if($status) $status.textContent = t; }
+
 function updateBadges(){
   if($pickInfo) $pickInfo.textContent = `선택 ${selected.size}개`;
   if($originInfo) $originInfo.textContent = `대상: ${originTab} · 기준행: ${Number(focusRow)+1}`;
@@ -42,7 +44,7 @@ function normalize(s){ return (s ?? "").toString().toLowerCase(); }
 
 function matchItem(item, mode, q){
   const qq = normalize(q);
-  if(!qq) return true; // ✅ 검색어 없으면 전부 표시
+  if(!qq) return true;
 
   const c  = normalize(item.code);
   const n  = normalize(item.name);
@@ -69,9 +71,12 @@ function render(){
 
   results.forEach((it, i)=>{
     const tr = document.createElement("tr");
+    tr.dataset.idx = String(i);
+
     if(i === cursorIndex) tr.classList.add("cursor");
     if(selected.has(it.code)) tr.classList.add("sel");
 
+    // ✅ note 제거(스크린샷 UI 기준)
     tr.innerHTML = `
       <td>${esc(it.code)}</td>
       <td>${esc(it.name)}</td>
@@ -80,20 +85,7 @@ function render(){
       <td>${esc(it.surcharge)}</td>
       <td>${esc(it.conv_unit)}</td>
       <td>${esc(it.conv_factor)}</td>
-      <td>${esc(it.note)}</td>
     `;
-
-    tr.addEventListener("click", ()=>{
-      cursorIndex = i;
-      render();
-      ensureVisible();
-    });
-
-    tr.addEventListener("dblclick", ()=>{
-      cursorIndex = i;
-      toggleSelectCursor();
-      ensureVisible();
-    });
 
     $tbody.appendChild(tr);
   });
@@ -108,7 +100,6 @@ function runSearch(){
 
   results = (codes || []).filter(it => matchItem(it, mode, q));
 
-  // 커서 유지: 검색 후에도 기존 커서 인덱스가 범위를 벗어나면 보정
   if(results.length === 0){
     cursorIndex = -1;
   }else{
@@ -140,12 +131,12 @@ function toggleSelectCursor(){
   else selected.add(it.code);
 
   render();
+  ensureVisible();
 }
 
 function insertToParent(){
   let selectedCodes = Array.from(selected);
 
-  // 선택 없으면 커서 1개라도 넣기
   if(selectedCodes.length === 0 && cursorIndex >= 0 && results[cursorIndex]){
     selectedCodes = [results[cursorIndex].code];
   }
@@ -170,11 +161,36 @@ function closeMe(){
   window.close();
 }
 
-/* ✅ 드롭박스 기본값만 세팅 (옵션 이동 X: 꼬임 방지) */
 function ensureModeDefault(){
   const want = "name_spec";
   const has = Array.from($mode?.options ?? []).some(o => o.value === want);
   if(has) $mode.value = want;
+}
+
+/* ✅ tbody 이벤트 위임: click / dblclick */
+function wireTbodyDelegation(){
+  if(!$tbody) return;
+
+  $tbody.addEventListener("click", (e)=>{
+    const tr = e.target?.closest?.("tr");
+    if(!tr) return;
+    const i = Number(tr.dataset.idx || -1);
+    if(i < 0) return;
+
+    cursorIndex = i;
+    render();
+    ensureVisible();
+  });
+
+  $tbody.addEventListener("dblclick", (e)=>{
+    const tr = e.target?.closest?.("tr");
+    if(!tr) return;
+    const i = Number(tr.dataset.idx || -1);
+    if(i < 0) return;
+
+    cursorIndex = i;
+    toggleSelectCursor();
+  });
 }
 
 /* INIT from opener */
@@ -190,14 +206,11 @@ window.addEventListener("message", (event) => {
 
     ensureModeDefault();
 
-    // ✅ 열리자마자 전체 표시
     if($q) $q.value = "";
     selected.clear();
     shiftSelecting = false;
 
-    // ✅ 커서 초기화
     cursorIndex = (codes.length ? 0 : -1);
-
     runSearch();
   }
 });
@@ -213,11 +226,10 @@ document.addEventListener("keydown", (e)=>{
     }
   }
 
-  // ✅ Shift + ArrowDown/Up : 시작행 포함 누적선택 + 이동행도 선택
+  // Shift + ArrowDown/Up : 누적선택 + 이동행도 선택
   if(e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "ArrowDown" || e.key === "ArrowUp")){
     e.preventDefault();
 
-    // Shift 시작 순간: 현재 행을 먼저 선택(시작행 포함)
     if(!shiftSelecting){
       shiftSelecting = true;
       if(cursorIndex >= 0 && results[cursorIndex]){
@@ -225,10 +237,8 @@ document.addEventListener("keydown", (e)=>{
       }
     }
 
-    // 이동(렌더 없이)
     moveCursorNoRender(e.key === "ArrowDown" ? 1 : -1);
 
-    // 이동한 행도 선택(누적)
     if(cursorIndex >= 0 && results[cursorIndex]){
       selected.add(results[cursorIndex].code);
     }
@@ -238,7 +248,6 @@ document.addEventListener("keydown", (e)=>{
     return;
   }
 
-  // ArrowDown/Up: 커서 이동
   if(e.key === "ArrowDown"){
     e.preventDefault();
     shiftSelecting = false;
@@ -274,7 +283,6 @@ document.addEventListener("keydown", (e)=>{
   }
 });
 
-/* Shift 떼면 선택 시작 상태 초기화 */
 document.addEventListener("keyup", (e)=>{
   if(e.key === "Shift") shiftSelecting = false;
 });
@@ -282,9 +290,10 @@ document.addEventListener("keyup", (e)=>{
 $btnInsert?.addEventListener("click", insertToParent);
 $btnClose?.addEventListener("click", closeMe);
 
-/* 최초 로드 시: UI만 초기화(코드는 INIT에서 들어옴) */
 (function boot(){
   ensureModeDefault();
+  wireTbodyDelegation();
+
   if($q) $q.value = "";
   results = [];
   cursorIndex = -1;

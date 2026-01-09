@@ -1,8 +1,9 @@
 /* =========================
-   FIN 산출자료(Web) picker.js (수정 통합본)
-   - ✅ Ctrl+. 열면 검색 없이 전체 코드 즉시 표시
+   FIN 산출자료(Web) picker.js (수정 통합본 - 적용 안정판)
+   - ✅ Ctrl+. 열면 검색 없이 전체 코드 즉시 표시 (INIT 수신 즉시)
    - ✅ 드롭다운 기본 검색모드 = "품명+규격(name_spec)"
-   - ✅ INIT 변수 중복/꼬임 제거 (originTab/focusRow/codes를 실제로 사용)
+   - ✅ Shift+↑/↓ = 시작행 포함 누적 다중선택(엑셀 느낌)
+   - ✅ 렌더 중복/타이밍 꼬임 제거(Shift 이동은 NoRender 이동)
    ========================= */
 
 let originTab = "steel";
@@ -11,9 +12,8 @@ let codes = [];
 
 let results = [];
 let cursorIndex = -1;
-const selected = new Set(); // code string
-let shiftSelecting = false; // Shift로 범위선택 시작 여부
-
+const selected = new Set();
+let shiftSelecting = false; // Shift 선택 진행중 여부
 
 const $q = document.getElementById("q");
 const $mode = document.getElementById("searchMode");
@@ -32,36 +32,43 @@ function esc(s){
     .replaceAll('"',"&quot;");
 }
 
-function setStatus(t){ $status.textContent = t; }
+function setStatus(t){ if($status) $status.textContent = t; }
 function updateBadges(){
-  $pickInfo.textContent = `선택 ${selected.size}개`;
-  $originInfo.textContent = `대상: ${originTab} · 기준행: ${Number(focusRow)+1}`;
+  if($pickInfo) $pickInfo.textContent = `선택 ${selected.size}개`;
+  if($originInfo) $originInfo.textContent = `대상: ${originTab} · 기준행: ${Number(focusRow)+1}`;
 }
 
 function normalize(s){ return (s ?? "").toString().toLowerCase(); }
 
 function matchItem(item, mode, q){
   const qq = normalize(q);
-  if(!qq) return true; // ✅ 검색어 없으면 전부 매칭(= 전체 표시)
+  if(!qq) return true; // ✅ 검색어 없으면 전부 표시
 
-  const c = normalize(item.code);
-  const n = normalize(item.name);
+  const c  = normalize(item.code);
+  const n  = normalize(item.name);
   const sp = normalize(item.spec);
 
   if(mode === "code") return c.includes(qq);
   if(mode === "name") return n.includes(qq);
   if(mode === "spec") return sp.includes(qq);
 
-  // name_spec (기본)
+  // name_spec
   return (n + " " + sp).includes(qq);
 }
 
+function ensureVisible(){
+  if(cursorIndex < 0) return;
+  const row = $tbody?.children?.[cursorIndex];
+  if(!row) return;
+  row.scrollIntoView({block:"nearest"});
+}
+
 function render(){
+  if(!$tbody) return;
   $tbody.innerHTML = "";
 
   results.forEach((it, i)=>{
     const tr = document.createElement("tr");
-
     if(i === cursorIndex) tr.classList.add("cursor");
     if(selected.has(it.code)) tr.classList.add("sel");
 
@@ -95,25 +102,31 @@ function render(){
   updateBadges();
 }
 
-function ensureVisible(){
-  if(cursorIndex < 0) return;
-  const row = $tbody.children[cursorIndex];
-  if(!row) return;
-  row.scrollIntoView({block:"nearest"});
-}
-
 function runSearch(){
-  const q = $q.value ?? "";
-  const mode = $mode.value;
-  results = codes.filter(it => matchItem(it, mode, q));
-  cursorIndex = results.length ? 0 : -1;
+  const q = $q?.value ?? "";
+  const mode = $mode?.value ?? "name_spec";
+
+  results = (codes || []).filter(it => matchItem(it, mode, q));
+
+  // 커서 유지: 검색 후에도 기존 커서 인덱스가 범위를 벗어나면 보정
+  if(results.length === 0){
+    cursorIndex = -1;
+  }else{
+    cursorIndex = Math.min(Math.max(cursorIndex, 0), results.length - 1);
+    if(cursorIndex < 0) cursorIndex = 0;
+  }
+
   render();
   ensureVisible();
 }
 
-function moveCursor(delta){
+function moveCursorNoRender(delta){
   if(!results.length) return;
-  cursorIndex = Math.min(results.length-1, Math.max(0, cursorIndex + delta));
+  cursorIndex = Math.min(results.length - 1, Math.max(0, cursorIndex + delta));
+}
+
+function moveCursor(delta){
+  moveCursorNoRender(delta);
   render();
   ensureVisible();
 }
@@ -122,23 +135,26 @@ function toggleSelectCursor(){
   if(cursorIndex < 0) return;
   const it = results[cursorIndex];
   if(!it) return;
+
   if(selected.has(it.code)) selected.delete(it.code);
   else selected.add(it.code);
+
   render();
 }
 
 function insertToParent(){
-  // 선택이 없으면 “커서 항목 1개”라도 넣어주기(사용성)
   let selectedCodes = Array.from(selected);
-  if(selectedCodes.length === 0 && cursorIndex >= 0){
+
+  // 선택 없으면 커서 1개라도 넣기
+  if(selectedCodes.length === 0 && cursorIndex >= 0 && results[cursorIndex]){
     selectedCodes = [results[cursorIndex].code];
   }
+
   if(selectedCodes.length === 0){
     alert("삽입할 항목이 없습니다.");
     return;
   }
 
-  // 메인창으로 전송
   window.opener?.postMessage({
     type: "INSERT_SELECTED",
     originTab,
@@ -154,26 +170,11 @@ function closeMe(){
   window.close();
 }
 
-/* ✅ 드롭박스 기본값/순서 보정 */
+/* ✅ 드롭박스 기본값만 세팅 (옵션 이동 X: 꼬임 방지) */
 function ensureModeDefault(){
-  // 기본값은 name_spec(품명+규격)
   const want = "name_spec";
-
-  // 옵션이 존재하면 value만 설정
   const has = Array.from($mode?.options ?? []).some(o => o.value === want);
-  if(has){
-    $mode.value = want;
-
-    // ✅ 가능하면 name_spec 옵션을 맨 앞으로 이동(“드롭박스 첫번째” 요구 대응)
-    // (HTML을 안 바꿔도 되게 JS에서 재배치)
-    const opts = Array.from($mode.options);
-    const idx = opts.findIndex(o => o.value === want);
-    if(idx > 0){
-      const opt = opts[idx];
-      $mode.remove(idx);
-      $mode.insertBefore(opt, $mode.firstChild);
-    }
-  }
+  if(has) $mode.value = want;
 }
 
 /* INIT from opener */
@@ -183,53 +184,53 @@ window.addEventListener("message", (event) => {
   if (!msg || typeof msg !== "object") return;
 
   if (msg.type === "INIT") {
-    // ✅ 실제로 쓰는 변수에 세팅
     originTab = msg.originTab || "steel";
     focusRow = Number(msg.focusRow || 0);
     codes = Array.isArray(msg.codes) ? msg.codes : [];
 
-    // 기본 검색모드 설정
     ensureModeDefault();
 
-    // ✅ 검색어 없어도 전체 바로 표시
-    $q.value = "";
+    // ✅ 열리자마자 전체 표시
+    if($q) $q.value = "";
     selected.clear();
+    shiftSelecting = false;
+
+    // ✅ 커서 초기화
+    cursorIndex = (codes.length ? 0 : -1);
+
     runSearch();
   }
 });
 
 /* Keys */
 document.addEventListener("keydown", (e)=>{
-  // Enter: 검색 실행(입력창 focus일 때만)
+  // Enter: 검색 실행(검색창에서만)
   if(e.key === "Enter" && !e.ctrlKey){
     if(document.activeElement === $q){
       e.preventDefault();
       runSearch();
+      return;
     }
   }
 
-       // ✅ Shift + ArrowDown/Up : 시작행부터 선택 + 이동한 행도 선택
+  // ✅ Shift + ArrowDown/Up : 시작행 포함 누적선택 + 이동행도 선택
   if(e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "ArrowDown" || e.key === "ArrowUp")){
     e.preventDefault();
 
-    // ✅ Shift 선택이 "처음 시작"될 때: 현재 커서 행을 먼저 선택(시작행 포함)
+    // Shift 시작 순간: 현재 행을 먼저 선택(시작행 포함)
     if(!shiftSelecting){
       shiftSelecting = true;
-      if(cursorIndex >= 0){
-        const cur = results[cursorIndex];
-        if(cur && !selected.has(cur.code)){
-          selected.add(cur.code);
-        }
+      if(cursorIndex >= 0 && results[cursorIndex]){
+        selected.add(results[cursorIndex].code);
       }
     }
 
-    // 커서 이동
-    moveCursor(e.key === "ArrowDown" ? 1 : -1);
+    // 이동(렌더 없이)
+    moveCursorNoRender(e.key === "ArrowDown" ? 1 : -1);
 
-    // 이동한 커서 행도 선택(토글 X, 무조건 add)
-    if(cursorIndex >= 0){
-      const it = results[cursorIndex];
-      if(it) selected.add(it.code);
+    // 이동한 행도 선택(누적)
+    if(cursorIndex >= 0 && results[cursorIndex]){
+      selected.add(results[cursorIndex].code);
     }
 
     render();
@@ -237,40 +238,56 @@ document.addEventListener("keydown", (e)=>{
     return;
   }
 
-
-  // 방향키: 커서 이동(리스트 있을 때)
+  // ArrowDown/Up: 커서 이동
   if(e.key === "ArrowDown"){
     e.preventDefault();
+    shiftSelecting = false;
     moveCursor(1);
+    return;
   }
-
-   
   if(e.key === "ArrowUp"){
     e.preventDefault();
+    shiftSelecting = false;
     moveCursor(-1);
+    return;
   }
 
   // Ctrl+B: 다중선택 토글
   if(e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "b" || e.key === "B")){
     e.preventDefault();
     toggleSelectCursor();
+    return;
   }
 
   // Ctrl+Enter: 삽입
   if(e.ctrlKey && !e.altKey && !e.metaKey && e.key === "Enter"){
     e.preventDefault();
     insertToParent();
+    return;
   }
 
   // Esc: 닫기
   if(e.key === "Escape"){
     e.preventDefault();
     closeMe();
+    return;
   }
 });
 
-$btnInsert.addEventListener("click", insertToParent);
-$btnClose.addEventListener("click", closeMe);
+/* Shift 떼면 선택 시작 상태 초기화 */
+document.addEventListener("keyup", (e)=>{
+  if(e.key === "Shift") shiftSelecting = false;
+});
 
-// UX: 열리면 검색창 포커스
-setTimeout(()=> $q.focus(), 0);
+$btnInsert?.addEventListener("click", insertToParent);
+$btnClose?.addEventListener("click", closeMe);
+
+/* 최초 로드 시: UI만 초기화(코드는 INIT에서 들어옴) */
+(function boot(){
+  ensureModeDefault();
+  if($q) $q.value = "";
+  results = [];
+  cursorIndex = -1;
+  render();
+  setTimeout(()=> $q?.focus(), 0);
+})();

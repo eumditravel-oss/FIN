@@ -1,9 +1,12 @@
 /* =========================
-   FIN 산출자료(Web) app.js (통합본) - FIXED
+   FIN 산출자료(Web) app.js (통합본) - FIXED (정상 동작 완성본)
    - ✅ 방향키 이동(Excel-like) (capture)
    - ✅ F2 편집모드
    - ✅ 마우스로 td 클릭해도 셀 포커스 가능 (이벤트 위임 1회)
-   - ✅ wireMouseFocus 전역화 + preventDefault 최소화 (키보드 막힘 해결)
+   - ✅ 코드 탭(마스터) 정상 편집 + 엑셀 업로드
+   - ✅ 철골/부자재/동바리: 탭-시트 사이 "구분바" + "구분행 삽입" (집계 제외)
+   - ✅ 구분행은 __section 플래그로 표시, 집계/합계에 영향 없음
+   - ✅ 산출식 칸 넓게(2.5배), 물량(value) 칸 좁게(0.5배)
    ========================= */
 
 const STORAGE_KEY = "FIN_WEB_V8";
@@ -32,26 +35,20 @@ function wireMouseFocus(){
   mouseFocusWired = true;
 
   document.addEventListener("click", (e)=>{
-    // ✅ 1) 드래그 선택(텍스트 selection)이 존재하면 아무것도 하지 않음
     const sel = window.getSelection?.();
     if(sel && !sel.isCollapsed) return;
 
     const t = e.target;
 
-    // ✅ 2) 버튼/링크/라벨 등 UI 클릭은 셀 포커스 강제 이동 금지
     if(t?.closest?.("button,a,label,select,option")) return;
-
-    // input/textarea 직접 클릭은 그대로 둠
     if(t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
 
-    // td 클릭만 처리
     const td = t?.closest?.("td");
     if(!td) return;
 
     const cell = td.querySelector("input.cell:not(.readonly), textarea.cell");
     if(!cell) return;
 
-    // ✅ 3) 클릭으로 셀 이동 시 편집모드 해제(선택)
     editMode = false;
     setEditingClass(false);
 
@@ -59,16 +56,14 @@ function wireMouseFocus(){
   });
 }
 
-
-
-
 function makeEmptyCalcRow(){
   return {
     code: "", name: "", spec: "", unit: "",
     formulaExpr: "", value: 0,
     note: "",
     surchargeMul: "", convUnit: "", convFactor: "",
-    convQty: 0, finalQty: 0
+    convQty: 0, finalQty: 0,
+    __section: false
   };
 }
 function makeEmptyCodeRow(){
@@ -82,7 +77,7 @@ function makeState(){
     steelSub: Array.from({length: 20}, makeEmptyCalcRow),
     support: Array.from({length: 20}, makeEmptyCalcRow),
 
-    // ✅ 추가: 탭별 구분바 입력값(로컬저장)
+    // ✅ 탭별 구분바 입력값(로컬저장)
     sectionBar: {
       steel:    { label: "", count: "" },
       steelSub: { label: "", count: "" },
@@ -91,22 +86,28 @@ function makeState(){
   };
 }
 
-
 function loadState(){
   const raw = localStorage.getItem(STORAGE_KEY);
   if(!raw) return makeState();
   try{
     const s = JSON.parse(raw);
+
     s.codes = Array.isArray(s.codes) ? s.codes : SEED_CODES;
     s.steel = Array.isArray(s.steel) ? s.steel : [];
     s.steelSub = Array.isArray(s.steelSub) ? s.steelSub : [];
     s.support = Array.isArray(s.support) ? s.support : [];
 
-    // ✅ 추가: 구분바 저장값 보정
     if(!s.sectionBar) s.sectionBar = {};
     if(!s.sectionBar.steel)    s.sectionBar.steel    = {label:"",count:""};
     if(!s.sectionBar.steelSub) s.sectionBar.steelSub = {label:"",count:""};
     if(!s.sectionBar.support)  s.sectionBar.support  = {label:"",count:""};
+
+    // 기존 데이터에 __section 누락 시 보정
+    for(const arr of [s.steel, s.steelSub, s.support]){
+      for(const r of arr){
+        if(typeof r.__section !== "boolean") r.__section = false;
+      }
+    }
 
     return s;
   }catch{
@@ -148,7 +149,10 @@ function evalExpr(exprRaw){
   }
 }
 
-function surchargeToMul(p){ const x = num(p); return x ? (1 + x/100) : ""; }
+function surchargeToMul(p){
+  const x = num(p);
+  return x ? (1 + x/100) : "";
+}
 
 function findCode(code){
   const key = (code ?? "").toString().trim();
@@ -157,6 +161,16 @@ function findCode(code){
 }
 
 function recalcRow(row){
+  // ✅ 구분행은 계산/자동치환 금지
+  if(row.__section){
+    row.value = 0;
+    row.surchargeMul = "";
+    row.convUnit = "";
+    row.convQty = 0;
+    row.finalQty = 0;
+    return;
+  }
+
   const m = findCode(row.code);
   if(m){
     row.name = m.name ?? "";
@@ -167,6 +181,7 @@ function recalcRow(row){
     row.convUnit = m.conv_unit ?? "";
     if((row.convFactor ?? "").toString().trim() === "") row.convFactor = (m.conv_factor ?? "");
   }
+
   row.value = evalExpr(row.formulaExpr);
 
   const E = num(row.value);
@@ -187,8 +202,6 @@ function recalcAll(){
 function refreshReadonlyInSameRow(activeEl){
   const tabId = activeEl?.getAttribute?.("data-tab");
   if(!tabId) return;
-
-  // codes 탭은 readonly 갱신 대상 없음
   if(tabId === "codes") return;
 
   const rowIdx = Number(activeEl.getAttribute("data-row") || -1);
@@ -198,27 +211,22 @@ function refreshReadonlyInSameRow(activeEl){
   if(!rows || !rows[rowIdx]) return;
 
   const r = rows[rowIdx];
-
-  // 현재 요소가 들어있는 tr 기준으로 readonly input들을 찾아서 갱신
   const tr = activeEl.closest("tr");
   if(!tr) return;
 
-  // renderCalcSheet readonly 순서: [name, spec, unit, value, surchargeMul, convUnit, convFactor, convQty, finalQty]
-const ro = tr.querySelectorAll("input.cell.readonly");
-if(ro.length < 9) return;
+  const ro = tr.querySelectorAll("input.cell.readonly");
+  if(ro.length < 9) return;
 
-ro[0].value = r.name ?? "";
-ro[1].value = r.spec ?? "";
-ro[2].value = r.unit ?? "";
-ro[3].value = String(roundUp3(r.value));
-ro[4].value = (r.surchargeMul === "" ? "" : String(r.surchargeMul));
-ro[5].value = r.convUnit ?? "";
-ro[6].value = (r.convFactor ?? "").toString();
-ro[7].value = String(roundUp3(r.convQty));
-ro[8].value = String(roundUp3(r.finalQty));
+  ro[0].value = r.name ?? "";
+  ro[1].value = r.spec ?? "";
+  ro[2].value = r.unit ?? "";
+  ro[3].value = String(roundUp3(r.value));
+  ro[4].value = (r.surchargeMul === "" ? "" : String(r.surchargeMul));
+  ro[5].value = r.convUnit ?? "";
+  ro[6].value = (r.convFactor ?? "").toString();
+  ro[7].value = String(roundUp3(r.convQty));
+  ro[8].value = String(roundUp3(r.finalQty));
 }
-
-
 
 /* ===== Tabs ===== */
 const tabsDef = [
@@ -302,24 +310,21 @@ function readonlyCell(value){
   return `<input class="cell readonly" value="${escapeAttr(value ?? "")}" readonly />`;
 }
 
-/* ✅ 핵심: 이벤트 바인딩(Enter 계산 포함) */
+/* ✅ 핵심: 이벤트 바인딩 */
 function wireCells(){
   document.querySelectorAll("[data-cell]").forEach(el=>{
     const id = el.getAttribute("data-cell");
     const meta = cellRegistry.find(x=>x.id===id);
     if(!meta) return;
 
-    const handler = (evt)=>{
-  meta.onChange(el.value);
+    const handler = ()=>{
+      meta.onChange(el.value);
 
-  // ✅ 계산 갱신
-  recalcAll();
-  saveState();
+      recalcAll();
+      saveState();
 
-  // ✅ 리렌더(go) 하지 말고, 같은 행 readonly만 즉시 업데이트
-  refreshReadonlyInSameRow(el);
-};
-
+      refreshReadonlyInSameRow(el);
+    };
 
     el.addEventListener("input", handler);
     el.addEventListener("blur", handler);
@@ -334,7 +339,7 @@ function wireCells(){
       if(col !== 1) return;
 
       e.preventDefault();
-      handler({ type:"enter" });
+      handler();
       moveGridFrom(el, +1, 0);
     });
   });
@@ -396,39 +401,6 @@ function getRowsByTab(tab){
 function insertRowBelowActive(){
   if(!["codes","steel","steelSub","support"].includes(activeTabId)) return;
 
-   // ✅ 구분행(섹션행) 삽입: 현재 포커스 행 아래에 1줄 추가
-function insertSectionRowBelowActive(){
-  // 철골/부자재/동바리에서만
-  if(!["steel","steelSub","support"].includes(activeTabId)) return;
-
-  const rows = getRowsByTab(activeTabId);
-  if(!rows) return;
-
-  const { row, col } = lastFocusCell[activeTabId] ?? {row:0, col:0};
-  const idx = Math.min(Math.max(0, Number(row) || 0), rows.length);
-  const insertAt = Math.min(idx + 1, rows.length);
-
-  const bar = state.sectionBar?.[activeTabId] ?? {label:"",count:""};
-  const label = (bar.label ?? "").toString().trim();
-  const count = (bar.count ?? "").toString().trim();
-
-  const tag = label ? `※ ${label}` : "※ 구분";
-  const countTxt = count === "" ? "" : `  (개소: ${count})`;
-
-  const r = makeEmptyCalcRow();
-  r.code = "";                 // ✅ 코드 비움 (집계 제외)
-  r.name = `${tag}${countTxt}`; // ✅ 품명칸에 구분 표시
-  r.__section = true;          // ✅ 섹션 표시용 플래그
-
-  rows.splice(insertAt, 0, r);
-  saveState();
-  go(activeTabId);
-
-  setTimeout(()=>focusGrid(activeTabId, insertAt, 0), 0);
-}
-
-
-
   const {row, col} = lastFocusCell[activeTabId] ?? {row:0, col:0};
 
   if(activeTabId === "codes"){
@@ -448,6 +420,36 @@ function insertSectionRowBelowActive(){
   saveState();
   go(activeTabId);
   setTimeout(()=>focusGrid(activeTabId, insertAt, col), 0);
+}
+
+// ✅ 구분행(섹션행) 삽입: 현재 포커스 행 아래에 1줄 추가
+function insertSectionRowBelowActive(){
+  if(!["steel","steelSub","support"].includes(activeTabId)) return;
+
+  const rows = getRowsByTab(activeTabId);
+  if(!rows) return;
+
+  const { row, col } = lastFocusCell[activeTabId] ?? {row:0, col:0};
+  const idx = Math.min(Math.max(0, Number(row) || 0), rows.length);
+  const insertAt = Math.min(idx + 1, rows.length);
+
+  const bar = state.sectionBar?.[activeTabId] ?? {label:"",count:""};
+  const label = (bar.label ?? "").toString().trim();
+  const count = (bar.count ?? "").toString().trim();
+
+  const tag = label ? `※ ${label}` : "※ 구분";
+  const countTxt = count === "" ? "" : `  (개소: ${count})`;
+
+  const r = makeEmptyCalcRow();
+  r.code = "";
+  r.name = `${tag}${countTxt}`;
+  r.__section = true;
+
+  rows.splice(insertAt, 0, r);
+  saveState();
+  go(activeTabId);
+
+  setTimeout(()=>focusGrid(activeTabId, insertAt, 0), 0);
 }
 
 /* ===== Views ===== */
@@ -513,6 +515,7 @@ function renderCodes(){
       }
 
       state.codes = mapped;
+      recalcAll();
       saveState();
       go("codes");
     }catch(err){
@@ -527,17 +530,18 @@ function renderCodes(){
   right.appendChild(uploadLabel);
   header.appendChild(right);
 
-    const tableWrap = document.createElement("div");
+  const tableWrap = document.createElement("div");
   tableWrap.className="table-wrap";
   tableWrap.innerHTML = `
     <table>
       <thead>
         <tr>
-          <th style="min-width:160px;">코드</th>
+          <th style="min-width:70px;">No</th>
+          <th style="min-width:170px;">코드</th>
           <th style="min-width:220px;">품명</th>
           <th style="min-width:220px;">규격</th>
           <th style="min-width:90px;">단위</th>
-          <th style="min-width:110px;">할증</th>
+          <th style="min-width:90px;">할증</th>
           <th style="min-width:120px;">환산단위</th>
           <th style="min-width:140px;">환산계수</th>
           <th style="min-width:260px;">비고</th>
@@ -552,6 +556,7 @@ function renderCodes(){
   state.codes.forEach((r, idx)=>{
     const tr = document.createElement("tr");
     tr.innerHTML = `
+      <td>${idx+1}</td>
       <td>${inputCell(r.code, v=>{ r.code=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:0})}</td>
       <td>${inputCell(r.name, v=>{ r.name=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:1})}</td>
       <td>${inputCell(r.spec, v=>{ r.spec=v; }, "", {tabId:"codes", rowIdx:idx, colIdx:2})}</td>
@@ -562,6 +567,7 @@ function renderCodes(){
       <td>${textAreaCell(r.note, v=>{ r.note=v; }, {tabId:"codes", rowIdx:idx, colIdx:7})}</td>
       <td></td>
     `;
+
     const tdAct = tr.lastElementChild;
     const act = document.createElement("div");
     act.className="row-actions";
@@ -574,21 +580,20 @@ function renderCodes(){
   });
 
   wrap.appendChild(tableWrap);
-
   $view.appendChild(wrap);
 
   wireCells();
   wireFocusTracking();
-  wireMouseFocus(); // ✅ 전역 위임 1회만
+  wireMouseFocus();
 
   const {row, col} = lastFocusCell.codes;
   setTimeout(()=>focusGrid("codes", row, col), 0);
 }
 
-   function renderCalcSheet(title, rows, tabId, mode){
+function renderCalcSheet(title, rows, tabId, mode){
   $view.innerHTML = "";
 
-  // ✅ 빨간 영역: 구분바(철골/부자재/동바리만 표시)
+  // ✅ 구분바
   if(["steel","steelSub","support"].includes(tabId)){
     const barWrap = document.createElement("div");
     barWrap.className = "sectionbar";
@@ -607,10 +612,8 @@ function renderCodes(){
         </div>
       </div>
     `;
-
     $view.appendChild(barWrap);
 
-    // 이벤트 연결
     setTimeout(()=>{
       const $label = document.getElementById("secLabel");
       const $count = document.getElementById("secCount");
@@ -632,7 +635,6 @@ function renderCodes(){
         insertSectionRowBelowActive();
       });
 
-      // Enter로도 구분행 삽입 (구분바에서)
       $count?.addEventListener("keydown", (e)=>{
         if(e.key === "Enter"){
           e.preventDefault();
@@ -642,10 +644,6 @@ function renderCodes(){
       });
     }, 0);
   }
-
-  // 기존 코드 계속...
-  const desc = '산출식 입력 → 물량(Value) 자동 계산(Enter). 코드 선택 새 창: Ctrl+.  | 행 추가: Ctrl+F3';
-  const {wrap, header} = panel(title, desc);
 
   const desc = '산출식 입력 → 물량(Value) 자동 계산(Enter). 코드 선택 새 창: Ctrl+.  | 행 추가: Ctrl+F3';
   const {wrap, header} = panel(title, desc);
@@ -669,7 +667,7 @@ function renderCodes(){
 
   const tableWrap = document.createElement("div");
   tableWrap.className="table-wrap";
-    tableWrap.innerHTML = `
+  tableWrap.innerHTML = `
     <table>
       <thead>
         <tr>
@@ -678,18 +676,14 @@ function renderCodes(){
           <th style="min-width:220px;">품명(자동)</th>
           <th style="min-width:220px;">규격(자동)</th>
           <th style="min-width:90px;">단위(자동)</th>
-
-          <!-- ✅ 노란색: 2.5배 -->
           <th style="min-width:550px;">산출식</th>
-
-          <!-- ✅ 초록색: 0.5배 -->
           <th style="min-width:80px;">물량(Value)</th>
-
-          <th style="min-width:90px;">할증(배수)</th>
-          <th style="min-width:90px;">환산단위</th>
-          <th style="min-width:110px;">환산계수</th>
-          <th style="min-width:120px;">환산수량</th>
-          <th style="min-width:130px;">할증후수량</th>
+          <th style="min-width:220px;">비고</th>
+          <th style="min-width:120px;">할증(배수)</th>
+          <th style="min-width:120px;">환산단위</th>
+          <th style="min-width:140px;">환산계수</th>
+          <th style="min-width:140px;">환산수량</th>
+          <th style="min-width:160px;">할증후수량</th>
           <th style="min-width:120px;">작업</th>
         </tr>
       </thead>
@@ -701,14 +695,13 @@ function renderCodes(){
 
   rows.forEach((r, idx)=>{
     recalcRow(r);
-     const tr = document.createElement("tr");
-if(r.__section) tr.classList.add("section-row");
-
 
     const tr = document.createElement("tr");
-        tr.innerHTML = `
+    if(r.__section) tr.classList.add("section-row");
+
+    tr.innerHTML = `
       <td>${idx+1}</td>
-      <td>${inputCell(r.code, v=>{ r.code=v; }, "코드 입력", {tabId, rowIdx:idx, colIdx:0})}</td>
+      <td>${inputCell(r.code, v=>{ r.code=v; r.__section=false; }, "코드 입력", {tabId, rowIdx:idx, colIdx:0})}</td>
       <td>${readonlyCell(r.name)}</td>
       <td>${readonlyCell(r.spec)}</td>
       <td>${readonlyCell(r.unit)}</td>
@@ -716,17 +709,14 @@ if(r.__section) tr.classList.add("section-row");
       <td>${inputCell(r.formulaExpr, v=>{ r.formulaExpr=v; }, "예: (0.5+0.3)/2", {tabId, rowIdx:idx, colIdx:1})}</td>
       <td>${readonlyCell(String(roundUp3(r.value)))}</td>
 
+      <td>${textAreaCell(r.note, v=>{ r.note=v; }, {tabId, rowIdx:idx, colIdx:2})}</td>
       <td>${readonlyCell(r.surchargeMul === "" ? "" : String(r.surchargeMul))}</td>
       <td>${readonlyCell(r.convUnit)}</td>
-
-      <!-- ✅ 환산계수도 입력 막기 -->
-      <td>${readonlyCell((r.convFactor ?? "").toString())}</td>
-
+      <td>${inputCell(r.convFactor, v=>{ r.convFactor=v; }, "비워도 됨", {tabId, rowIdx:idx, colIdx:3})}</td>
       <td>${readonlyCell(String(roundUp3(r.convQty)))}</td>
       <td>${readonlyCell(String(roundUp3(r.finalQty)))}</td>
       <td></td>
     `;
-
 
     const tdAct = tr.lastElementChild;
     const act = document.createElement("div");
@@ -751,9 +741,14 @@ if(r.__section) tr.classList.add("section-row");
 
   const sumBox = document.createElement("div");
   sumBox.style.marginTop="10px";
+
+  // ✅ 구분행은 합계에서 제외
+  const dataRows = rows.filter(r => !r.__section);
+
   const sumVal = (mode==="steel")
-    ? rows.reduce((a,b)=> a + roundUp3(b.finalQty), 0)
-    : rows.reduce((a,b)=> a + num(b.value), 0);
+    ? dataRows.reduce((a,b)=> a + roundUp3(b.finalQty), 0)
+    : dataRows.reduce((a,b)=> a + num(b.value), 0);
+
   sumBox.innerHTML = `<span class="badge">합계: ${roundUp3(sumVal)}</span>`;
   wrap.appendChild(sumBox);
 
@@ -761,7 +756,7 @@ if(r.__section) tr.classList.add("section-row");
 
   wireCells();
   wireFocusTracking();
-  wireMouseFocus(); // ✅ 전역 위임 1회만
+  wireMouseFocus();
 
   const last = lastFocusCell[tabId] ?? {row:0,col:0};
   setTimeout(()=>focusGrid(tabId, last.row, last.col), 0);
@@ -770,6 +765,7 @@ if(r.__section) tr.classList.add("section-row");
 function groupSum(rows, valueSelector){
   const map = new Map();
   for(const r of rows){
+    if(r.__section) continue; // ✅ 구분행 제외
     const code = (r.code ?? "").toString().trim();
     if(!code) continue;
     const m = findCode(code);
@@ -938,7 +934,6 @@ window.addEventListener("message", (event)=>{
     return;
   }
 
-  // ✅✅✅ 여기(INSERT_SELECTED 다음, CLOSE_PICKER 전에) 붙여넣기 ✅✅✅
   if(msg.type === "UPDATE_CODES"){
     const next = msg.codes;
 
@@ -979,13 +974,9 @@ window.addEventListener("message", (event)=>{
     state.codes = cleaned;
     recalcAll();
     saveState();
-
-    // 현재 화면 갱신(탭 유지)
     go(activeTabId);
-
     return;
   }
-  // ✅✅✅ 여기까지 ✅✅✅
 
   if(msg.type === "CLOSE_PICKER"){
     try{ pickerWin?.close(); }catch{}
@@ -993,7 +984,6 @@ window.addEventListener("message", (event)=>{
     return;
   }
 });
-
 
 /* =========================
    ✅ HOTKEYS + ✅ 방향키/편집모드 (capture)
@@ -1170,7 +1160,7 @@ document.addEventListener("keydown", (e)=>{
     return;
   }
 
-}, true); // capture
+}, true);
 
 /* ===== 버튼들 ===== */
 document.getElementById("btnOpenPicker")?.addEventListener("click", openPickerWindow);
@@ -1193,6 +1183,20 @@ document.getElementById("fileImport")?.addEventListener("change", async (e)=>{
   try{
     const parsed = JSON.parse(txt);
     state = parsed;
+
+    // sectionBar 보정
+    if(!state.sectionBar) state.sectionBar = {};
+    if(!state.sectionBar.steel) state.sectionBar.steel = {label:"",count:""};
+    if(!state.sectionBar.steelSub) state.sectionBar.steelSub = {label:"",count:""};
+    if(!state.sectionBar.support) state.sectionBar.support = {label:"",count:""};
+
+    // __section 보정
+    for(const arr of [state.steel||[], state.steelSub||[], state.support||[]]){
+      for(const r of arr){
+        if(typeof r.__section !== "boolean") r.__section = false;
+      }
+    }
+
     recalcAll();
     saveState();
     go("steel");

@@ -1029,7 +1029,7 @@
     });
   }
 
-  /***************
+    /***************
    * Export/Import/Reset buttons
    ***************/
   function bindTopButtons() {
@@ -1090,7 +1090,6 @@
     } else if (state.activeTab === "support") {
       content = renderCalcTab("support", "구조이기/동바리");
     } else if (state.activeTab === "steel_sum") {
-      // 집계(간단)
       content = renderSummaryTab("steel", "철골_집계", "converted");
     } else if (state.activeTab === "support_sum") {
       content = renderSummaryTab("support", "구조이기/동바리_집계", "value");
@@ -1098,12 +1097,11 @@
 
     $view.appendChild(content);
 
-    // 버튼 바인딩(최초 1회만 해도 되지만, 안전하게 매 렌더 후)
+    // 매 렌더 후 안전 바인딩
     bindTopButtons();
   }
 
   function renderSummaryTab(srcTabId, title, sumField) {
-    // srcTabId의 모든 구분 rows 합산
     const bucket = state[srcTabId];
     const items = [];
     let total = 0;
@@ -1138,8 +1136,14 @@
             ])
           ]),
           el("tbody", {}, [
-            ...items.map(x => el("tr", {}, [el("td", {}, [x.name]), el("td", {}, [String(round4(x.sum))])])),
-            el("tr", {}, [el("td", {}, ["TOTAL"]), el("td", {}, [String(round4(total))])])
+            ...items.map(x => el("tr", {}, [
+              el("td", {}, [x.name]),
+              el("td", {}, [String(round4(x.sum))])
+            ])),
+            el("tr", {}, [
+              el("td", {}, ["TOTAL"]),
+              el("td", {}, [String(round4(total))])
+            ])
           ])
         ])
       ])
@@ -1157,4 +1161,6 @@
    * Init
    ***************/
   render();
+})();
+
 

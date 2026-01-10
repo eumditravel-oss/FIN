@@ -318,23 +318,24 @@ tr.section-row td input.cell{ font-weight: 900; }
 }
 
 /* ===========================
-   NEW: 좌(구분/변수) + 우(산출표) 레이아웃
+   NEW: 구분/변수(초록) + 산출표(노란) 레이아웃 (세로형)
+   - ✅ 초록 박스가 산출표 "위"에 위치
    =========================== */
+
 .calc-layout{
   display:flex;
-  gap:14px;
-  align-items:stretch;
-
-  /* ✅ 화면 좁으면 자연스럽게 아래로 */
-  flex-wrap: wrap;
+  flex-direction: column;   /* ✅ 핵심 */
+  gap:12px;
+  align-items: stretch;
 }
 
+/* 위(초록) 영역 */
 .left-rail{
-  width:360px;
-  min-width:320px;
-  flex: 0 0 auto;
+  width:100%;
+  min-width:0;
 }
 
+/* rail-box는 그대로 사용 */
 .rail-box{
   background: rgba(255,250,240,.86);
   border:1px solid rgba(0,0,0,.10);
@@ -349,14 +350,16 @@ tr.section-row td input.cell{ font-weight: 900; }
   margin-bottom:8px;
 }
 
+/* ✅ 구분 리스트는 위에 있으니 너무 길어지지 않게 */
 .section-list{
   display:flex;
   flex-direction:column;
   gap:8px;
-  max-height:260px;
+  max-height:180px;     /* 기존 260px → 위에 올려서 조금 줄임 */
   overflow:auto;
   padding-right:4px;
 }
+
 .section-item{
   display:flex;
   align-items:center;
@@ -383,7 +386,7 @@ tr.section-row td input.cell{ font-weight: 900; }
   outline-offset:2px;
 }
 
-/* ✅ (필수) 구분 편집 UI: 3열(구분명 / 개소 / 버튼) */
+/* ✅ 구분 편집 UI: 3열(구분명/개소/버튼) 유지 */
 .section-editor{
   display:grid;
   grid-template-columns: 1fr 160px 120px;
@@ -399,14 +402,15 @@ tr.section-row td input.cell{ font-weight: 900; }
   font-size:12px;
 }
 
-/* 변수표 */
+/* ✅ 변수표는 위에 올라오므로 너무 커지면 스크롤 */
 .var-tablewrap{
   border:1px solid rgba(0,0,0,.10);
   border-radius:14px;
   overflow:auto;
   background: rgba(255,255,255,.55);
-  max-height: 54vh;
+  max-height:320px;    /* 기존 54vh → 위에 올려서 고정 */
 }
+
 .var-table{
   width:100%;
   border-collapse:separate;
@@ -433,7 +437,9 @@ tr.section-row td input.cell{ font-weight: 900; }
   line-height:1.4;
 }
 
+/* 아래(노란) 산출표 영역 */
 .right-main{
-  flex:1 1 540px;
-  min-width: 540px;
+  width:100%;
+  min-width:0;
 }
+

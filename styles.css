@@ -8,6 +8,9 @@
   --radius: 18px;
   --accent:#1a3d7c;     /* 네이비 */
   --accent2:#d6b25e;    /* 골드 */
+
+  /* app.js에서 topbar+tabs 높이 계산해서 넣어줌 */
+  --stickyTop: 120px;
 }
 
 *{ box-sizing:border-box; }
@@ -17,6 +20,7 @@ body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", Arial, "Apple SD Gothic Neo", "Malgun Gothic";
   color:var(--ink);
+  /* ✅ 얼룩 최소화(약한 그라데이션) */
   background:
     radial-gradient(1200px 600px at 20% 0%, rgba(26,61,124,.05), transparent 60%),
     radial-gradient(900px 500px at 90% 20%, rgba(214,178,94,.06), transparent 60%),
@@ -27,7 +31,7 @@ body{
 .topbar{
   position: sticky;
   top: 0;
-  z-index: 50;
+  z-index: 60;
   display:flex;
   align-items:flex-start;
   justify-content:space-between;
@@ -84,7 +88,6 @@ body{
 .smallbtn{
   padding: 8px 10px;
   box-shadow: 0 10px 24px rgba(0,0,0,.08);
-  font-size: 12px;
 }
 
 .btn:hover,
@@ -107,11 +110,18 @@ body{
 
 /* ===== Tabs ===== */
 .tabs{
+  position: sticky;
+  top: calc(var(--stickyTop) - 10px); /* topbar 바로 아래 고정 느낌 */
+  z-index: 55;
   display:flex;
   gap:8px;
-  padding: 10px 16px 0;
+  padding: 10px 16px 10px;
   flex-wrap:wrap;
+  background: rgba(246,241,230,.70);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(0,0,0,.06);
 }
+
 .tab{
   border:1px solid var(--line);
   background: rgba(255,255,255,.50);
@@ -120,7 +130,6 @@ body{
   cursor:pointer;
   font-weight: 900;
   color: var(--muted);
-  font-size: 13px;
 }
 .tab.active{
   background: rgba(26,61,124,.10);
@@ -130,6 +139,7 @@ body{
 
 /* ===== Content Panels ===== */
 .content{ padding: 12px 16px 22px; }
+.content, main, #view{ overflow: visible; } /* ✅ sticky 깨짐 방지 */
 
 .panel{
   background: rgba(255,250,240,.86);
@@ -137,7 +147,6 @@ body{
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 12px;
-  margin-bottom: 14px;
 }
 
 .panel-header{
@@ -188,7 +197,7 @@ thead th{
 
 tbody td{
   border-bottom: 1px solid rgba(0,0,0,.06);
-  padding: 4px 6px;
+  padding: 4px 6px;               /* ✅ 줄 간격 압축 */
   vertical-align: middle;
 }
 
@@ -199,16 +208,17 @@ tbody td{
   align-items:center;
 }
 
-/* ===== Cells (grid only) ===== */
+/* ===== Cells ===== */
 .cell{
   width: 100%;
   border: 1px solid rgba(0,0,0,.14);
   background: rgba(255,255,255,.72);
   border-radius: 10px;
-  padding: 6px 8px;
+  padding: 6px 8px;               /* ✅ 셀 높이 줄임 */
   font-size: 12px;
   outline: none;
 
+  /* ✅ 마우스 클릭/드래그 선택 허용 */
   pointer-events: auto !important;
   user-select: text !important;
   -webkit-user-select: text !important;
@@ -222,12 +232,12 @@ tbody td{
   background: rgba(255,255,255,.45);
   color: rgba(0,0,0,.65);
 }
+
 textarea.cell{
   min-height: 30px;
   resize: vertical;
 }
 
-/* ✅ 테이블 위에 덮는 레이어가 있다면 클릭 가로채지 않게 */
 .table-wrap,
 .table-wrap *{ pointer-events: auto; }
 .table-wrap td,
@@ -258,60 +268,52 @@ textarea.cell{
   box-shadow: 0 0 0 3px rgba(26,61,124,0.15);
 }
 
-/* =========================================================
-   ✅ 요청 반영 핵심: 상단(초록 영역) = 구분명 리스트(좌) + 변수표(우)
-   - 산출표 위에 위치
-   - 높이(세로) 축소 + 글자 한 단계 줄임
-   - 구분 항목에서 "구분명 오른쪽에 개소" 표시
-   - 변수표 하단 설명 문구 삭제(= CSS엔 없음)
-   ========================================================= */
+/* ===========================
+   NEW: 상단(구분명 리스트 + 변수표) 영역 고정 + 레이아웃
+   - "구분명 리스트" = 좌측
+   - "변수표" = 우측
+   - 둘 다 산출영역처럼 키보드/마우스 입력 가능
+   =========================== */
+
+/* 상단 2패널 래퍼 (app.js에서 생성되는 wrapper 클래스명에 맞춰 사용) */
 .top-split{
-  display:flex;
-  gap:12px;
-  align-items:stretch;
-  margin-bottom: 14px;
-
-  /* ✅ 좁은 화면은 줄바꿈 */
-  flex-wrap: wrap;
+  position: sticky;
+  top: var(--stickyTop);
+  z-index: 45;
+  margin-bottom: 12px;
 }
 
-/* 좌: 구분명 리스트 */
-.top-split > .rail-box:first-child{
-  width: 300px;
-  min-width: 260px;
-  flex: 0 0 auto;
+/* 상단 2열 레이아웃 */
+.top-split .calc-layout{
+  display: grid;
+  grid-template-columns: 280px 1fr; /* ✅ 좌는 콤팩트, 우는 넓게 */
+  gap: 12px;
+  align-items: stretch;
 }
 
-/* 우: 변수표 */
-.top-split > .rail-box:last-child{
-  flex: 1 1 640px;
-  min-width: 520px;
-}
-
-/* rail 박스 공통 */
+/* 각 박스 공통 */
 .rail-box{
   background: rgba(255,250,240,.86);
   border:1px solid rgba(0,0,0,.10);
   border-radius:16px;
   box-shadow: 0 10px 26px rgba(0,0,0,.08);
   padding:10px;
+  min-width:0; /* ✅ overflow 방지 핵심 */
 }
 
+/* 제목(작게) */
 .rail-title{
   font-weight:900;
   margin-bottom:8px;
-  font-size: 12px;     /* ✅ 글자 한 단계 축소 */
-  color: rgba(0,0,0,.78);
+  font-size: 12px; /* ✅ 한 단계 축소 */
 }
 
-/* ===== 구분 리스트 ===== */
+/* ===== 구분명 리스트 ===== */
 .section-list{
   display:flex;
   flex-direction:column;
-  gap:8px;
-
-  /* ✅ 세로 높이 축소(요청: 초록라인만큼 줄이기) */
-  max-height: 170px;
+  gap:6px;
+  max-height: 140px;   /* ✅ 초록라인처럼 세로 줄임 */
   overflow:auto;
   padding-right:4px;
 }
@@ -324,50 +326,53 @@ textarea.cell{
   border:1px solid rgba(0,0,0,.10);
   background: rgba(255,255,255,.70);
   border-radius:12px;
-
-  /* ✅ 높이/글자 축소 */
   padding:8px 10px;
   cursor:pointer;
   font-weight:800;
-  font-size: 12px;
-  text-align:left;
+  font-size: 12px; /* ✅ 축소 */
 }
 .section-item.active{
   background: rgba(26,61,124,.10);
   border-color: rgba(26,61,124,.25);
 }
-.section-item .meta{
-  font-size:11px;
-  opacity:.80;
-  font-weight:800;
+
+/* 구분명 + 개소를 한 줄로 */
+.section-item .name{
+  min-width: 0;
+  overflow:hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.section-item:focus{
-  outline: 2px solid rgba(26,61,124,.35);
-  outline-offset:2px;
+.section-item .meta{
+  white-space: nowrap;
+  flex: 0 0 auto;
+  font-size: 11px;
+  opacity: .8;
+  font-weight: 900;
 }
 
-/* ===== 구분 편집(구분명/개소/저장) 3열 ===== */
+/* 구분 편집(입력2 + 버튼) : ✅ 삐져나옴 방지 */
 .section-editor{
   display:grid;
-  grid-template-columns: 1fr 140px 88px; /* ✅ 더 촘촘 */
+  grid-template-columns: minmax(0,1fr) minmax(0,120px) 84px;
   gap:8px;
   margin-top:8px;
+  align-items:center;
 }
 .section-editor input{
+  width:100%;
+  min-width:0;
   border:1px solid rgba(0,0,0,.12);
-  background:rgba(255,255,255,.82);
+  background:rgba(255,255,255,.8);
   border-radius:10px;
   padding:8px 10px;
   outline:none;
-
-  /* ✅ 글자/높이 축소 */
-  font-size: 12px;
+  font-size: 12px; /* ✅ 축소 */
 }
-
-/* 구분 리스트 박스 아래 버튼 줄도 촘촘 */
-.section-editor + div .smallbtn{
-  padding: 8px 10px;
+.section-editor .smallbtn{
+  width:84px;
+  justify-content:center;
+  padding:8px 8px;
   font-size: 12px;
 }
 
@@ -377,9 +382,7 @@ textarea.cell{
   border-radius:14px;
   overflow:auto;
   background: rgba(255,255,255,.55);
-
-  /* ✅ 세로 높이 축소(요청: 초록라인만큼) */
-  max-height: 220px;
+  max-height: 168px; /* ✅ 초록라인처럼 세로 줄임 */
 }
 
 .var-table{
@@ -388,6 +391,7 @@ textarea.cell{
   border-spacing:0;
   font-size:12px;
 }
+
 .var-table thead th{
   position:sticky;
   top:0;
@@ -398,49 +402,31 @@ textarea.cell{
   font-weight:900;
   font-size: 12px; /* ✅ 축소 */
 }
+
 .var-table tbody td{
   border-bottom:1px solid rgba(0,0,0,.06);
-  padding:6px 8px;
+  padding:5px 8px;
 }
 
-/* ✅ 변수표 입력 전용 (grid 이동 영향 X) */
-.varcell{
-  width: 100%;
-  border: 1px solid rgba(0,0,0,.14);
-  background: rgba(255,255,255,.78);
-  border-radius: 10px;
-
-  /* ✅ 높이/글자 축소 */
+.var-table input.cell{
   padding: 6px 8px;
   font-size: 12px;
-  outline: none;
-
-  pointer-events: auto;
-  user-select: text;
-  -webkit-user-select: text;
-  cursor: text;
-}
-.varcell:focus{
-  border-color: rgba(26,61,124,.35);
-  box-shadow: 0 0 0 3px rgba(26,61,124,.10);
-}
-.varcell.readonly{
-  background: rgba(255,255,255,.50);
-  color: rgba(0,0,0,.65);
 }
 
-/* =========================================================
-   Responsive
-   ========================================================= */
+/* (요청) 변수표 아래 설명 문구 제거 → app.js에서 안 넣도록 처리(여긴 영향 없음) */
+
+/* ===== 산출표 영역 ===== */
+.right-main{
+  min-width: 0;
+}
+
+/* ===== 반응형 ===== */
 @media (max-width: 980px){
-  .top-split > .rail-box:first-child{
-    width: 100%;
-    min-width: 0;
-  }
-  .top-split > .rail-box:last-child{
-    min-width: 0;
-    width: 100%;
+  .tabs{ position: static; top:auto; }
+  .top-split{ position: static; top:auto; }
+  .top-split .calc-layout{
+    grid-template-columns: 1fr;
   }
   .section-list{ max-height: 160px; }
-  .var-tablewrap{ max-height: 240px; }
+  .var-tablewrap{ max-height: 200px; }
 }

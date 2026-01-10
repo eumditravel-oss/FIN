@@ -1,15 +1,15 @@
 /* =========================
-   FIN 산출자료(Web) app.js (통합본) - FIXED (정상 동작 완성본)
-   - ✅ 방향키 이동(Excel-like) (capture)
-   - ✅ F2 편집모드
-   - ✅ 마우스로 td 클릭해도 셀 포커스 가능 (이벤트 위임 1회)
-   - ✅ 코드 탭(마스터) 정상 편집 + 엑셀 업로드
-   - ✅ 철골/부자재/동바리: 탭-시트 사이 "구분바" + "구분행 삽입" (집계 제외)
-   - ✅ 구분행은 __section 플래그로 표시, 집계/합계에 영향 없음
-   - ✅ 산출식 칸 넓게(2.5배), 물량(value) 칸 좁게(0.5배)
+   FIN 산출자료(Web) app.js (섹션=서브시트 방식) - FIXED
+   - ✅ "구분(빨간영역)" = 섹션 목록 (여러 줄)
+   - ✅ 섹션 선택 시, 산출표(노란영역)는 해당 섹션의 별도 rows를 표시
+   - ✅ Ctrl+F3: 섹션(구분) 추가 + 그 섹션으로 즉시 이동 + 새 산출표 준비
+   - ✅ Ctrl+Shift+F3: 산출표 행 추가 (기존 Ctrl+F3 대체)
+   - ✅ 집계(철골_집계/동바리_집계)는 "모든 섹션"을 합산
+   - ✅ Ctrl+. picker 그대로
+   - ✅ 방향키 이동/F2 편집모드/마우스 td 클릭 포커스 유지
    ========================= */
 
-const STORAGE_KEY = "FIN_WEB_V8";
+const STORAGE_KEY = "FIN_WEB_V9";
 
 /* ===== Seed ===== */
 const SEED_CODES = [
@@ -25,11 +25,8 @@ let suppressRerenderOnce = false;
 
 /* =========================
    ✅ Mouse click -> focus cell (delegation, once)
-   - click 단계에서만 처리 (mousedown ❌)
-   - preventDefault ❌ (브라우저 기본 포커스 허용)
    ========================= */
 let mouseFocusWired = false;
-
 function wireMouseFocus(){
   if(mouseFocusWired) return;
   mouseFocusWired = true;
@@ -39,7 +36,6 @@ function wireMouseFocus(){
     if(sel && !sel.isCollapsed) return;
 
     const t = e.target;
-
     if(t?.closest?.("button,a,label,select,option")) return;
     if(t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
 
@@ -51,37 +47,54 @@ function wireMouseFocus(){
 
     editMode = false;
     setEditingClass(false);
-
     cell.focus();
   });
 }
 
+/* ===== Row factories ===== */
 function makeEmptyCalcRow(){
   return {
     code: "", name: "", spec: "", unit: "",
     formulaExpr: "", value: 0,
     note: "",
     surchargeMul: "", convUnit: "", convFactor: "",
-    convQty: 0, finalQty: 0,
-    __section: false
+    convQty: 0, finalQty: 0
   };
 }
 function makeEmptyCodeRow(){
   return {code:"", name:"", spec:"", unit:"", surcharge:"", conv_unit:"", conv_factor:"", note:""};
 }
+function makeDefaultRows(n=20){
+  return Array.from({length:n}, makeEmptyCalcRow);
+}
+
+/* ===== New: Section model =====
+   tab마다 sections[] 를 갖고, activeIndex로 현재 섹션 선택
+*/
+function makeDefaultSection(){
+  return { label:"", count:"", rows: makeDefaultRows(20) };
+}
+function makeSectionsPackFromLegacyRows(rows){
+  // 기존 steel 배열이 있으면, 그걸 1번 섹션으로 감싸서 마이그레이션
+  return {
+    activeIndex: 0,
+    sections: [{
+      label: "",
+      count: "",
+      rows: Array.isArray(rows) ? rows : makeDefaultRows(20)
+    }]
+  };
+}
 
 function makeState(){
   return {
     codes: SEED_CODES,
-    steel: Array.from({length: 20}, makeEmptyCalcRow),
-    steelSub: Array.from({length: 20}, makeEmptyCalcRow),
-    support: Array.from({length: 20}, makeEmptyCalcRow),
 
-    // ✅ 탭별 구분바 입력값(로컬저장)
-    sectionBar: {
-      steel:    { label: "", count: "" },
-      steelSub: { label: "", count: "" },
-      support:  { label: "", count: "" },
+    // ✅ 섹션 구조(서브시트)
+    sheets: {
+      steel:    { activeIndex: 0, sections: [ makeDefaultSection() ] },
+      steelSub: { activeIndex: 0, sections: [ makeDefaultSection() ] },
+      support:  { activeIndex: 0, sections: [ makeDefaultSection() ] },
     }
   };
 }
@@ -89,24 +102,42 @@ function makeState(){
 function loadState(){
   const raw = localStorage.getItem(STORAGE_KEY);
   if(!raw) return makeState();
+
   try{
     const s = JSON.parse(raw);
 
+    // codes 보정
     s.codes = Array.isArray(s.codes) ? s.codes : SEED_CODES;
-    s.steel = Array.isArray(s.steel) ? s.steel : [];
-    s.steelSub = Array.isArray(s.steelSub) ? s.steelSub : [];
-    s.support = Array.isArray(s.support) ? s.support : [];
 
-    if(!s.sectionBar) s.sectionBar = {};
-    if(!s.sectionBar.steel)    s.sectionBar.steel    = {label:"",count:""};
-    if(!s.sectionBar.steelSub) s.sectionBar.steelSub = {label:"",count:""};
-    if(!s.sectionBar.support)  s.sectionBar.support  = {label:"",count:""};
+    // ✅ V8(legacy) -> V9 migrate
+    // 기존: s.steel / s.steelSub / s.support + s.sectionBar
+    // 신규: s.sheets.tab.sections[]
+    if(!s.sheets){
+      s.sheets = {};
+      s.sheets.steel    = makeSectionsPackFromLegacyRows(s.steel);
+      s.sheets.steelSub = makeSectionsPackFromLegacyRows(s.steelSub);
+      s.sheets.support  = makeSectionsPackFromLegacyRows(s.support);
+      delete s.steel; delete s.steelSub; delete s.support;
+      delete s.sectionBar;
+    }
 
-    // 기존 데이터에 __section 누락 시 보정
-    for(const arr of [s.steel, s.steelSub, s.support]){
-      for(const r of arr){
-        if(typeof r.__section !== "boolean") r.__section = false;
+    // sheets 보정
+    for(const k of ["steel","steelSub","support"]){
+      if(!s.sheets[k]) s.sheets[k] = { activeIndex:0, sections:[makeDefaultSection()] };
+      if(!Array.isArray(s.sheets[k].sections) || s.sheets[k].sections.length === 0){
+        s.sheets[k].sections = [makeDefaultSection()];
       }
+      if(typeof s.sheets[k].activeIndex !== "number") s.sheets[k].activeIndex = 0;
+      if(s.sheets[k].activeIndex < 0) s.sheets[k].activeIndex = 0;
+      if(s.sheets[k].activeIndex >= s.sheets[k].sections.length) s.sheets[k].activeIndex = 0;
+
+      // section rows 보정
+      s.sheets[k].sections.forEach(sec=>{
+        if(!sec || typeof sec !== "object") return;
+        if(sec.label == null) sec.label = "";
+        if(sec.count == null) sec.count = "";
+        if(!Array.isArray(sec.rows)) sec.rows = makeDefaultRows(20);
+      });
     }
 
     return s;
@@ -131,12 +162,9 @@ function roundUp3(x){
   return Math.ceil(n * 1000) / 1000;
 }
 function evalExpr(exprRaw){
-  // ✅ <...> 안은 주석 처리(계산 제외)
   const withoutTags = (exprRaw ?? "").toString().replace(/<[^>]*>/g, "");
   const s = withoutTags.trim();
   if(!s) return 0;
-
-  // 숫자/연산자만 허용
   if(!/^[0-9+\-*/().\s,]+$/.test(s)) return 0;
 
   try{
@@ -148,29 +176,40 @@ function evalExpr(exprRaw){
     return 0;
   }
 }
-
 function surchargeToMul(p){
   const x = num(p);
   return x ? (1 + x/100) : "";
 }
-
 function findCode(code){
   const key = (code ?? "").toString().trim();
   if(!key) return null;
   return state.codes.find(x => (x.code ?? "").toString().trim() === key) ?? null;
 }
 
-function recalcRow(row){
-  // ✅ 구분행은 계산/자동치환 금지
-  if(row.__section){
-    row.value = 0;
-    row.surchargeMul = "";
-    row.convUnit = "";
-    row.convQty = 0;
-    row.finalQty = 0;
-    return;
-  }
+/* ===== Sheet/Section helpers ===== */
+function getPack(tab){
+  return state.sheets?.[tab] ?? null;
+}
+function getActiveSection(tab){
+  const pack = getPack(tab);
+  if(!pack) return null;
+  const i = Math.min(Math.max(0, pack.activeIndex|0), pack.sections.length-1);
+  return pack.sections[i] ?? null;
+}
+function getActiveRows(tab){
+  return getActiveSection(tab)?.rows ?? null;
+}
+function setActiveSectionIndex(tab, idx){
+  const pack = getPack(tab);
+  if(!pack) return;
+  const n = pack.sections.length;
+  const next = Math.min(Math.max(0, idx|0), n-1);
+  pack.activeIndex = next;
+  saveState();
+}
 
+/* ===== Recalc ===== */
+function recalcRow(row){
   const m = findCode(row.code);
   if(m){
     row.name = m.name ?? "";
@@ -181,7 +220,6 @@ function recalcRow(row){
     row.convUnit = m.conv_unit ?? "";
     if((row.convFactor ?? "").toString().trim() === "") row.convFactor = (m.conv_factor ?? "");
   }
-
   row.value = evalExpr(row.formulaExpr);
 
   const E = num(row.value);
@@ -191,31 +229,36 @@ function recalcRow(row){
   row.convQty = (K === 0 ? E : E*K);
   row.finalQty = (I === 0 ? row.convQty : row.convQty * I);
 }
-
 function recalcAll(){
-  state.steel.forEach(recalcRow);
-  state.steelSub.forEach(recalcRow);
-  state.support.forEach(recalcRow);
+  for(const tab of ["steel","steelSub","support"]){
+    const pack = getPack(tab);
+    if(!pack) continue;
+    for(const sec of pack.sections){
+      (sec.rows || []).forEach(recalcRow);
+    }
+  }
 }
 
-// ✅ 현재 편집중인 행의 readonly 셀만 즉시 갱신 (리렌더(go) 없이)
+/* ✅ 현재 편집중인 행 readonly만 즉시 갱신 */
 function refreshReadonlyInSameRow(activeEl){
   const tabId = activeEl?.getAttribute?.("data-tab");
   if(!tabId) return;
   if(tabId === "codes") return;
 
+  const rows = getActiveRows(tabId);
+  if(!rows) return;
+
   const rowIdx = Number(activeEl.getAttribute("data-row") || -1);
   if(rowIdx < 0) return;
-
-  const rows = getRowsByTab(tabId);
-  if(!rows || !rows[rowIdx]) return;
-
   const r = rows[rowIdx];
+  if(!r) return;
+
   const tr = activeEl.closest("tr");
   if(!tr) return;
 
+  // readonly 순서: [name, spec, unit, value, surchargeMul, convUnit, convQty, finalQty]
   const ro = tr.querySelectorAll("input.cell.readonly");
-  if(ro.length < 9) return;
+  if(ro.length < 8) return;
 
   ro[0].value = r.name ?? "";
   ro[1].value = r.spec ?? "";
@@ -223,9 +266,8 @@ function refreshReadonlyInSameRow(activeEl){
   ro[3].value = String(roundUp3(r.value));
   ro[4].value = (r.surchargeMul === "" ? "" : String(r.surchargeMul));
   ro[5].value = r.convUnit ?? "";
-  ro[6].value = (r.convFactor ?? "").toString();
-  ro[7].value = String(roundUp3(r.convQty));
-  ro[8].value = String(roundUp3(r.finalQty));
+  ro[6].value = String(roundUp3(r.convQty));
+  ro[7].value = String(roundUp3(r.finalQty));
 }
 
 /* ===== Tabs ===== */
@@ -237,10 +279,9 @@ const tabsDef = [
   { id:"support", label:"동바리(support)" },
   { id:"supportTotal", label:"동바리_집계" }
 ];
-
 let activeTabId = "steel";
 
-/* ✅ 현재 포커스 셀(탭/행/열) 기억 */
+/* ✅ 포커스 셀 기억 */
 const lastFocusCell = {
   codes: { row: 0, col: 0 },
   steel: { row: 0, col: 0 },
@@ -248,7 +289,6 @@ const lastFocusCell = {
   support: { row: 0, col: 0 },
 };
 
-/* ===== DOM ===== */
 const $tabs = document.getElementById("tabs");
 const $view = document.getElementById("view");
 
@@ -310,7 +350,7 @@ function readonlyCell(value){
   return `<input class="cell readonly" value="${escapeAttr(value ?? "")}" readonly />`;
 }
 
-/* ✅ 핵심: 이벤트 바인딩 */
+/* ===== Wire cells ===== */
 function wireCells(){
   document.querySelectorAll("[data-cell]").forEach(el=>{
     const id = el.getAttribute("data-cell");
@@ -319,10 +359,8 @@ function wireCells(){
 
     const handler = ()=>{
       meta.onChange(el.value);
-
       recalcAll();
       saveState();
-
       refreshReadonlyInSameRow(el);
     };
 
@@ -330,7 +368,7 @@ function wireCells(){
     el.addEventListener("blur", handler);
     el.addEventListener("change", handler);
 
-    // ✅ 산출식(col=1) Enter = 계산 + 아래행 이동
+    // 산출식(col=1) Enter = 계산 + 아래행 이동
     el.addEventListener("keydown", (e)=>{
       if(e.key !== "Enter") return;
       if(el.tagName.toLowerCase() === "textarea") return;
@@ -361,18 +399,17 @@ function wireFocusTracking(){
   });
 }
 
-/* ===== Excel-like navigation helpers ===== */
+/* ===== Grid nav ===== */
 function focusGrid(tab, row, col){
   const selector = `[data-grid="1"][data-tab="${tab}"][data-row="${row}"][data-col="${col}"]`;
   const el = document.querySelector(selector);
   if(el){
     el.focus();
-    if(el.scrollIntoView) el.scrollIntoView({block:"nearest", inline:"nearest"});
+    el.scrollIntoView?.({block:"nearest", inline:"nearest"});
     return true;
   }
   return false;
 }
-
 function moveGridFrom(el, dRow, dCol){
   const tab = el.getAttribute("data-tab");
   const row = Number(el.getAttribute("data-row") || 0);
@@ -390,80 +427,54 @@ function moveGridFrom(el, dRow, dCol){
   return false;
 }
 
-/* ===== Row insert below focused row (Ctrl+F3) ===== */
-function getRowsByTab(tab){
-  if(tab==="steel") return state.steel;
-  if(tab==="steelSub") return state.steelSub;
-  if(tab==="support") return state.support;
-  return null;
-}
+/* ===== Rows manipulation ===== */
+function insertCalcRowBelowActive(){
+  if(!["steel","steelSub","support"].includes(activeTabId)) return;
 
-function insertRowBelowActive(){
-  if(!["codes","steel","steelSub","support"].includes(activeTabId)) return;
-
-  const {row, col} = lastFocusCell[activeTabId] ?? {row:0, col:0};
-
-  if(activeTabId === "codes"){
-    const insertAt = Math.min(row + 1, state.codes.length);
-    state.codes.splice(insertAt, 0, makeEmptyCodeRow());
-    saveState();
-    go("codes");
-    setTimeout(()=>focusGrid("codes", insertAt, col), 0);
-    return;
-  }
-
-  const rows = getRowsByTab(activeTabId);
+  const rows = getActiveRows(activeTabId);
   if(!rows) return;
 
-  const insertAt = Math.min(row + 1, rows.length);
+  const {row, col} = lastFocusCell[activeTabId] ?? {row:0, col:0};
+  const insertAt = Math.min((row|0) + 1, rows.length);
+
   rows.splice(insertAt, 0, makeEmptyCalcRow());
   saveState();
   go(activeTabId);
   setTimeout(()=>focusGrid(activeTabId, insertAt, col), 0);
 }
 
-// ✅ 구분행(섹션행) 삽입: 현재 포커스 행 아래에 1줄 추가
-function insertSectionRowBelowActive(){
-  if(!["steel","steelSub","support"].includes(activeTabId)) return;
+function addSection(tab){
+  const pack = getPack(tab);
+  if(!pack) return;
 
-  const rows = getRowsByTab(activeTabId);
-  if(!rows) return;
+  const curIdx = pack.activeIndex|0;
+  const insertAt = Math.min(curIdx + 1, pack.sections.length);
 
-  const { row, col } = lastFocusCell[activeTabId] ?? {row:0, col:0};
-  const idx = Math.min(Math.max(0, Number(row) || 0), rows.length);
-  const insertAt = Math.min(idx + 1, rows.length);
+  pack.sections.splice(insertAt, 0, makeDefaultSection());
+  pack.activeIndex = insertAt;
 
-  const bar = state.sectionBar?.[activeTabId] ?? {label:"",count:""};
-  const label = (bar.label ?? "").toString().trim();
-  const count = (bar.count ?? "").toString().trim();
-
-  const tag = label ? `※ ${label}` : "※ 구분";
-  const countTxt = count === "" ? "" : `  (개소: ${count})`;
-
-  const r = makeEmptyCalcRow();
-  r.code = "";
-  r.name = `${tag}${countTxt}`;
-  r.__section = true;
-
-  rows.splice(insertAt, 0, r);
   saveState();
-  go(activeTabId);
-
-  setTimeout(()=>focusGrid(activeTabId, insertAt, 0), 0);
 }
 
 /* ===== Views ===== */
 function renderCodes(){
   $view.innerHTML = "";
-  const {wrap, header} = panel('코드(Ctrl+".")', "코드 마스터(수정/추가). 엑셀 업로드(.xlsx)로 한 번에 등록 가능. (행 추가: Ctrl+F3)");
+  const {wrap, header} = panel('코드(Ctrl+".")', "코드 마스터(수정/추가). 엑셀 업로드(.xlsx)로 한 번에 등록 가능.");
 
   const right = document.createElement("div");
   right.style.display="flex"; right.style.gap="8px"; right.style.flexWrap="wrap";
 
   const addBtn = document.createElement("button");
   addBtn.className="smallbtn";
-  addBtn.textContent="행 추가 (Ctrl+F3)";
-  addBtn.onclick = ()=> insertRowBelowActive();
+  addBtn.textContent="행 추가";
+  addBtn.onclick = ()=>{
+    const {row, col} = lastFocusCell.codes ?? {row:0,col:0};
+    const insertAt = Math.min((row|0)+1, state.codes.length);
+    state.codes.splice(insertAt, 0, makeEmptyCodeRow());
+    saveState();
+    go("codes");
+    setTimeout(()=>focusGrid("codes", insertAt, col), 0);
+  };
 
   // Excel upload
   const uploadLabel = document.createElement("label");
@@ -567,7 +578,6 @@ function renderCodes(){
       <td>${textAreaCell(r.note, v=>{ r.note=v; }, {tabId:"codes", rowIdx:idx, colIdx:7})}</td>
       <td></td>
     `;
-
     const tdAct = tr.lastElementChild;
     const act = document.createElement("div");
     act.className="row-actions";
@@ -590,78 +600,114 @@ function renderCodes(){
   setTimeout(()=>focusGrid("codes", row, col), 0);
 }
 
-function renderCalcSheet(title, rows, tabId, mode){
+/* ===== Section Bar UI ===== */
+function renderSectionBar(tabId){
+  const pack = getPack(tabId);
+  if(!pack) return null;
+
+  const activeIdx = pack.activeIndex|0;
+  const sec = getActiveSection(tabId) || pack.sections[0];
+
+  const bar = document.createElement("div");
+  bar.className = "sectionbar";
+
+  // 섹션 칩 리스트
+  const chips = pack.sections.map((s, i)=>{
+    const title = (s.label || "").trim() ? s.label.trim() : `구분 ${i+1}`;
+    const count = (s.count ?? "").toString().trim();
+    const sub = count !== "" ? ` · 개소:${count}` : "";
+    const active = i === activeIdx ? " active" : "";
+    return `<button class="secchip${active}" data-sec="${i}" title="${escapeAttr(title)}">${escapeHtml(title)}${escapeHtml(sub)}</button>`;
+  }).join("");
+
+  bar.innerHTML = `
+    <div class="sectionbar-inner">
+      <div class="sectionbar-left">
+        <span class="sectionbar-title">구분</span>
+
+        <div class="secchips" id="secChips">${chips}</div>
+
+        <input class="sectionbar-input" id="secLabel" placeholder="구분명(예: 2층 바닥 철골보)" value="${escapeAttr(sec?.label ?? "")}">
+        <input class="sectionbar-input small" id="secCount" placeholder="개소(예: 0,1,2...)" value="${escapeAttr(sec?.count ?? "")}">
+
+        <button class="smallbtn" id="btnSecAdd">구분 추가 (Ctrl+F3)</button>
+      </div>
+      <div class="sectionbar-right">
+        <span class="sectionbar-hint">구분을 클릭하면 해당 구분의 산출표로 전환됩니다.</span>
+      </div>
+    </div>
+  `;
+
+  // 이벤트 연결
+  setTimeout(()=>{
+    const $chips = document.getElementById("secChips");
+    const $label = document.getElementById("secLabel");
+    const $count = document.getElementById("secCount");
+    const $add = document.getElementById("btnSecAdd");
+
+    const saveCurrentMeta = ()=>{
+      const cur = getActiveSection(tabId);
+      if(!cur) return;
+      cur.label = ($label?.value ?? "").toString();
+      cur.count = ($count?.value ?? "").toString();
+      saveState();
+      // 칩 텍스트 갱신을 위해 재렌더
+      go(tabId);
+    };
+
+    // 칩 클릭: 섹션 전환
+    $chips?.addEventListener("click", (e)=>{
+      const btn = e.target?.closest?.("button[data-sec]");
+      if(!btn) return;
+      const idx = Number(btn.getAttribute("data-sec") || 0);
+      setActiveSectionIndex(tabId, idx);
+      go(tabId);
+    });
+
+    // 메타 저장(입력)
+    $label?.addEventListener("change", saveCurrentMeta);
+    $count?.addEventListener("change", saveCurrentMeta);
+
+    // 추가 버튼
+    $add?.addEventListener("click", ()=>{
+      addSection(tabId);
+      go(tabId);
+    });
+  }, 0);
+
+  return bar;
+}
+
+function renderCalcSheet(title, tabId, mode){
   $view.innerHTML = "";
 
-  // ✅ 구분바
-  if(["steel","steelSub","support"].includes(tabId)){
-    const barWrap = document.createElement("div");
-    barWrap.className = "sectionbar";
-    const saved = state.sectionBar?.[tabId] ?? {label:"",count:""};
+  // ✅ 섹션바 먼저
+  const bar = renderSectionBar(tabId);
+  if(bar) $view.appendChild(bar);
 
-    barWrap.innerHTML = `
-      <div class="sectionbar-inner">
-        <div class="sectionbar-left">
-          <span class="sectionbar-title">구분</span>
-          <input class="sectionbar-input" id="secLabel" placeholder="구분명(예: 2층 바닥 철골보)" value="${escapeAttr(saved.label ?? "")}">
-          <input class="sectionbar-input small" id="secCount" placeholder="개소(예: 0,1,2...)" value="${escapeAttr(saved.count ?? "")}">
-          <button class="smallbtn" id="btnSecInsert">구분행 삽입</button>
-        </div>
-        <div class="sectionbar-right">
-          <span class="sectionbar-hint">※ 구분행은 합계/집계에 영향을 주지 않습니다.</span>
-        </div>
-      </div>
-    `;
-    $view.appendChild(barWrap);
+  const rows = getActiveRows(tabId) || makeDefaultRows(20);
 
-    setTimeout(()=>{
-      const $label = document.getElementById("secLabel");
-      const $count = document.getElementById("secCount");
-      const $btn = document.getElementById("btnSecInsert");
-
-      const saveBar = ()=>{
-        state.sectionBar[tabId] = {
-          label: ($label?.value ?? "").toString(),
-          count: ($count?.value ?? "").toString(),
-        };
-        saveState();
-      };
-
-      $label?.addEventListener("input", saveBar);
-      $count?.addEventListener("input", saveBar);
-
-      $btn?.addEventListener("click", ()=>{
-        saveBar();
-        insertSectionRowBelowActive();
-      });
-
-      $count?.addEventListener("keydown", (e)=>{
-        if(e.key === "Enter"){
-          e.preventDefault();
-          saveBar();
-          insertSectionRowBelowActive();
-        }
-      });
-    }, 0);
-  }
-
-  const desc = '산출식 입력 → 물량(Value) 자동 계산(Enter). 코드 선택 새 창: Ctrl+.  | 행 추가: Ctrl+F3';
+  const desc = '산출식 입력 → 물량(Value) 자동 계산(Enter). 코드 선택 새 창: Ctrl+.  | (구분추가: Ctrl+F3 / 행추가: Ctrl+Shift+F3)';
   const {wrap, header} = panel(title, desc);
 
   const right = document.createElement("div");
   right.style.display="flex"; right.style.gap="8px"; right.style.flexWrap="wrap";
 
-  const addBtn = document.createElement("button");
-  addBtn.className="smallbtn";
-  addBtn.textContent="행 추가 (Ctrl+F3)";
-  addBtn.onclick=()=>insertRowBelowActive();
+  const addRowBtn = document.createElement("button");
+  addRowBtn.className="smallbtn";
+  addRowBtn.textContent="행 추가 (Ctrl+Shift+F3)";
+  addRowBtn.onclick=()=>insertCalcRowBelowActive();
 
   const add10Btn = document.createElement("button");
   add10Btn.className="smallbtn";
   add10Btn.textContent="+10행";
-  add10Btn.onclick=()=>{ for(let i=0;i<10;i++) rows.push(makeEmptyCalcRow()); saveState(); go(tabId); };
+  add10Btn.onclick=()=>{
+    for(let i=0;i<10;i++) rows.push(makeEmptyCalcRow());
+    saveState();
+    go(tabId);
+  };
 
-  right.appendChild(addBtn);
+  right.appendChild(addRowBtn);
   right.appendChild(add10Btn);
   header.appendChild(right);
 
@@ -676,8 +722,10 @@ function renderCalcSheet(title, rows, tabId, mode){
           <th style="min-width:220px;">품명(자동)</th>
           <th style="min-width:220px;">규격(자동)</th>
           <th style="min-width:90px;">단위(자동)</th>
+
           <th style="min-width:550px;">산출식</th>
           <th style="min-width:80px;">물량(Value)</th>
+
           <th style="min-width:220px;">비고</th>
           <th style="min-width:120px;">할증(배수)</th>
           <th style="min-width:120px;">환산단위</th>
@@ -697,11 +745,10 @@ function renderCalcSheet(title, rows, tabId, mode){
     recalcRow(r);
 
     const tr = document.createElement("tr");
-    if(r.__section) tr.classList.add("section-row");
-
     tr.innerHTML = `
       <td>${idx+1}</td>
-      <td>${inputCell(r.code, v=>{ r.code=v; r.__section=false; }, "코드 입력", {tabId, rowIdx:idx, colIdx:0})}</td>
+
+      <td>${inputCell(r.code, v=>{ r.code=v; }, "코드 입력", {tabId, rowIdx:idx, colIdx:0})}</td>
       <td>${readonlyCell(r.name)}</td>
       <td>${readonlyCell(r.spec)}</td>
       <td>${readonlyCell(r.unit)}</td>
@@ -710,9 +757,12 @@ function renderCalcSheet(title, rows, tabId, mode){
       <td>${readonlyCell(String(roundUp3(r.value)))}</td>
 
       <td>${textAreaCell(r.note, v=>{ r.note=v; }, {tabId, rowIdx:idx, colIdx:2})}</td>
+
       <td>${readonlyCell(r.surchargeMul === "" ? "" : String(r.surchargeMul))}</td>
       <td>${readonlyCell(r.convUnit)}</td>
+
       <td>${inputCell(r.convFactor, v=>{ r.convFactor=v; }, "비워도 됨", {tabId, rowIdx:idx, colIdx:3})}</td>
+
       <td>${readonlyCell(String(roundUp3(r.convQty)))}</td>
       <td>${readonlyCell(String(roundUp3(r.finalQty)))}</td>
       <td></td>
@@ -741,14 +791,9 @@ function renderCalcSheet(title, rows, tabId, mode){
 
   const sumBox = document.createElement("div");
   sumBox.style.marginTop="10px";
-
-  // ✅ 구분행은 합계에서 제외
-  const dataRows = rows.filter(r => !r.__section);
-
   const sumVal = (mode==="steel")
-    ? dataRows.reduce((a,b)=> a + roundUp3(b.finalQty), 0)
-    : dataRows.reduce((a,b)=> a + num(b.value), 0);
-
+    ? rows.reduce((a,b)=> a + roundUp3(b.finalQty), 0)
+    : rows.reduce((a,b)=> a + num(b.value), 0);
   sumBox.innerHTML = `<span class="badge">합계: ${roundUp3(sumVal)}</span>`;
   wrap.appendChild(sumBox);
 
@@ -762,10 +807,20 @@ function renderCalcSheet(title, rows, tabId, mode){
   setTimeout(()=>focusGrid(tabId, last.row, last.col), 0);
 }
 
+/* ===== Total helpers (모든 섹션 합산) ===== */
+function flattenAllRows(tab){
+  const pack = getPack(tab);
+  if(!pack) return [];
+  const out = [];
+  for(const sec of pack.sections){
+    out.push(...(sec.rows || []));
+  }
+  return out;
+}
+
 function groupSum(rows, valueSelector){
   const map = new Map();
   for(const r of rows){
-    if(r.__section) continue; // ✅ 구분행 제외
     const code = (r.code ?? "").toString().trim();
     if(!code) continue;
     const m = findCode(code);
@@ -784,9 +839,13 @@ function groupSum(rows, valueSelector){
 
 function renderSteelTotal(){
   $view.innerHTML = "";
-  const {wrap} = panel("철골_집계(Steel_Total quantity)", "코드별 합계(철골+부자재의 할증후수량 합산)");
+  const {wrap} = panel("철골_집계(Steel_Total quantity)", "코드별 합계(철골+부자재 모든 구분(섹션)의 할증후수량 합산)");
   recalcAll();
-  const grouped = groupSum([...state.steel, ...state.steelSub], r => roundUp3(r.finalQty));
+
+  const grouped = groupSum(
+    [...flattenAllRows("steel"), ...flattenAllRows("steelSub")],
+    r => roundUp3(r.finalQty)
+  );
 
   const tableWrap = document.createElement("div");
   tableWrap.className="table-wrap";
@@ -817,9 +876,10 @@ function renderSteelTotal(){
 
 function renderSupportTotal(){
   $view.innerHTML = "";
-  const {wrap} = panel("동바리_집계(Support_Total quantity)", "코드별 합계(동바리의 물량(Value) 합계)");
+  const {wrap} = panel("동바리_집계(Support_Total quantity)", "코드별 합계(동바리 모든 구분(섹션)의 물량(Value) 합계)");
   recalcAll();
-  const grouped = groupSum(state.support, r => num(r.value));
+
+  const grouped = groupSum(flattenAllRows("support"), r => num(r.value));
 
   const tableWrap = document.createElement("div");
   tableWrap.className="table-wrap";
@@ -848,6 +908,7 @@ function renderSupportTotal(){
   $view.appendChild(wrap);
 }
 
+/* ===== Router ===== */
 function go(id, opts={silentTabRender:false}){
   activeTabId = id;
   recalcAll();
@@ -855,9 +916,9 @@ function go(id, opts={silentTabRender:false}){
   if(!opts.silentTabRender) renderTabs();
 
   if(id==="codes") renderCodes();
-  else if(id==="steel") renderCalcSheet("철골(Steel)", state.steel, "steel", "steel");
-  else if(id==="steelSub") renderCalcSheet("철골_부자재(Processing and assembly)", state.steelSub, "steelSub", "steel");
-  else if(id==="support") renderCalcSheet("동바리(support)", state.support, "support", "support");
+  else if(id==="steel") renderCalcSheet("철골(Steel)", "steel", "steel");
+  else if(id==="steelSub") renderCalcSheet("철골_부자재(Processing and assembly)", "steelSub", "steel");
+  else if(id==="support") renderCalcSheet("동바리(support)", "support", "support");
   else if(id==="steelTotal") renderSteelTotal();
   else if(id==="supportTotal") renderSupportTotal();
 }
@@ -902,7 +963,7 @@ function openPickerWindow(){
 }
 
 function insertCodesBelow(tab, focusRow, codeList){
-  const rows = getRowsByTab(tab);
+  const rows = getActiveRows(tab);
   if(!rows) return;
 
   const idx = Math.min(Math.max(0, Number(focusRow) || 0), rows.length);
@@ -931,50 +992,6 @@ window.addEventListener("message", (event)=>{
     if(Array.isArray(selectedCodes) && selectedCodes.length){
       insertCodesBelow(originTab, focusRow, selectedCodes);
     }
-    return;
-  }
-
-  if(msg.type === "UPDATE_CODES"){
-    const next = msg.codes;
-
-    if(!Array.isArray(next) || next.length === 0){
-      alert("코드 반영 실패: 전달된 codes가 비어있습니다.");
-      return;
-    }
-
-    const cleaned = next
-      .map(r => ({
-        code: (r.code ?? "").toString().trim(),
-        name: (r.name ?? "").toString().trim(),
-        spec: (r.spec ?? "").toString().trim(),
-        unit: (r.unit ?? "").toString().trim(),
-        surcharge: (r.surcharge ?? "").toString().trim(),
-        conv_unit: (r.conv_unit ?? "").toString().trim(),
-        conv_factor: (r.conv_factor ?? "").toString().trim(),
-        note: (r.note ?? "").toString().trim(),
-      }))
-      .filter(r => r.code);
-
-    if(cleaned.length === 0){
-      alert("코드 반영 실패: 유효한 code가 없습니다.");
-      return;
-    }
-
-    const seen = new Set();
-    const dup = [];
-    for(const r of cleaned){
-      if(seen.has(r.code)) dup.push(r.code);
-      else seen.add(r.code);
-    }
-    if(dup.length){
-      alert(`코드 반영 실패: 중복 코드 존재\n${dup.slice(0,20).join(", ")}${dup.length>20 ? "..." : ""}`);
-      return;
-    }
-
-    state.codes = cleaned;
-    recalcAll();
-    saveState();
-    go(activeTabId);
     return;
   }
 
@@ -1024,55 +1041,31 @@ function textareaAtBottom(el){
   return !v.slice(pos).includes("\n");
 }
 
-function deleteRowAtActiveFocus(){
-  if(!["codes","steel","steelSub","support"].includes(activeTabId)) return;
-
-  const { row } = lastFocusCell[activeTabId] ?? { row: 0 };
-  const r = Math.max(0, Number(row) || 0);
-
-  const ok = confirm("선택된 행을 정말 삭제할까요?");
-  if(!ok) return;
-
-  if(activeTabId === "codes"){
-    if(state.codes.length === 0) return;
-    if(r >= state.codes.length) return;
-    state.codes.splice(r, 1);
-    saveState();
-    go("codes");
-    const newRow = Math.min(r, state.codes.length - 1);
-    if(newRow >= 0) setTimeout(()=>focusGrid("codes", newRow, 0), 0);
-    return;
-  }
-
-  const rows = getRowsByTab(activeTabId);
-  if(!rows || rows.length === 0) return;
-  if(r >= rows.length) return;
-
-  rows.splice(r, 1);
-  saveState();
-  go(activeTabId);
-
-  const newRow = Math.min(r, rows.length - 1);
-  if(newRow >= 0) setTimeout(()=>focusGrid(activeTabId, newRow, 0), 0);
-}
-
 document.addEventListener("keydown", (e)=>{
+  // Ctrl+. : picker
   if(e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "." || e.code === "Period")){
     e.preventDefault();
     openPickerWindow();
     return;
   }
 
-  if(e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "Delete" || e.code === "Delete")){
-    e.preventDefault();
-    deleteRowAtActiveFocus();
-    return;
+  // ✅ Ctrl+F3 : "구분(섹션)" 추가
+  if(e.ctrlKey && !e.altKey && !e.metaKey && e.code === "F3" && !e.shiftKey){
+    if(["steel","steelSub","support"].includes(activeTabId)){
+      e.preventDefault();
+      addSection(activeTabId);
+      go(activeTabId);
+      return;
+    }
   }
 
-  if(e.ctrlKey && !e.altKey && !e.metaKey && e.code === "F3"){
-    e.preventDefault();
-    insertRowBelowActive();
-    return;
+  // ✅ Ctrl+Shift+F3 : 산출행 추가
+  if(e.ctrlKey && !e.altKey && !e.metaKey && e.code === "F3" && e.shiftKey){
+    if(["steel","steelSub","support"].includes(activeTabId)){
+      e.preventDefault();
+      insertCalcRowBelowActive();
+      return;
+    }
   }
 
   const el = document.activeElement;
@@ -1139,26 +1132,10 @@ document.addEventListener("keydown", (e)=>{
     return;
   }
 
-  if(e.key === "ArrowUp"){
-    e.preventDefault(); beginNav();
-    moveGridFrom(el, -1, 0);
-    return;
-  }
-  if(e.key === "ArrowDown"){
-    e.preventDefault(); beginNav();
-    moveGridFrom(el, +1, 0);
-    return;
-  }
-  if(e.key === "ArrowLeft"){
-    e.preventDefault(); beginNav();
-    moveGridFrom(el, 0, -1);
-    return;
-  }
-  if(e.key === "ArrowRight"){
-    e.preventDefault(); beginNav();
-    moveGridFrom(el, 0, +1);
-    return;
-  }
+  if(e.key === "ArrowUp"){ e.preventDefault(); beginNav(); moveGridFrom(el, -1, 0); return; }
+  if(e.key === "ArrowDown"){ e.preventDefault(); beginNav(); moveGridFrom(el, +1, 0); return; }
+  if(e.key === "ArrowLeft"){ e.preventDefault(); beginNav(); moveGridFrom(el, 0, -1); return; }
+  if(e.key === "ArrowRight"){ e.preventDefault(); beginNav(); moveGridFrom(el, 0, +1); return; }
 
 }, true);
 
@@ -1183,20 +1160,8 @@ document.getElementById("fileImport")?.addEventListener("change", async (e)=>{
   try{
     const parsed = JSON.parse(txt);
     state = parsed;
-
-    // sectionBar 보정
-    if(!state.sectionBar) state.sectionBar = {};
-    if(!state.sectionBar.steel) state.sectionBar.steel = {label:"",count:""};
-    if(!state.sectionBar.steelSub) state.sectionBar.steelSub = {label:"",count:""};
-    if(!state.sectionBar.support) state.sectionBar.support = {label:"",count:""};
-
-    // __section 보정
-    for(const arr of [state.steel||[], state.steelSub||[], state.support||[]]){
-      for(const r of arr){
-        if(typeof r.__section !== "boolean") r.__section = false;
-      }
-    }
-
+    // 기본 보정
+    if(!state.sheets) state = loadState(); // 형식 이상 시 기본으로
     recalcAll();
     saveState();
     go("steel");

@@ -17,7 +17,6 @@ body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", Arial, "Apple SD Gothic Neo", "Malgun Gothic";
   color:var(--ink);
-  /* ✅ 얼룩 최소화(약한 그라데이션) */
   background:
     radial-gradient(1200px 600px at 20% 0%, rgba(26,61,124,.05), transparent 60%),
     radial-gradient(900px 500px at 90% 20%, rgba(214,178,94,.06), transparent 60%),
@@ -85,6 +84,7 @@ body{
 .smallbtn{
   padding: 8px 10px;
   box-shadow: 0 10px 24px rgba(0,0,0,.08);
+  font-size: 12px;
 }
 
 .btn:hover,
@@ -120,6 +120,7 @@ body{
   cursor:pointer;
   font-weight: 900;
   color: var(--muted);
+  font-size: 13px;
 }
 .tab.active{
   background: rgba(26,61,124,.10);
@@ -136,6 +137,7 @@ body{
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 12px;
+  margin-bottom: 14px;
 }
 
 .panel-header{
@@ -163,6 +165,7 @@ body{
   overflow:auto;
   background: rgba(255,255,255,.55);
 }
+
 table{
   width: max-content;
   min-width: 100%;
@@ -170,6 +173,7 @@ table{
   border-spacing: 0;
   font-size: 12px;
 }
+
 thead th{
   position: sticky;
   top: 0;
@@ -181,9 +185,10 @@ thead th{
   font-weight: 900;
   white-space: nowrap;
 }
+
 tbody td{
   border-bottom: 1px solid rgba(0,0,0,.06);
-  padding: 4px 6px;               /* ✅ 줄 간격 압축 */
+  padding: 4px 6px;
   vertical-align: middle;
 }
 
@@ -194,17 +199,16 @@ tbody td{
   align-items:center;
 }
 
-/* ===== Cells ===== */
+/* ===== Cells (grid only) ===== */
 .cell{
   width: 100%;
   border: 1px solid rgba(0,0,0,.14);
   background: rgba(255,255,255,.72);
   border-radius: 10px;
-  padding: 6px 8px;               /* ✅ 셀 높이 줄임 */
+  padding: 6px 8px;
   font-size: 12px;
   outline: none;
 
-  /* ✅ 마우스 클릭/드래그 선택 허용 */
   pointer-events: auto !important;
   user-select: text !important;
   -webkit-user-select: text !important;
@@ -219,7 +223,7 @@ tbody td{
   color: rgba(0,0,0,.65);
 }
 textarea.cell{
-  min-height: 30px;               /* ✅ textarea도 높이 최소화 */
+  min-height: 30px;
   resize: vertical;
 }
 
@@ -254,36 +258,50 @@ textarea.cell{
   box-shadow: 0 0 0 3px rgba(26,61,124,0.15);
 }
 
-/* =================================================
-   TOP SPLIT (요청: 구분명 리스트(좌) + 변수표(우) 를
-   산출표 "위"에서 한 줄로 배치하고, 공간을 줄이기)
-   ================================================= */
+/* =========================================================
+   ✅ 요청 반영 핵심: 상단(초록 영역) = 구분명 리스트(좌) + 변수표(우)
+   - 산출표 위에 위치
+   - 높이(세로) 축소 + 글자 한 단계 줄임
+   - 구분 항목에서 "구분명 오른쪽에 개소" 표시
+   - 변수표 하단 설명 문구 삭제(= CSS엔 없음)
+   ========================================================= */
 .top-split{
-  display:grid;
-  grid-template-columns: 360px 1fr;  /* 좌:구분 / 우:변수표 */
-  gap:14px;
+  display:flex;
+  gap:12px;
   align-items:stretch;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+
+  /* ✅ 좁은 화면은 줄바꿈 */
+  flex-wrap: wrap;
 }
 
-/* 화면이 좁으면 아래로 떨어지게 */
-@media (max-width: 980px){
-  .top-split{
-    grid-template-columns: 1fr;
-  }
+/* 좌: 구분명 리스트 */
+.top-split > .rail-box:first-child{
+  width: 300px;
+  min-width: 260px;
+  flex: 0 0 auto;
 }
 
+/* 우: 변수표 */
+.top-split > .rail-box:last-child{
+  flex: 1 1 640px;
+  min-width: 520px;
+}
+
+/* rail 박스 공통 */
 .rail-box{
   background: rgba(255,250,240,.86);
   border:1px solid rgba(0,0,0,.10);
   border-radius:16px;
   box-shadow: 0 10px 26px rgba(0,0,0,.08);
-  padding:12px;
+  padding:10px;
 }
 
 .rail-title{
   font-weight:900;
   margin-bottom:8px;
+  font-size: 12px;     /* ✅ 글자 한 단계 축소 */
+  color: rgba(0,0,0,.78);
 }
 
 /* ===== 구분 리스트 ===== */
@@ -291,10 +309,13 @@ textarea.cell{
   display:flex;
   flex-direction:column;
   gap:8px;
-  max-height: 180px;     /* ✅ 너무 커지지 않게 */
+
+  /* ✅ 세로 높이 축소(요청: 초록라인만큼 줄이기) */
+  max-height: 170px;
   overflow:auto;
   padding-right:4px;
 }
+
 .section-item{
   display:flex;
   align-items:center;
@@ -303,38 +324,51 @@ textarea.cell{
   border:1px solid rgba(0,0,0,.10);
   background: rgba(255,255,255,.70);
   border-radius:12px;
-  padding:10px 10px;
+
+  /* ✅ 높이/글자 축소 */
+  padding:8px 10px;
   cursor:pointer;
   font-weight:800;
+  font-size: 12px;
+  text-align:left;
 }
 .section-item.active{
   background: rgba(26,61,124,.10);
   border-color: rgba(26,61,124,.25);
 }
 .section-item .meta{
-  font-size:12px;
-  opacity:.75;
+  font-size:11px;
+  opacity:.80;
   font-weight:800;
+  white-space: nowrap;
 }
 .section-item:focus{
   outline: 2px solid rgba(26,61,124,.35);
   outline-offset:2px;
 }
 
-/* 구분 편집 UI */
+/* ===== 구분 편집(구분명/개소/저장) 3열 ===== */
 .section-editor{
   display:grid;
-  grid-template-columns: 1fr 160px 120px;
+  grid-template-columns: 1fr 140px 88px; /* ✅ 더 촘촘 */
   gap:8px;
-  margin-top:10px;
+  margin-top:8px;
 }
 .section-editor input{
   border:1px solid rgba(0,0,0,.12);
-  background:rgba(255,255,255,.8);
+  background:rgba(255,255,255,.82);
   border-radius:10px;
-  padding:9px 10px;
+  padding:8px 10px;
   outline:none;
-  font-size:12px;
+
+  /* ✅ 글자/높이 축소 */
+  font-size: 12px;
+}
+
+/* 구분 리스트 박스 아래 버튼 줄도 촘촘 */
+.section-editor + div .smallbtn{
+  padding: 8px 10px;
+  font-size: 12px;
 }
 
 /* ===== 변수표 ===== */
@@ -343,8 +377,11 @@ textarea.cell{
   border-radius:14px;
   overflow:auto;
   background: rgba(255,255,255,.55);
-  max-height: 260px;     /* ✅ 상단 영역 과점유 방지 */
+
+  /* ✅ 세로 높이 축소(요청: 초록라인만큼) */
+  max-height: 220px;
 }
+
 .var-table{
   width:100%;
   border-collapse:separate;
@@ -356,17 +393,54 @@ textarea.cell{
   top:0;
   background: rgba(255,250,240,.95);
   border-bottom: 1px solid rgba(0,0,0,.10);
-  padding: 9px 8px;
+  padding: 8px 8px;
   text-align:left;
   font-weight:900;
+  font-size: 12px; /* ✅ 축소 */
 }
 .var-table tbody td{
   border-bottom:1px solid rgba(0,0,0,.06);
   padding:6px 8px;
 }
-.var-hint{
-  font-size:12px;
-  opacity:.75;
-  margin-top:8px;
-  line-height:1.4;
+
+/* ✅ 변수표 입력 전용 (grid 이동 영향 X) */
+.varcell{
+  width: 100%;
+  border: 1px solid rgba(0,0,0,.14);
+  background: rgba(255,255,255,.78);
+  border-radius: 10px;
+
+  /* ✅ 높이/글자 축소 */
+  padding: 6px 8px;
+  font-size: 12px;
+  outline: none;
+
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+.varcell:focus{
+  border-color: rgba(26,61,124,.35);
+  box-shadow: 0 0 0 3px rgba(26,61,124,.10);
+}
+.varcell.readonly{
+  background: rgba(255,255,255,.50);
+  color: rgba(0,0,0,.65);
+}
+
+/* =========================================================
+   Responsive
+   ========================================================= */
+@media (max-width: 980px){
+  .top-split > .rail-box:first-child{
+    width: 100%;
+    min-width: 0;
+  }
+  .top-split > .rail-box:last-child{
+    min-width: 0;
+    width: 100%;
+  }
+  .section-list{ max-height: 160px; }
+  .var-tablewrap{ max-height: 240px; }
 }

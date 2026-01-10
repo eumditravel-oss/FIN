@@ -717,6 +717,9 @@ function renderCalcSheet(title, rows, tabId, mode){
 
   rows.forEach((r, idx)=>{
     recalcRow(r);
+     const tr = document.createElement("tr");
+if(r.__section) tr.classList.add("section-row");
+
 
     const tr = document.createElement("tr");
         tr.innerHTML = `

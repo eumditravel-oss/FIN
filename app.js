@@ -1,20 +1,7 @@
-/* app.js (v11)
-  - 상단(구분명 리스트 + 변수표) : 산출표 "위"에 위치 + sticky 고정
-  - 레이아웃: 좌(구분명 리스트) / 우(변수표) (초록박스 형태)
-  - 변수표: 방향키로 셀 이동(↑↓←→), Enter로 다음 셀 이동
-  - 글로벌 ↑↓ 구분이동은 "입력중"이면 절대 가로채지 않음
-  - 탭명 변경:
-    * "철골(Steel)" -> "철골"
-    * "동바리(support)" -> "구조이기/동바리"
-    * "동바리_집계" -> "구조이기/동바리_집계"
-*/
-
+/* app.js (v12) */
 (() => {
   "use strict";
 
-  /* =========================
-     Helpers
-     ========================= */
   const $ = (sel, el = document) => el.querySelector(sel);
   const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
 
@@ -41,16 +28,11 @@
   }
 
   function cryptoRandomId() {
-    try {
-      return crypto.getRandomValues(new Uint32Array(2)).join("-");
-    } catch {
-      return String(Date.now()) + "-" + Math.floor(Math.random() * 1e9);
-    }
+    try { return crypto.getRandomValues(new Uint32Array(2)).join("-"); }
+    catch { return String(Date.now()) + "-" + Math.floor(Math.random() * 1e9); }
   }
 
-  /* =========================
-     Tabs
-     ========================= */
+  /* Tabs */
   const TAB_DEFS = [
     { id: "code", label: "코드(Ctrl+.)", type: "code" },
     { id: "steel", label: "철골", type: "calc_steel" },
@@ -60,171 +42,91 @@
     { id: "support_sum", label: "구조이기/동바리_집계", type: "summary_support" },
   ];
 
-  /* =========================
-     Storage
-     ========================= */
-  const LS_KEY = "FIN_WEB_V11_STATE";
+  /* Storage */
+  const LS_KEY = "FIN_WEB_V12_STATE";
+  const loadState = () => { try { const r = localStorage.getItem(LS_KEY); return r ? JSON.parse(r) : null; } catch { return null; } };
+  const saveState = () => { try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch {} };
 
-  function loadState() {
-    try {
-      const raw = localStorage.getItem(LS_KEY);
-      if (!raw) return null;
-      return JSON.parse(raw);
-    } catch {
-      return null;
-    }
-  }
-
-  function saveState() {
-    try {
-      localStorage.setItem(LS_KEY, JSON.stringify(state));
-    } catch {}
-  }
-
-  /* =========================
-     Data Model
-     ========================= */
-  function makeDefaultVars() {
-    return Array.from({ length: 10 }).map(() => ({
-      key: "",
-      expr: "",
-      value: 0,
-      note: ""
-    }));
-  }
-
-  function makeDefaultRows(calcType) {
+  /* Model */
+  const makeDefaultVars = () => Array.from({ length: 10 }).map(() => ({ key:"", expr:"", value:0, note:"" }));
+  const makeDefaultRows = (calcType) => {
     const base = Array.from({ length: 12 }).map(() => ({
-      code: "",
-      name: "",
-      spec: "",
-      unit: "",
-      expr: "",
-      value: 0,
-      mult: "",
-      conv: ""
+      code:"", name:"", spec:"", unit:"", expr:"", value:0, mult:"", conv:""
     }));
     if (calcType === "calc_steel") base.forEach(r => (r.unit = "M"));
     if (calcType === "calc_aux") base.forEach(r => (r.unit = "M2"));
     return base;
-  }
-
-  function makeSection(name = "구분 1", count = "") {
-    return {
-      id: cryptoRandomId(),
-      name,
-      count,
-      vars: makeDefaultVars(),
-    };
-  }
+  };
+  const makeSection = (name="구분 1", count="") => ({ id: cryptoRandomId(), name, count, vars: makeDefaultVars() });
 
   function makeDefaultState() {
     const tabs = {};
     for (const t of TAB_DEFS) {
-      tabs[t.id] = {
-        id: t.id,
-        label: t.label,
-        type: t.type,
-        sections: (t.type.startsWith("calc_") ? [makeSection("1층 바닥 철골보", "1")] : []),
-        activeSectionId: null,
-        sectionsRows: {}
-      };
-
+      tabs[t.id] = { id:t.id, label:t.label, type:t.type, sections:[], activeSectionId:null, sectionsRows:{} };
       if (t.type.startsWith("calc_")) {
-        const sec = tabs[t.id].sections[0];
+        const sec = makeSection("1층 바닥 철골보", "1");
+        tabs[t.id].sections = [sec];
         tabs[t.id].activeSectionId = sec.id;
         tabs[t.id].sectionsRows[sec.id] = makeDefaultRows(t.type);
       }
     }
-
-    return { activeTabId: "steel", tabs };
+    return { activeTabId:"steel", tabs };
   }
 
   let state = loadState() || makeDefaultState();
 
-  /* =========================
-     Sticky Top offset
-     ========================= */
-  function updateStickyTopVar() {
+  /* ✅ Sticky var 계산 (초록 공백 제거 핵심) */
+  function updateStickyVars() {
     const topbar = $(".topbar");
     const tabs = $("#tabs");
-    const topbarH = topbar ? topbar.getBoundingClientRect().height : 0;
-    const tabsH = tabs ? tabs.getBoundingClientRect().height : 0;
-    document.documentElement.style.setProperty("--stickyTop", `${Math.ceil(topbarH + tabsH)}px`);
+    const topbarH = topbar ? Math.ceil(topbar.getBoundingClientRect().height) : 0;
+    const tabsH = tabs ? Math.ceil(tabs.getBoundingClientRect().height) : 0;
+    document.documentElement.style.setProperty("--topbarH", `${topbarH}px`);
+    document.documentElement.style.setProperty("--tabsH", `${tabsH}px`);
   }
 
-  /* =========================
-     Expression eval
-     ========================= */
-  function stripAngleComments(s) {
-    if (!s) return "";
-    return String(s).replace(/<[^>]*>/g, "");
-  }
-  function normalizeExpr(s) {
-    return stripAngleComments(s).replace(/\s+/g, " ").trim();
-  }
-  function isValidVarName(v) {
-    return /^[A-Z][A-Z0-9]{0,2}$/.test(v || "");
-  }
+  /* Eval */
+  const stripAngleComments = (s) => (s ? String(s).replace(/<[^>]*>/g, "") : "");
+  const normalizeExpr = (s) => stripAngleComments(s).replace(/\s+/g, " ").trim();
+  const isValidVarName = (v) => /^[A-Z][A-Z0-9]{0,2}$/.test(v || "");
+
   function safeEvalMath(expr, varMap) {
     const raw = normalizeExpr(expr);
     if (!raw) return 0;
-
-    const tokenized = raw.replace(/[A-Z][A-Z0-9]{0,2}/g, (m) => {
-      const v = varMap[m];
-      if (v == null || Number.isNaN(Number(v))) return "0";
-      return String(Number(v));
-    });
-
+    const tokenized = raw.replace(/[A-Z][A-Z0-9]{0,2}/g, (m) => String(Number(varMap[m] ?? 0) || 0));
     if (!/^[0-9+\-*/().\s]+$/.test(tokenized)) return 0;
-
     try {
       // eslint-disable-next-line no-new-func
       const fn = new Function(`"use strict"; return (${tokenized});`);
       const out = fn();
       const num = Number(out);
       return Number.isFinite(num) ? num : 0;
-    } catch {
-      return 0;
-    }
+    } catch { return 0; }
   }
 
   function buildVarMap(section) {
     const map = {};
-    for (const r of section.vars) {
-      if (isValidVarName(r.key)) map[r.key] = 0;
-    }
-    for (let iter = 0; iter < 4; iter++) {
-      for (const r of section.vars) {
-        if (!isValidVarName(r.key)) continue;
-        map[r.key] = safeEvalMath(r.expr, map);
-      }
-    }
+    for (const r of section.vars) if (isValidVarName(r.key)) map[r.key] = 0;
+    for (let i=0;i<4;i++) for (const r of section.vars) if (isValidVarName(r.key)) map[r.key] = safeEvalMath(r.expr, map);
     return map;
   }
 
-  function formatNumber(n) {
+  const formatNumber = (n) => {
     const num = Number(n);
     if (!Number.isFinite(num)) return "0";
     const x = Math.round(num * 1000000) / 1000000;
     return String(x);
-  }
+  };
 
-  /* =========================
-     Active getters
-     ========================= */
-  function getActiveTab() {
-    return state.tabs[state.activeTabId];
-  }
-  function getActiveSection(tab) {
-    if (!tab || !tab.sections?.length) return null;
+  /* Active */
+  const getActiveTab = () => state.tabs[state.activeTabId];
+  const getActiveSection = (tab) => {
+    if (!tab?.sections?.length) return null;
     const id = tab.activeSectionId || tab.sections[0].id;
     return tab.sections.find(s => s.id === id) || tab.sections[0];
-  }
+  };
 
-  /* =========================
-     Render
-     ========================= */
+  /* Render targets */
   const tabsEl = $("#tabs");
   const viewEl = $("#view");
 
@@ -235,49 +137,36 @@
         el("button", {
           class: "tab" + (state.activeTabId === t.id ? " active" : ""),
           type: "button",
-          onclick: () => {
-            state.activeTabId = t.id;
-            saveState();
-            render();
-          }
+          onclick: () => { state.activeTabId = t.id; saveState(); render(); }
         }, t.label)
       );
     }
   }
 
   function addSection(tab) {
-    if (!tab.type.startsWith("calc_")) return;
     const sec = makeSection(`구분 ${tab.sections.length + 1}`, "");
     tab.sections.push(sec);
     tab.activeSectionId = sec.id;
     tab.sectionsRows[sec.id] = makeDefaultRows(tab.type);
-    saveState();
-    render();
-    requestAnimationFrame(() => {
-      $(`.section-item[data-sec-id="${cssEscape(sec.id)}"]`)?.focus();
-    });
+    saveState(); render();
+    requestAnimationFrame(() => $(`.section-item[data-sec-id="${cssEscape(sec.id)}"]`)?.focus());
   }
 
   function deleteActiveSection(tab) {
-    if (!tab.type.startsWith("calc_")) return;
     if (tab.sections.length <= 1) return;
     const cur = getActiveSection(tab);
-    if (!cur) return;
-
     const idx = tab.sections.findIndex(s => s.id === cur.id);
     tab.sections.splice(idx, 1);
     delete tab.sectionsRows[cur.id];
-
     const next = tab.sections[clamp(idx, 0, tab.sections.length - 1)];
     tab.activeSectionId = next.id;
-    saveState();
-    render();
+    saveState(); render();
   }
 
-  /* --------- varTable keyboard nav --------- */
+  /* ===== 변수표 키보드 이동 (v12 fix) ===== */
   const VAR_COLS = ["key", "expr", "note"];
 
-  function getCaretInfo(input) {
+  function caretInfo(input) {
     try {
       return { start: input.selectionStart ?? 0, end: input.selectionEnd ?? 0, len: (input.value ?? "").length };
     } catch {
@@ -286,11 +175,12 @@
   }
 
   function focusVarCell(row, col) {
+    const box = $("#varBox");
+    if (!box) return;
     const q = `input[data-scope="var"][data-row="${row}"][data-col="${col}"]`;
-    const target = $(q);
+    const target = box.querySelector(q);
     if (target) {
       target.focus();
-      // 셀 이동은 selection 전체선택이 오히려 불편할 수 있어 key col만 select
       if (col === "key") target.select?.();
     }
   }
@@ -299,7 +189,6 @@
     const tab = getActiveTab();
     const sec = getActiveSection(tab);
     if (!sec) return;
-
     const maxRow = sec.vars.length - 1;
     const colIdx = VAR_COLS.indexOf(col);
     const nextRow = clamp(row + dRow, 0, maxRow);
@@ -309,46 +198,36 @@
 
   function onVarKeydownFactory(rowIdx, colName) {
     return (e) => {
-      // 조합키는 기본 동작 유지
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
+      // ✅ 밖으로 새지 않게 강제
+      if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Enter"].includes(e.key)) {
+        e.stopPropagation();
+      }
+
       const input = e.currentTarget;
-      const caret = getCaretInfo(input);
+      const c = caretInfo(input);
 
-      // ↑↓ : 행 이동 (항상)
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        moveVarCell(rowIdx, colName, -1, 0);
-        return;
-      }
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        moveVarCell(rowIdx, colName, +1, 0);
-        return;
-      }
+      if (e.key === "ArrowUp") { e.preventDefault(); moveVarCell(rowIdx, colName, -1, 0); return; }
+      if (e.key === "ArrowDown") { e.preventDefault(); moveVarCell(rowIdx, colName, +1, 0); return; }
 
-      // ← → : 커서가 맨 앞/뒤일 때만 셀 이동
+      // ✅ 좌/우 규칙을 명확히 고정 (표 밖 탈출 없음)
       if (e.key === "ArrowLeft") {
-        if (caret.start === 0 && caret.end === 0) {
-          e.preventDefault();
-          moveVarCell(rowIdx, colName, 0, -1);
-        }
-        return;
-      }
-      if (e.key === "ArrowRight") {
-        if (caret.start === caret.len && caret.end === caret.len) {
-          e.preventDefault();
-          moveVarCell(rowIdx, colName, 0, +1);
-        }
+        if (colName === "key") return; // key에서는 좌로 이동시키지 않음(커서만)
+        if (c.start === 0 && c.end === 0) { e.preventDefault(); moveVarCell(rowIdx, colName, 0, -1); }
         return;
       }
 
-      // Enter: 다음 셀(키->산식->비고->다음행 키)
+      if (e.key === "ArrowRight") {
+        if (colName === "note") return; // note에서는 우로 이동시키지 않음(커서만)
+        if (c.start === c.len && c.end === c.len) { e.preventDefault(); moveVarCell(rowIdx, colName, 0, +1); }
+        return;
+      }
+
       if (e.key === "Enter") {
         e.preventDefault();
         if (colName === "key") focusVarCell(rowIdx, "expr");
         else if (colName === "expr") {
-          // 즉시 계산 반영
           saveState();
           render();
           requestAnimationFrame(() => focusVarCell(rowIdx, "note"));
@@ -359,14 +238,12 @@
     };
   }
 
-  /* --------- Top Split: left sections / right vars --------- */
+  /* ===== Top split render ===== */
   function renderTopSplit(tab) {
     const wrapper = el("div", { class: "top-split" });
     const layout = el("div", { class: "calc-layout top-grid" });
-
     layout.appendChild(renderSectionBox(tab));
     layout.appendChild(renderVarBox(tab));
-
     wrapper.appendChild(layout);
     return wrapper;
   }
@@ -388,11 +265,8 @@
         onclick: () => {
           tab.activeSectionId = s.id;
           if (!tab.sectionsRows[s.id]) tab.sectionsRows[s.id] = makeDefaultRows(tab.type);
-          saveState();
-          render();
-          requestAnimationFrame(() => {
-            $(`.section-item[data-sec-id="${cssEscape(s.id)}"]`)?.focus();
-          });
+          saveState(); render();
+          requestAnimationFrame(() => $(`.section-item[data-sec-id="${cssEscape(s.id)}"]`)?.focus());
         },
         onkeydown: (e) => {
           if (e.key === "ArrowUp" || e.key === "ArrowDown") {
@@ -402,10 +276,7 @@
             const next = clamp(cur + (e.key === "ArrowDown" ? 1 : -1), 0, items.length - 1);
             items[next]?.focus();
           }
-          if (e.key === "Enter") {
-            e.preventDefault();
-            e.currentTarget.click();
-          }
+          if (e.key === "Enter") { e.preventDefault(); e.currentTarget.click(); }
         }
       },
         el("div", { class: "name" }, s.name || `구분 ${idx + 1}`),
@@ -418,39 +289,22 @@
     const editor = el("div", { class: "section-editor" });
     const inpName = el("input", {
       type: "text",
-      placeholder: "구분명(예: 2층 바닥 철골보)",
+      placeholder: "구분명",
       value: active?.name ?? "",
-      oninput: (e) => {
-        const s = getActiveSection(tab);
-        if (!s) return;
-        s.name = e.target.value;
-        saveState();
-      }
+      oninput: (e) => { const s = getActiveSection(tab); if (!s) return; s.name = e.target.value; saveState(); }
     });
-
     const inpCount = el("input", {
       type: "text",
-      placeholder: "개소(예: 0,1,2...)",
+      placeholder: "개소",
       value: active?.count ?? "",
-      oninput: (e) => {
-        const s = getActiveSection(tab);
-        if (!s) return;
-        s.count = e.target.value;
-        saveState();
-      }
+      oninput: (e) => { const s = getActiveSection(tab); if (!s) return; s.count = e.target.value; saveState(); }
     });
-
-    const btnSave = el("button", {
-      class: "smallbtn",
-      type: "button",
-      onclick: () => { saveState(); render(); }
-    }, "저장");
-
+    const btnSave = el("button", { class:"smallbtn", type:"button", onclick:()=>{ saveState(); render(); } }, "저장");
     editor.append(inpName, inpCount, btnSave);
 
-    const btnRow = el("div", { class: "row-actions", style: "margin-top:8px;" },
-      el("button", { class: "smallbtn", type: "button", onclick: () => addSection(tab) }, "구분 추가 (Ctrl+F3)"),
-      el("button", { class: "smallbtn", type: "button", onclick: () => deleteActiveSection(tab) }, "구분 삭제")
+    const btnRow = el("div", { class: "row-actions" },
+      el("button", { class:"smallbtn", type:"button", onclick:()=>addSection(tab) }, "구분 추가 (Ctrl+F3)"),
+      el("button", { class:"smallbtn", type:"button", onclick:()=>deleteActiveSection(tab) }, "구분 삭제")
     );
 
     box.append(list, editor, btnRow);
@@ -484,12 +338,9 @@
       const tdKey = el("td", {}, el("input", {
         class: "cell",
         type: "text",
-        inputmode: "text",
-        autocomplete: "off",
-        spellcheck: "false",
         placeholder: "예: A / AB / A1",
         value: r.key ?? "",
-        dataset: { scope: "var", row: String(rowIdx), col: "key" },
+        dataset: { scope:"var", row:String(rowIdx), col:"key" },
         oninput: (e) => {
           if (!sec) return;
           let v = String(e.target.value || "").toUpperCase();
@@ -507,7 +358,7 @@
         type: "text",
         placeholder: "예: (A+0.5)*2  (<...> 주석)",
         value: r.expr ?? "",
-        dataset: { scope: "var", row: String(rowIdx), col: "expr" },
+        dataset: { scope:"var", row:String(rowIdx), col:"expr" },
         oninput: (e) => { if (!sec) return; r.expr = e.target.value; saveState(); },
         onkeydown: onVarKeydownFactory(rowIdx, "expr"),
         onblur: () => { saveState(); render(); }
@@ -525,14 +376,13 @@
         type: "text",
         placeholder: "비고",
         value: r.note ?? "",
-        dataset: { scope: "var", row: String(rowIdx), col: "note" },
+        dataset: { scope:"var", row:String(rowIdx), col:"note" },
         oninput: (e) => { if (!sec) return; r.note = e.target.value; saveState(); },
         onkeydown: onVarKeydownFactory(rowIdx, "note"),
         onblur: () => { saveState(); }
       }));
 
-      const tr = el("tr", {}, tdKey, tdExpr, tdVal, tdNote);
-      tbody.appendChild(tr);
+      tbody.appendChild(el("tr", {}, tdKey, tdExpr, tdVal, tdNote));
     });
 
     table.append(thead, tbody);
@@ -541,15 +391,7 @@
     return box;
   }
 
-  /* --------- Calc table --------- */
-  function addCalcRows(tab, secId, n) {
-    const rows = tab.sectionsRows[secId] || (tab.sectionsRows[secId] = makeDefaultRows(tab.type));
-    const extra = makeDefaultRows(tab.type).slice(0, n);
-    tab.sectionsRows[secId] = rows.concat(extra);
-    saveState();
-    render();
-  }
-
+  /* Calc table (동일) */
   function renderCalcTab(tab) {
     const sec = getActiveSection(tab);
     if (!sec) return el("div", { class: "panel" }, "구분을 먼저 생성해 주세요.");
@@ -558,7 +400,6 @@
     const varMap = buildVarMap(sec);
 
     const panel = el("div", { class: "panel" });
-
     panel.appendChild(
       el("div", { class: "panel-header" },
         el("div", {},
@@ -568,7 +409,11 @@
           )
         ),
         el("div", { class: "row-actions" },
-          el("button", { class: "smallbtn", type: "button", onclick: () => addCalcRows(tab, sec.id, 10) }, "+10행")
+          el("button", { class: "smallbtn", type: "button", onclick: () => {
+            const extra = makeDefaultRows(tab.type).slice(0, 10);
+            tab.sectionsRows[sec.id] = rows.concat(extra);
+            saveState(); render();
+          } }, "+10행")
         )
       )
     );
@@ -586,59 +431,32 @@
       el("th", {}, "할증(배수)"),
       el("th", {}, "환산단위")
     ));
-
     const tbody = el("tbody");
+
     rows.forEach((r, i) => {
       r.value = safeEvalMath(r.expr, varMap);
-
-      const tr = el("tr", {},
+      tbody.appendChild(el("tr", {},
         el("td", {}, String(i + 1)),
-        el("td", {}, el("input", {
-          class: "cell",
-          type: "text",
-          value: r.code ?? "",
-          placeholder: "코드 입력",
-          oninput: (e) => { r.code = e.target.value; saveState(); }
+        el("td", {}, el("input", { class:"cell", type:"text", value:r.code ?? "", placeholder:"코드 입력",
+          oninput:(e)=>{ r.code=e.target.value; saveState(); }
         })),
-        el("td", {}, el("input", { class: "cell readonly", type: "text", value: r.name ?? "", readonly: true })),
-        el("td", {}, el("input", { class: "cell readonly", type: "text", value: r.spec ?? "", readonly: true })),
-        el("td", {}, el("input", {
-          class: "cell",
-          type: "text",
-          value: r.unit ?? "",
-          oninput: (e) => { r.unit = e.target.value; saveState(); }
+        el("td", {}, el("input", { class:"cell readonly", type:"text", value:r.name ?? "", readonly:true })),
+        el("td", {}, el("input", { class:"cell readonly", type:"text", value:r.spec ?? "", readonly:true })),
+        el("td", {}, el("input", { class:"cell", type:"text", value:r.unit ?? "",
+          oninput:(e)=>{ r.unit=e.target.value; saveState(); }
         })),
-        el("td", {}, el("input", {
-          class: "cell",
-          type: "text",
-          value: r.expr ?? "",
-          placeholder: "예: (A+0.5)*2  (<...>는 주석)",
-          oninput: (e) => { r.expr = e.target.value; saveState(); },
-          onkeydown: (e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              saveState();
-              render();
-              requestAnimationFrame(() => e.currentTarget.focus());
-            }
-          }
+        el("td", {}, el("input", { class:"cell", type:"text", value:r.expr ?? "", placeholder:"예: (A+0.5)*2  (<...>는 주석)",
+          oninput:(e)=>{ r.expr=e.target.value; saveState(); },
+          onkeydown:(e)=>{ if(e.key==="Enter"){ e.preventDefault(); saveState(); render(); requestAnimationFrame(()=>e.currentTarget.focus()); } }
         })),
-        el("td", {}, el("input", { class: "cell readonly", type: "text", readonly: true, value: formatNumber(r.value) })),
-        el("td", {}, el("input", {
-          class: "cell",
-          type: "text",
-          value: r.mult ?? "",
-          oninput: (e) => { r.mult = e.target.value; saveState(); }
+        el("td", {}, el("input", { class:"cell readonly", type:"text", readonly:true, value:formatNumber(r.value) })),
+        el("td", {}, el("input", { class:"cell", type:"text", value:r.mult ?? "",
+          oninput:(e)=>{ r.mult=e.target.value; saveState(); }
         })),
-        el("td", {}, el("input", {
-          class: "cell",
-          type: "text",
-          value: r.conv ?? "",
-          oninput: (e) => { r.conv = e.target.value; saveState(); }
-        })),
-      );
-
-      tbody.appendChild(tr);
+        el("td", {}, el("input", { class:"cell", type:"text", value:r.conv ?? "",
+          oninput:(e)=>{ r.conv=e.target.value; saveState(); }
+        }))
+      ));
     });
 
     table.append(thead, tbody);
@@ -647,26 +465,23 @@
     return panel;
   }
 
-  function renderSummaryTab(tab) {
-    return el("div", { class: "panel" },
-      el("div", { class: "panel-header" },
+  function renderCodeTab() {
+    return el("div", { class:"panel" },
+      el("div", { class:"panel-header" },
         el("div", {},
-          el("div", { class: "panel-title" }, tab.label),
-          el("div", { class: "panel-desc" }, "집계 탭(확장 예정)")
+          el("div", { class:"panel-title" }, "코드(Ctrl+.)"),
+          el("div", { class:"panel-desc" }, "코드 선택 팝업/엑셀 연동은 기존 로직 연결 지점")
         )
-      ),
-      el("div", { style: "font-size:12px; color:rgba(0,0,0,.65); padding:8px 4px;" },
-        "현재는 구분/변수/산출 구조와 UI 동작을 우선 안정화했습니다."
       )
     );
   }
 
-  function renderCodeTab() {
-    return el("div", { class: "panel" },
-      el("div", { class: "panel-header" },
+  function renderSummaryTab(tab) {
+    return el("div", { class:"panel" },
+      el("div", { class:"panel-header" },
         el("div", {},
-          el("div", { class: "panel-title" }, "코드(Ctrl+.)"),
-          el("div", { class: "panel-desc" }, "코드 선택 팝업/엑셀 연동은 기존 로직 연결 지점")
+          el("div", { class:"panel-title" }, tab.label),
+          el("div", { class:"panel-desc" }, "집계 탭(확장 예정)")
         )
       )
     );
@@ -681,32 +496,24 @@
       viewEl.appendChild(renderCalcTab(tab));
       return;
     }
-    if (tab.type === "code") {
-      viewEl.appendChild(renderCodeTab());
-      return;
-    }
-    if (tab.type.startsWith("summary_")) {
-      viewEl.appendChild(renderSummaryTab(tab));
-      return;
-    }
-    viewEl.appendChild(el("div", { class: "panel" }, "준비중"));
+    if (tab.type === "code") { viewEl.appendChild(renderCodeTab()); return; }
+    if (tab.type.startsWith("summary_")) { viewEl.appendChild(renderSummaryTab(tab)); return; }
+
+    viewEl.appendChild(el("div", { class:"panel" }, "준비중"));
   }
 
   function render() {
     renderTabs();
     renderView();
-    updateStickyTopVar();
+    updateStickyVars();
   }
 
-  /* =========================
-     Global Hotkeys
-     ========================= */
+  /* Global hotkeys */
   document.addEventListener("keydown", (e) => {
     const t = e.target;
     const tag = t?.tagName ? t.tagName.toLowerCase() : "";
     const isTyping = (tag === "input" || tag === "textarea" || t?.isContentEditable);
 
-    // Ctrl+F3 구분 추가
     if (e.ctrlKey && e.key === "F3") {
       e.preventDefault();
       const tab = getActiveTab();
@@ -714,7 +521,7 @@
       return;
     }
 
-    // 구분 ↑↓ 이동은 "입력중"이면 절대 동작하지 않게
+    // 입력중이면 구분 이동 가로채지 않음
     if (isTyping) return;
 
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
@@ -730,24 +537,17 @@
       e.preventDefault();
       tab.activeSectionId = nextSec.id;
       if (!tab.sectionsRows[nextSec.id]) tab.sectionsRows[nextSec.id] = makeDefaultRows(tab.type);
-      saveState();
-      render();
-      requestAnimationFrame(() => {
-        $(`.section-item[data-sec-id="${cssEscape(nextSec.id)}"]`)?.focus();
-      });
+      saveState(); render();
+      requestAnimationFrame(() => $(`.section-item[data-sec-id="${cssEscape(nextSec.id)}"]`)?.focus());
     }
-  }, { capture: true });
+  }, { capture:true });
 
-  /* =========================
-     Export / Import / Reset
-     ========================= */
+  /* Buttons */
   $("#btnExport")?.addEventListener("click", () => {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type:"application/json" });
     const url = URL.createObjectURL(blob);
-    const a = el("a", { href: url, download: "FIN_WEB_export.json" });
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    const a = el("a", { href:url, download:"FIN_WEB_export.json" });
+    document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
   });
 
@@ -757,10 +557,9 @@
     try {
       const text = await file.text();
       const obj = JSON.parse(text);
-      if (!obj || !obj.tabs) throw new Error("Invalid");
+      if (!obj?.tabs) throw new Error("Invalid");
       state = obj;
-      saveState();
-      render();
+      saveState(); render();
     } catch {
       alert("가져오기 실패: JSON 형식을 확인해주세요.");
     } finally {
@@ -771,19 +570,15 @@
   $("#btnReset")?.addEventListener("click", () => {
     if (!confirm("초기화 하시겠습니까? (저장된 데이터가 삭제됩니다)")) return;
     state = makeDefaultState();
-    saveState();
-    render();
+    saveState(); render();
   });
 
   $("#btnOpenPicker")?.addEventListener("click", () => {
     alert("코드 선택 창(Ctrl+.) 로직은 기존 구현을 app.js에 연결해 주세요.");
   });
 
-  /* =========================
-     Boot
-     ========================= */
-  window.addEventListener("resize", updateStickyTopVar);
-  window.addEventListener("load", updateStickyTopVar);
+  window.addEventListener("resize", updateStickyVars);
+  window.addEventListener("load", updateStickyVars);
 
   render();
 })();

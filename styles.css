@@ -279,3 +279,48 @@ textarea.cell{
   pointer-events: auto !important;
 }
 
+/* ✅ 탭과 시트 사이 구분바(빨간 영역) */
+.sectionbar{
+  margin: 10px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(0,0,0,.10);
+  border-radius: 16px;
+  background: rgba(255,250,240,.88);
+  box-shadow: 0 10px 26px rgba(0,0,0,.06);
+}
+.sectionbar-inner{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.sectionbar-left{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.sectionbar-title{
+  font-weight:900;
+  font-size:12px;
+}
+.sectionbar-input{
+  border:1px solid rgba(0,0,0,.12);
+  background: rgba(255,255,255,.85);
+  border-radius: 12px;
+  padding: 10px 12px;
+  min-width: 360px;
+  font-size: 12px;
+  outline:none;
+}
+.sectionbar-input.small{
+  min-width: 160px;
+}
+.sectionbar-hint{
+  font-size:12px;
+  color: rgba(0,0,0,.55);
+  font-weight:700;
+}
+
+

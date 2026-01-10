@@ -81,8 +81,16 @@ function makeState(){
     steel: Array.from({length: 20}, makeEmptyCalcRow),
     steelSub: Array.from({length: 20}, makeEmptyCalcRow),
     support: Array.from({length: 20}, makeEmptyCalcRow),
+
+    // ✅ 추가: 탭별 구분바 입력값(로컬저장)
+    sectionBar: {
+      steel:    { label: "", count: "" },
+      steelSub: { label: "", count: "" },
+      support:  { label: "", count: "" },
+    }
   };
 }
+
 
 function loadState(){
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -93,11 +101,19 @@ function loadState(){
     s.steel = Array.isArray(s.steel) ? s.steel : [];
     s.steelSub = Array.isArray(s.steelSub) ? s.steelSub : [];
     s.support = Array.isArray(s.support) ? s.support : [];
+
+    // ✅ 추가: 구분바 저장값 보정
+    if(!s.sectionBar) s.sectionBar = {};
+    if(!s.sectionBar.steel)    s.sectionBar.steel    = {label:"",count:""};
+    if(!s.sectionBar.steelSub) s.sectionBar.steelSub = {label:"",count:""};
+    if(!s.sectionBar.support)  s.sectionBar.support  = {label:"",count:""};
+
     return s;
   }catch{
     return makeState();
   }
 }
+
 let state = loadState();
 function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
@@ -380,6 +396,53 @@ function getRowsByTab(tab){
 function insertRowBelowActive(){
   if(!["codes","steel","steelSub","support"].includes(activeTabId)) return;
 
+   // ✅ 구분행(섹션행) 삽입: 현재 포커스 행 아래에 1줄 추가
+function insertSectionRowBelowActive(){
+  // 철골/부자재/동바리에서만
+  if(!["steel","steelSub","support"].includes(activeTabId)) return;
+
+  const rows = getRowsByTab(activeTabId);
+  if(!rows) return;
+
+  const { row, col } = lastFocusCell[activeTabId] ?? {row:0, col:0};
+  const idx = Math.min(Math.max(0, Number(row) || 0), rows.length);
+  const insertAt = Math.min(idx + 1, rows.length);
+
+  const bar = state.sectionBar?.[activeTabId] ?? {label:"",count:""};
+  const label = (bar.label ?? "").toString().trim();
+  const count = (bar.count ?? "").toString().trim();
+
+  // 표기 문자열
+  const tag = label ? `※ ${label}` : "※ 구분";
+  const countTxt = count === "" ? "" : `  (개소: ${count})`;
+
+  const r = makeEmptyCalcRow();
+
+  // ✅ 핵심: code를 비워두면 recalcRow가 자동값을 덮어쓰지 않음
+  r.code = "";
+  r.name = `${tag}${countTxt}`;
+  r.spec = "";
+  r.unit = "";
+  r.formulaExpr = "";
+  r.note = "";
+  r.surchargeMul = "";
+  r.convUnit = "";
+  r.convFactor = "";
+  r.convQty = 0;
+  r.finalQty = 0;
+
+  // 구분행 플래그(렌더에서 스타일 주기 용도)
+  r.__section = true;
+
+  rows.splice(insertAt, 0, r);
+  saveState();
+  go(activeTabId);
+
+  // 포커스: 삽입된 구분행의 코드칸(0)으로
+  setTimeout(()=>focusGrid(activeTabId, insertAt, 0), 0);
+}
+
+
   const {row, col} = lastFocusCell[activeTabId] ?? {row:0, col:0};
 
   if(activeTabId === "codes"){
@@ -538,6 +601,68 @@ function renderCodes(){
 
 function renderCalcSheet(title, rows, tabId, mode){
   $view.innerHTML = "";
+   function renderCalcSheet(title, rows, tabId, mode){
+  $view.innerHTML = "";
+
+  // ✅ 빨간 영역: 구분바(철골/부자재/동바리만 표시)
+  if(["steel","steelSub","support"].includes(tabId)){
+    const barWrap = document.createElement("div");
+    barWrap.className = "sectionbar";
+    const saved = state.sectionBar?.[tabId] ?? {label:"",count:""};
+
+    barWrap.innerHTML = `
+      <div class="sectionbar-inner">
+        <div class="sectionbar-left">
+          <span class="sectionbar-title">구분</span>
+          <input class="sectionbar-input" id="secLabel" placeholder="구분명(예: 2층 바닥 철골보)" value="${escapeAttr(saved.label ?? "")}">
+          <input class="sectionbar-input small" id="secCount" placeholder="개소(예: 0,1,2...)" value="${escapeAttr(saved.count ?? "")}">
+          <button class="smallbtn" id="btnSecInsert">구분행 삽입</button>
+        </div>
+        <div class="sectionbar-right">
+          <span class="sectionbar-hint">※ 구분행은 합계/집계에 영향을 주지 않습니다.</span>
+        </div>
+      </div>
+    `;
+
+    $view.appendChild(barWrap);
+
+    // 이벤트 연결
+    setTimeout(()=>{
+      const $label = document.getElementById("secLabel");
+      const $count = document.getElementById("secCount");
+      const $btn = document.getElementById("btnSecInsert");
+
+      const saveBar = ()=>{
+        state.sectionBar[tabId] = {
+          label: ($label?.value ?? "").toString(),
+          count: ($count?.value ?? "").toString(),
+        };
+        saveState();
+      };
+
+      $label?.addEventListener("input", saveBar);
+      $count?.addEventListener("input", saveBar);
+
+      $btn?.addEventListener("click", ()=>{
+        saveBar();
+        insertSectionRowBelowActive();
+      });
+
+      // Enter로도 구분행 삽입 (구분바에서)
+      $count?.addEventListener("keydown", (e)=>{
+        if(e.key === "Enter"){
+          e.preventDefault();
+          saveBar();
+          insertSectionRowBelowActive();
+        }
+      });
+    }, 0);
+  }
+
+  // 기존 코드 계속...
+  const desc = '산출식 입력 → 물량(Value) 자동 계산(Enter). 코드 선택 새 창: Ctrl+.  | 행 추가: Ctrl+F3';
+  const {wrap, header} = panel(title, desc);
+
   const desc = '산출식 입력 → 물량(Value) 자동 계산(Enter). 코드 선택 새 창: Ctrl+.  | 행 추가: Ctrl+F3';
   const {wrap, header} = panel(title, desc);
 

@@ -323,4 +323,13 @@ textarea.cell{
   font-weight:700;
 }
 
+tr.section-row td{
+  background: rgba(26,61,124,.06) !important;
+}
+tr.section-row td input.cell{
+  font-weight: 900;
+}
+
+
+
 

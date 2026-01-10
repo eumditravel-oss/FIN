@@ -1,16 +1,19 @@
 :root{
-  --bg:#f6f1e6;         /* 아이보리 */
-  --paper:#fffaf0;      /* 따뜻한 종이 */
+  --bg:#f6f1e6;
+  --paper:#fffaf0;
   --ink:#1d1d1f;
   --muted:#5a5a61;
   --line: rgba(0,0,0,.10);
   --shadow: 0 12px 30px rgba(0,0,0,.08);
   --radius: 18px;
-  --accent:#1a3d7c;     /* 네이비 */
-  --accent2:#d6b25e;    /* 골드 */
+  --accent:#1a3d7c;
+  --accent2:#d6b25e;
 
-  /* app.js에서 topbar+tabs 높이 계산해서 넣어줌 */
+  /* ✅ JS가 자동 계산해서 넣음 (topbar + tabs 높이) */
   --stickyTop: 120px;
+
+  /* ✅ 상단(구분/변수) 고정 영역 높이 = 사용자가 초록 라인으로 지정한 느낌 */
+  --topSplitH: 260px;
 }
 
 *{ box-sizing:border-box; }
@@ -20,7 +23,6 @@ body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", Arial, "Apple SD Gothic Neo", "Malgun Gothic";
   color:var(--ink);
-  /* ✅ 얼룩 최소화(약한 그라데이션) */
   background:
     radial-gradient(1200px 600px at 20% 0%, rgba(26,61,124,.05), transparent 60%),
     radial-gradient(900px 500px at 90% 20%, rgba(214,178,94,.06), transparent 60%),
@@ -31,32 +33,20 @@ body{
 .topbar{
   position: sticky;
   top: 0;
-  z-index: 60;
+  z-index: 80;
   display:flex;
   align-items:flex-start;
   justify-content:space-between;
   gap:16px;
   padding: 14px 16px;
-  background: rgba(246,241,230,.86);
+  background: rgba(246,241,230,.90);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
 }
 
-.brand .title{
-  font-weight: 900;
-  letter-spacing: -0.2px;
-  font-size: 18px;
-}
-.brand .sub{
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 12px;
-}
-.brand .hint{
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: 12px;
-}
+.brand .title{ font-weight: 900; letter-spacing: -0.2px; font-size: 18px; }
+.brand .sub{ margin-top: 4px; color: var(--muted); font-size: 12px; }
+.brand .hint{ margin-top: 8px; color: var(--muted); font-size: 12px; }
 .brand .hint b{ color: var(--accent); }
 
 .actions{
@@ -89,30 +79,23 @@ body{
   padding: 8px 10px;
   box-shadow: 0 10px 24px rgba(0,0,0,.08);
 }
-
-.btn:hover,
-.smallbtn:hover{ transform: translateY(-1px); }
-.btn:active{
-  transform: translateY(0);
-  box-shadow: 0 8px 20px rgba(0,0,0,.08);
-}
+.btn:hover,.smallbtn:hover{ transform: translateY(-1px); }
+.btn:active{ transform: translateY(0); box-shadow: 0 8px 20px rgba(0,0,0,.08); }
 .smallbtn:active{ transform: translateY(0); }
 
 .btn.ghost{ background: rgba(255,255,255,.55); }
-
 .btn.danger{
   border-color: rgba(180,0,0,.25);
   background: rgba(255,230,230,.7);
 }
-
 .btn input[type="file"],
 .smallbtn input[type="file"]{ display:none; }
 
 /* ===== Tabs ===== */
 .tabs{
   position: sticky;
-  top: calc(var(--stickyTop) - 10px); /* topbar 바로 아래 고정 느낌 */
-  z-index: 55;
+  top: var(--stickyTop);
+  z-index: 70;
   display:flex;
   gap:8px;
   padding: 10px 16px 10px;
@@ -137,10 +120,10 @@ body{
   color: var(--accent);
 }
 
-/* ===== Content Panels ===== */
+/* ===== Content ===== */
 .content{ padding: 12px 16px 22px; }
-.content, main, #view{ overflow: visible; } /* ✅ sticky 깨짐 방지 */
 
+/* ===== Panel ===== */
 .panel{
   background: rgba(255,250,240,.86);
   border:1px solid var(--line);
@@ -156,10 +139,7 @@ body{
   gap:12px;
   margin-bottom: 10px;
 }
-.panel-title{
-  font-weight: 900;
-  font-size: 16px;
-}
+.panel-title{ font-weight: 900; font-size: 16px; }
 .panel-desc{
   margin-top: 4px;
   font-size: 12px;
@@ -174,7 +154,6 @@ body{
   overflow:auto;
   background: rgba(255,255,255,.55);
 }
-
 table{
   width: max-content;
   min-width: 100%;
@@ -182,7 +161,6 @@ table{
   border-spacing: 0;
   font-size: 12px;
 }
-
 thead th{
   position: sticky;
   top: 0;
@@ -194,10 +172,9 @@ thead th{
   font-weight: 900;
   white-space: nowrap;
 }
-
 tbody td{
   border-bottom: 1px solid rgba(0,0,0,.06);
-  padding: 4px 6px;               /* ✅ 줄 간격 압축 */
+  padding: 4px 6px;
   vertical-align: middle;
 }
 
@@ -214,11 +191,9 @@ tbody td{
   border: 1px solid rgba(0,0,0,.14);
   background: rgba(255,255,255,.72);
   border-radius: 10px;
-  padding: 6px 8px;               /* ✅ 셀 높이 줄임 */
+  padding: 6px 8px;
   font-size: 12px;
   outline: none;
-
-  /* ✅ 마우스 클릭/드래그 선택 허용 */
   pointer-events: auto !important;
   user-select: text !important;
   -webkit-user-select: text !important;
@@ -233,28 +208,6 @@ tbody td{
   color: rgba(0,0,0,.65);
 }
 
-textarea.cell{
-  min-height: 30px;
-  resize: vertical;
-}
-
-.table-wrap,
-.table-wrap *{ pointer-events: auto; }
-.table-wrap td,
-.table-wrap th{ pointer-events: auto !important; }
-
-.badge{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  border-radius: 999px;
-  padding: 6px 10px;
-  background: rgba(26,61,124,.08);
-  border: 1px solid rgba(26,61,124,.18);
-  font-weight: 900;
-  font-size: 12px;
-}
-
 /* Footer */
 .footer{
   padding: 10px 16px 16px;
@@ -262,58 +215,60 @@ textarea.cell{
   font-size: 12px;
 }
 
-/* ===== F2 편집모드 셀 강조 ===== */
-.cell.editing{
-  outline: 2px solid rgba(26,61,124,0.9);
-  box-shadow: 0 0 0 3px rgba(26,61,124,0.15);
-}
-
 /* ===========================
-   NEW: 상단(구분명 리스트 + 변수표) 영역 고정 + 레이아웃
-   - "구분명 리스트" = 좌측
-   - "변수표" = 우측
-   - 둘 다 산출영역처럼 키보드/마우스 입력 가능
+   ✅ 핵심: 상단(구분/변수) 고정 영역
+   - 초록 박스 형태(좌: 구분, 우: 변수표)
    =========================== */
-
-/* 상단 2패널 래퍼 (app.js에서 생성되는 wrapper 클래스명에 맞춰 사용) */
 .top-split{
   position: sticky;
-  top: var(--stickyTop);
-  z-index: 45;
+  top: calc(var(--stickyTop) + 48px); /* tabs 아래 살짝 여유 */
+  z-index: 60;
   margin-bottom: 12px;
 }
 
-/* 상단 2열 레이아웃 */
-.top-split .calc-layout{
-  display: grid;
-  grid-template-columns: 280px 1fr; /* ✅ 좌는 콤팩트, 우는 넓게 */
-  gap: 12px;
-  align-items: stretch;
+/* 좌/우 2열 고정 (아래로 떨어지지 않게) */
+.calc-layout.top-grid{
+  display:flex;
+  gap:12px;
+  align-items:stretch;
+  flex-wrap: nowrap;                 /* ✅ 절대 줄바꿈 금지 */
 }
 
-/* 각 박스 공통 */
+/* 좌측(구분명) 폭 고정 */
+.section-box{
+  flex: 0 0 360px;
+  min-width: 360px;
+}
+
+/* 우측(변수표) 나머지 폭 */
+.var-box{
+  flex: 1 1 auto;
+  min-width: 640px;                  /* ✅ 내려가는 현상 방지 */
+}
+
+/* 공통 박스 */
 .rail-box{
-  background: rgba(255,250,240,.86);
+  background: rgba(255,250,240,.88);
   border:1px solid rgba(0,0,0,.10);
   border-radius:16px;
-  box-shadow: 0 10px 26px rgba(0,0,0,.08);
+  box-shadow: 0 10px 26px rgba(0,0,0,.06);
   padding:10px;
-  min-width:0; /* ✅ overflow 방지 핵심 */
+  height: var(--topSplitH);           /* ✅ 초록라인 만큼으로 강제 */
+  overflow: hidden;                   /* 안쪽 스크롤만 */
 }
 
-/* 제목(작게) */
 .rail-title{
   font-weight:900;
+  font-size:12px;                     /* ✅ 텍스트 1단계 축소 */
   margin-bottom:8px;
-  font-size: 12px; /* ✅ 한 단계 축소 */
 }
 
-/* ===== 구분명 리스트 ===== */
+/* 구분 리스트 (박스 내부 스크롤) */
 .section-list{
   display:flex;
   flex-direction:column;
   gap:6px;
-  max-height: 140px;   /* ✅ 초록라인처럼 세로 줄임 */
+  height: calc(var(--topSplitH) - 110px);
   overflow:auto;
   padding-right:4px;
 }
@@ -321,7 +276,6 @@ textarea.cell{
 .section-item{
   display:flex;
   align-items:center;
-  justify-content:space-between;
   gap:8px;
   border:1px solid rgba(0,0,0,.10);
   background: rgba(255,255,255,.70);
@@ -329,104 +283,88 @@ textarea.cell{
   padding:8px 10px;
   cursor:pointer;
   font-weight:800;
-  font-size: 12px; /* ✅ 축소 */
+  font-size:12px;                     /* ✅ 1단계 축소 */
 }
 .section-item.active{
   background: rgba(26,61,124,.10);
   border-color: rgba(26,61,124,.25);
 }
-
-/* 구분명 + 개소를 한 줄로 */
-.section-item .name{
-  min-width: 0;
-  overflow:hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+.section-item .name{ flex:1; min-width: 0; }
 .section-item .meta{
+  font-size:12px;
+  opacity:.75;
+  font-weight:800;
+}
+.section-item .meta-inline{
+  font-size:12px;
+  opacity:.75;
+  font-weight:800;
   white-space: nowrap;
-  flex: 0 0 auto;
-  font-size: 11px;
-  opacity: .8;
-  font-weight: 900;
 }
 
-/* 구분 편집(입력2 + 버튼) : ✅ 삐져나옴 방지 */
+/* 구분 편집(아래 1줄) */
 .section-editor{
   display:grid;
-  grid-template-columns: minmax(0,1fr) minmax(0,120px) 84px;
+  grid-template-columns: 1fr 160px 90px;
   gap:8px;
   margin-top:8px;
-  align-items:center;
 }
 .section-editor input{
-  width:100%;
-  min-width:0;
   border:1px solid rgba(0,0,0,.12);
-  background:rgba(255,255,255,.8);
+  background:rgba(255,255,255,.85);
   border-radius:10px;
   padding:8px 10px;
   outline:none;
-  font-size: 12px; /* ✅ 축소 */
-}
-.section-editor .smallbtn{
-  width:84px;
-  justify-content:center;
-  padding:8px 8px;
-  font-size: 12px;
+  font-size:12px;                     /* ✅ 축소 */
 }
 
-/* ===== 변수표 ===== */
+/* 변수표 wrapper (박스 내부 스크롤) */
 .var-tablewrap{
   border:1px solid rgba(0,0,0,.10);
   border-radius:14px;
   overflow:auto;
   background: rgba(255,255,255,.55);
-  max-height: 168px; /* ✅ 초록라인처럼 세로 줄임 */
+  height: calc(var(--topSplitH) - 34px); /* ✅ 제목 영역 제외 */
 }
 
+/* 변수표 */
 .var-table{
   width:100%;
   border-collapse:separate;
   border-spacing:0;
   font-size:12px;
 }
-
 .var-table thead th{
   position:sticky;
   top:0;
+  z-index: 2;
   background: rgba(255,250,240,.95);
   border-bottom: 1px solid rgba(0,0,0,.10);
   padding: 8px 8px;
   text-align:left;
   font-weight:900;
-  font-size: 12px; /* ✅ 축소 */
 }
-
 .var-table tbody td{
   border-bottom:1px solid rgba(0,0,0,.06);
-  padding:5px 8px;
+  padding:6px 8px;
 }
 
-.var-table input.cell{
-  padding: 6px 8px;
-  font-size: 12px;
-}
-
-/* (요청) 변수표 아래 설명 문구 제거 → app.js에서 안 넣도록 처리(여긴 영향 없음) */
-
-/* ===== 산출표 영역 ===== */
-.right-main{
-  min-width: 0;
-}
-
-/* ===== 반응형 ===== */
-@media (max-width: 980px){
-  .tabs{ position: static; top:auto; }
-  .top-split{ position: static; top:auto; }
-  .top-split .calc-layout{
-    grid-template-columns: 1fr;
+/* ✅ 화면이 너무 좁은 경우에만 아래로 떨어뜨리기 */
+@media (max-width: 1100px){
+  .calc-layout.top-grid{
+    flex-wrap: wrap;
   }
-  .section-list{ max-height: 160px; }
-  .var-tablewrap{ max-height: 200px; }
+  .section-box{
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .var-box{
+    flex: 1 1 100%;
+    min-width: 0;
+  }
 }
+
+/* ✅ 안전장치: 클릭/키보드 먹통 방지 */
+.table-wrap, .table-wrap *{ pointer-events:auto; }
+.var-tablewrap, .var-tablewrap *{ pointer-events:auto; }
+.section-list, .section-list *{ pointer-events:auto; }

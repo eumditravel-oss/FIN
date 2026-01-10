@@ -218,7 +218,6 @@ tbody td{
   background: rgba(255,255,255,.45);
   color: rgba(0,0,0,.65);
 }
-
 textarea.cell{
   min-height: 30px;               /* ✅ textarea도 높이 최소화 */
   resize: vertical;
@@ -255,94 +254,31 @@ textarea.cell{
   box-shadow: 0 0 0 3px rgba(26,61,124,0.15);
 }
 
-/* ===========================
-   (구) 탭-시트 사이 구분바 (가로형)
-   - 지금 구조가 "좌 레일" 방식이면, 이 섹션은 사용 안 해도 됨.
-   - 그래도 남겨둠(호환)
-   =========================== */
-.sectionbar{
-  margin: 10px 0 12px;
-  padding: 10px 12px;
-  border: 1px solid rgba(0,0,0,.10);
-  border-radius: 16px;
-  background: rgba(255,250,240,.88);
-  box-shadow: 0 10px 26px rgba(0,0,0,.06);
-}
-.sectionbar-inner{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  flex-wrap:wrap;
-}
-.sectionbar-left{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  flex-wrap:wrap;
-}
-.sectionbar-title{
-  font-weight:900;
-  font-size:12px;
-}
-.sectionbar-input{
-  border:1px solid rgba(0,0,0,.12);
-  background: rgba(255,255,255,.85);
-  border-radius: 12px;
-  padding: 10px 12px;
-  min-width: 360px;
-  font-size: 12px;
-  outline:none;
-}
-.sectionbar-input.small{ min-width: 160px; }
-.sectionbar-hint{
-  font-size:12px;
-  color: rgba(0,0,0,.55);
-  font-weight:700;
-}
-tr.section-row td{ background: rgba(26,61,124,.06) !important; }
-tr.section-row td input.cell{ font-weight: 900; }
-
-.secchips{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-.secchip{
-  border:1px solid rgba(0,0,0,.12);
-  background:rgba(255,255,255,.75);
-  border-radius:999px;
-  padding:8px 10px;
-  font-weight:800;
-  cursor:pointer;
-}
-.secchip.active{
-  background:rgba(26,61,124,.10);
-  border-color:rgba(26,61,124,.25);
+/* =================================================
+   TOP SPLIT (요청: 구분명 리스트(좌) + 변수표(우) 를
+   산출표 "위"에서 한 줄로 배치하고, 공간을 줄이기)
+   ================================================= */
+.top-split{
+  display:grid;
+  grid-template-columns: 360px 1fr;  /* 좌:구분 / 우:변수표 */
+  gap:14px;
+  align-items:stretch;
+  margin-bottom: 12px;
 }
 
-/* ===========================
-   NEW: 구분/변수(초록) + 산출표(노란) 레이아웃 (세로형)
-   - ✅ 초록 박스가 산출표 "위"에 위치
-   =========================== */
-
-.calc-layout{
-  display:flex;
-  flex-direction: column;   /* ✅ 핵심 */
-  gap:12px;
-  align-items: stretch;
+/* 화면이 좁으면 아래로 떨어지게 */
+@media (max-width: 980px){
+  .top-split{
+    grid-template-columns: 1fr;
+  }
 }
 
-/* 위(초록) 영역 */
-.left-rail{
-  width:100%;
-  min-width:0;
-}
-
-/* rail-box는 그대로 사용 */
 .rail-box{
   background: rgba(255,250,240,.86);
   border:1px solid rgba(0,0,0,.10);
   border-radius:16px;
   box-shadow: 0 10px 26px rgba(0,0,0,.08);
   padding:12px;
-  margin-bottom:12px;
 }
 
 .rail-title{
@@ -350,16 +286,15 @@ tr.section-row td input.cell{ font-weight: 900; }
   margin-bottom:8px;
 }
 
-/* ✅ 구분 리스트는 위에 있으니 너무 길어지지 않게 */
+/* ===== 구분 리스트 ===== */
 .section-list{
   display:flex;
   flex-direction:column;
   gap:8px;
-  max-height:180px;     /* 기존 260px → 위에 올려서 조금 줄임 */
+  max-height: 180px;     /* ✅ 너무 커지지 않게 */
   overflow:auto;
   padding-right:4px;
 }
-
 .section-item{
   display:flex;
   align-items:center;
@@ -386,7 +321,7 @@ tr.section-row td input.cell{ font-weight: 900; }
   outline-offset:2px;
 }
 
-/* ✅ 구분 편집 UI: 3열(구분명/개소/버튼) 유지 */
+/* 구분 편집 UI */
 .section-editor{
   display:grid;
   grid-template-columns: 1fr 160px 120px;
@@ -402,15 +337,14 @@ tr.section-row td input.cell{ font-weight: 900; }
   font-size:12px;
 }
 
-/* ✅ 변수표는 위에 올라오므로 너무 커지면 스크롤 */
+/* ===== 변수표 ===== */
 .var-tablewrap{
   border:1px solid rgba(0,0,0,.10);
   border-radius:14px;
   overflow:auto;
   background: rgba(255,255,255,.55);
-  max-height:320px;    /* 기존 54vh → 위에 올려서 고정 */
+  max-height: 260px;     /* ✅ 상단 영역 과점유 방지 */
 }
-
 .var-table{
   width:100%;
   border-collapse:separate;
@@ -436,10 +370,3 @@ tr.section-row td input.cell{ font-weight: 900; }
   margin-top:8px;
   line-height:1.4;
 }
-
-/* 아래(노란) 산출표 영역 */
-.right-main{
-  width:100%;
-  min-width:0;
-}
-

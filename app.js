@@ -412,35 +412,21 @@ function insertSectionRowBelowActive(){
   const label = (bar.label ?? "").toString().trim();
   const count = (bar.count ?? "").toString().trim();
 
-  // 표기 문자열
   const tag = label ? `※ ${label}` : "※ 구분";
   const countTxt = count === "" ? "" : `  (개소: ${count})`;
 
   const r = makeEmptyCalcRow();
-
-  // ✅ 핵심: code를 비워두면 recalcRow가 자동값을 덮어쓰지 않음
-  r.code = "";
-  r.name = `${tag}${countTxt}`;
-  r.spec = "";
-  r.unit = "";
-  r.formulaExpr = "";
-  r.note = "";
-  r.surchargeMul = "";
-  r.convUnit = "";
-  r.convFactor = "";
-  r.convQty = 0;
-  r.finalQty = 0;
-
-  // 구분행 플래그(렌더에서 스타일 주기 용도)
-  r.__section = true;
+  r.code = "";                 // ✅ 코드 비움 (집계 제외)
+  r.name = `${tag}${countTxt}`; // ✅ 품명칸에 구분 표시
+  r.__section = true;          // ✅ 섹션 표시용 플래그
 
   rows.splice(insertAt, 0, r);
   saveState();
   go(activeTabId);
 
-  // 포커스: 삽입된 구분행의 코드칸(0)으로
   setTimeout(()=>focusGrid(activeTabId, insertAt, 0), 0);
 }
+
 
 
   const {row, col} = lastFocusCell[activeTabId] ?? {row:0, col:0};
@@ -599,8 +585,6 @@ function renderCodes(){
   setTimeout(()=>focusGrid("codes", row, col), 0);
 }
 
-function renderCalcSheet(title, rows, tabId, mode){
-  $view.innerHTML = "";
    function renderCalcSheet(title, rows, tabId, mode){
   $view.innerHTML = "";
 

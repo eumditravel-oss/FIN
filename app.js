@@ -1,16 +1,16 @@
 /* =========================
-   FIN 산출자료(Web) app.js - FINAL (syntax fixed + section UI on TOP)
-   - ✅ 방향키 이동(Excel-like) (capture)
-   - ✅ F2 편집모드
-   - ✅ 마우스로 td 클릭해도 셀 포커스 가능 (delegation 1회)
-   - ✅ 구분(섹션) 리스트/변수표를 산출표 "위"에 배치
-   - ✅ 구분 리스트(↑/↓) 이동 + 선택 시 산출표가 해당 구분 데이터로 전환
-   - ✅ <...> 주석은 계산 제외
+   FIN 산출자료(Web) app.js - FINAL (Sections + Vars)
+   ✅ 섹션(구분) = Ctrl+F3 (철골/부자재/동바리 탭에서)
+   ✅ 행 추가 = Shift+Ctrl+F3 (산출표에서)
+   ✅ Ctrl+. 코드피커, Ctrl+Delete 행삭제, F2 편집모드
+   ✅ <...> 주석 제외 계산 유지
+   ✅ 변수(A/AB/A1/AB1… 최대 3자) 정의 → 산출식에서 바로 사용
+   ✅ 섹션 이동 시 해당 섹션의 변수표/산출표가 분리되어 저장/로드
    ========================= */
 
-const STORAGE_KEY = "FIN_WEB_V9";
+const STORAGE_KEY = "FIN_WEB_V10";
 
-/* ===== Seed Codes ===== */
+/* ===== Seed ===== */
 const SEED_CODES = [
   {"code":"A0SM355150","name":"RH형강 / SM355","spec":"150*150*7*10","unit":"M","surcharge":7,"conv_unit":"TON","conv_factor":0.0315,"note":""},
   {"code":"A0SM355200","name":"RH형강 / SM355","spec":"200*100*5.5*8","unit":"M","surcharge":7,"conv_unit":"TON","conv_factor":0.0213,"note":""},
@@ -20,7 +20,8 @@ const SEED_CODES = [
   {"code":"Z0ETC001","name":"기타","spec":"(사용자 입력)","unit":"","surcharge":"","conv_unit":"","conv_factor":"","note":""},
 ];
 
-/* ===== State makers ===== */
+const SECTION_DEFAULT = { name: "구분 1", count: "" };
+
 function makeEmptyCalcRow(){
   return {
     code: "", name: "", spec: "", unit: "",
@@ -36,67 +37,71 @@ function makeEmptyCodeRow(){
 function makeEmptyVarRow(){
   return { key:"", expr:"", value:0, note:"" };
 }
-function makeEmptySection(){
+
+function makeTabState(){
   return {
-    label: "",
-    count: "",
-    vars: Array.from({length: 12}, makeEmptyVarRow), // 변수 12줄(원하면 늘려도 됨)
-    rows: Array.from({length: 20}, makeEmptyCalcRow),
+    sections: [ { ...SECTION_DEFAULT } ],
+    activeSection: 0,
+    calcBySection: [ Array.from({length: 20}, makeEmptyCalcRow) ],
+    varsBySection: [ Array.from({length: 12}, makeEmptyVarRow) ],
   };
 }
+
 function makeState(){
   return {
     codes: SEED_CODES,
-    // ✅ 탭별 섹션(구분) 묶음
-    sections: {
-      steel:    [makeEmptySection()],
-      steelSub: [makeEmptySection()],
-      support:  [makeEmptySection()],
-    },
-    // ✅ 탭별 현재 선택된 섹션 인덱스
-    activeSectionIndex: {
-      steel: 0,
-      steelSub: 0,
-      support: 0,
+    tabs: {
+      steel: makeTabState(),
+      steelSub: makeTabState(),
+      support: makeTabState(),
     }
   };
 }
 
-/* ===== Load/Save ===== */
 function loadState(){
   const raw = localStorage.getItem(STORAGE_KEY);
   if(!raw) return makeState();
+
   try{
     const s = JSON.parse(raw);
 
     // codes
     s.codes = Array.isArray(s.codes) ? s.codes : SEED_CODES;
 
-    // sections
-    if(!s.sections) s.sections = {};
+    // tabs
+    if(!s.tabs) s.tabs = {};
     for(const k of ["steel","steelSub","support"]){
-      if(!Array.isArray(s.sections[k]) || s.sections[k].length === 0){
-        s.sections[k] = [makeEmptySection()];
-      }else{
-        // 보정
-        s.sections[k] = s.sections[k].map(sec => ({
-          label: (sec.label ?? "").toString(),
-          count: (sec.count ?? "").toString(),
-          vars: Array.isArray(sec.vars) ? sec.vars.map(v=>({
-            key:(v.key??"").toString(),
-            expr:(v.expr??"").toString(),
-            value:Number(v.value||0)||0,
-            note:(v.note??"").toString(),
-          })) : Array.from({length:12}, makeEmptyVarRow),
-          rows: Array.isArray(sec.rows) ? sec.rows : Array.from({length:20}, makeEmptyCalcRow),
-        }));
-      }
-    }
+      if(!s.tabs[k]) s.tabs[k] = makeTabState();
 
-    if(!s.activeSectionIndex) s.activeSectionIndex = {steel:0, steelSub:0, support:0};
-    for(const k of ["steel","steelSub","support"]){
-      const n = Number(s.activeSectionIndex[k] ?? 0);
-      s.activeSectionIndex[k] = Number.isFinite(n) ? Math.max(0, Math.min(n, s.sections[k].length-1)) : 0;
+      const t = s.tabs[k];
+
+      // sections
+      if(!Array.isArray(t.sections) || t.sections.length === 0) t.sections = [{...SECTION_DEFAULT}];
+      if(typeof t.activeSection !== "number") t.activeSection = 0;
+      t.activeSection = Math.max(0, Math.min(t.activeSection, t.sections.length-1));
+
+      // calcBySection
+      if(!Array.isArray(t.calcBySection)) t.calcBySection = [];
+      // 맞춰서 늘림
+      while(t.calcBySection.length < t.sections.length){
+        t.calcBySection.push(Array.from({length: 20}, makeEmptyCalcRow));
+      }
+      // 줄이면 같이 줄임(데이터 정리)
+      if(t.calcBySection.length > t.sections.length){
+        t.calcBySection = t.calcBySection.slice(0, t.sections.length);
+      }
+      // 각 섹션 rows 보정
+      t.calcBySection = t.calcBySection.map(arr => Array.isArray(arr) ? arr : Array.from({length: 20}, makeEmptyCalcRow));
+
+      // varsBySection
+      if(!Array.isArray(t.varsBySection)) t.varsBySection = [];
+      while(t.varsBySection.length < t.sections.length){
+        t.varsBySection.push(Array.from({length: 12}, makeEmptyVarRow));
+      }
+      if(t.varsBySection.length > t.sections.length){
+        t.varsBySection = t.varsBySection.slice(0, t.sections.length);
+      }
+      t.varsBySection = t.varsBySection.map(arr => Array.isArray(arr) ? arr : Array.from({length: 12}, makeEmptyVarRow));
     }
 
     return s;
@@ -109,15 +114,6 @@ let state = loadState();
 function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
 /* ===== Utils ===== */
-function escapeHtml(s){
-  return (s ?? "").toString()
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;");
-}
-function escapeAttr(s){ return escapeHtml(s).replaceAll("\n","&#10;"); }
-
 function num(v){
   const x = (v ?? "").toString().trim();
   if(x === "") return 0;
@@ -129,44 +125,37 @@ function roundUp3(x){
   if(!Number.isFinite(n)) return 0;
   return Math.ceil(n * 1000) / 1000;
 }
-function surchargeToMul(p){
-  const x = num(p);
-  return x ? (1 + x/100) : "";
+function escapeHtml(s){
+  return (s ?? "").toString()
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;");
 }
-function normalizeKey(s){
-  return (s ?? "").toString().trim().toUpperCase();
-}
-function isValidVarName(name){
-  // ✅ A, AB, A1, AB1 ... 최대 3자(영문 시작, 영문/숫자 조합)
-  const n = normalizeKey(name);
-  return /^[A-Z][A-Z0-9]{0,2}$/.test(n);
-}
+function escapeAttr(s){ return escapeHtml(s).replaceAll("\n","&#10;"); }
 
-/* ===== Find code ===== */
 function findCode(code){
   const key = (code ?? "").toString().trim();
   if(!key) return null;
   return state.codes.find(x => (x.code ?? "").toString().trim() === key) ?? null;
 }
+function surchargeToMul(p){
+  const x = num(p);
+  return x ? (1 + x/100) : "";
+}
 
-/* ===== Variable evaluation ===== */
-function evalExprWithVars(exprRaw, varMap){
-  const withoutTags = (exprRaw ?? "").toString().replace(/<[^>]*>/g, "");
-  let s = withoutTags.trim();
+/* =========================
+   Expr eval
+   - <...> 제거
+   - 숫자/연산자만 허용(치환 후)
+   ========================= */
+function stripAngleTags(exprRaw){
+  return (exprRaw ?? "").toString().replace(/<[^>]*>/g, "");
+}
+function safeEvalNumeric(expr){
+  const s = (expr ?? "").toString().trim();
   if(!s) return 0;
-
-  // 변수명 치환(가장 긴 키부터)
-  const keys = Array.from(varMap.keys()).sort((a,b)=>b.length-a.length);
-  for(const k of keys){
-    const v = varMap.get(k);
-    const safe = String(Number(v)||0);
-    // 경계: 알파벳/숫자 덩어리로만 매칭
-    s = s.replace(new RegExp(`\\b${k}\\b`, "g"), safe);
-  }
-
-  // 숫자/연산자만 허용
   if(!/^[0-9+\-*/().\s,]+$/.test(s)) return 0;
-
   try{
     // eslint-disable-next-line no-new-func
     const f = new Function(`return (${s.replaceAll(",","")});`);
@@ -177,36 +166,96 @@ function evalExprWithVars(exprRaw, varMap){
   }
 }
 
-function buildVarMap(tabId){
-  const idx = state.activeSectionIndex[tabId] ?? 0;
-  const sec = state.sections[tabId]?.[idx];
-  const map = new Map();
-  if(!sec) return map;
+/* ===== Variables =====
+   - key: ^[A-Za-z][A-Za-z0-9]{0,2}$  (최대3자, 시작은 영문)
+   - expr: 숫자/연산자 + 변수 사용 가능
+   - expr에서 <...>는 제외
+   - 변수간 참조 허용(순서/반복 계산)
+*/
+const VAR_KEY_RE = /^[A-Za-z][A-Za-z0-9]{0,2}$/;
+const VAR_TOKEN_RE = /\b[A-Za-z][A-Za-z0-9]{0,2}\b/g;
 
-  for(const v of (sec.vars ?? [])){
-    const k = normalizeKey(v.key);
-    if(!k) continue;
-    if(!isValidVarName(k)) continue;
-    map.set(k, Number(v.value)||0);
+function buildVarMap(tabId){
+  const t = state.tabs[tabId];
+  if(!t) return {};
+  const si = t.activeSection || 0;
+  const vars = t.varsBySection?.[si] ?? [];
+
+  // 초기 값 0으로
+  const map = {};
+  for(const v of vars){
+    const k = (v.key ?? "").trim();
+    if(!VAR_KEY_RE.test(k)) continue;
+    map[k] = 0;
   }
+
+  // 반복 계산(서로 참조)
+  for(let pass=0; pass<6; pass++){
+    let changed = false;
+
+    for(const v of vars){
+      const k = (v.key ?? "").trim();
+      if(!VAR_KEY_RE.test(k)) continue;
+
+      const raw = stripAngleTags(v.expr ?? "");
+      // 변수 토큰 치환
+      const replaced = raw.replace(VAR_TOKEN_RE, (tok)=>{
+        if(Object.prototype.hasOwnProperty.call(map, tok)) return String(map[tok] ?? 0);
+        return tok; // 미정의 변수면 그대로(=> 안전검증에서 0 처리됨)
+      });
+
+      // 치환 후에도 변수 토큰이 남아있으면(미정의) 계산 불가 -> 0
+      if(/[A-Za-z]/.test(replaced)){
+        if(v.value !== 0){ v.value = 0; changed = true; }
+        map[k] = 0;
+        continue;
+      }
+
+      const val = safeEvalNumeric(replaced);
+      if((v.value ?? 0) !== val){
+        v.value = val;
+        changed = true;
+      }
+      map[k] = val;
+    }
+
+    if(!changed) break;
+  }
+
   return map;
 }
 
-function recalcRow(row, tabId){
+function evalExprWithVars(exprRaw, varMap){
+  const raw = stripAngleTags(exprRaw ?? "");
+  const replaced = raw.replace(VAR_TOKEN_RE, (tok)=>{
+    if(Object.prototype.hasOwnProperty.call(varMap, tok)) return String(varMap[tok] ?? 0);
+    return tok;
+  });
+
+  // 변수 토큰이 남아있으면(미정의 변수) 계산 불가 -> 0
+  if(/[A-Za-z]/.test(replaced)) return 0;
+
+  return safeEvalNumeric(replaced);
+}
+
+/* ===== Recalc ===== */
+function recalcRow(row, varMap){
   const m = findCode(row.code);
   if(m){
     row.name = m.name ?? "";
     row.spec = m.spec ?? "";
     row.unit = m.unit ?? "";
     const mul = surchargeToMul(m.surcharge);
-    row.surchargeMul = mul === "" ? "" : mul;
+    row.surchargeMul = (mul === "" ? "" : mul);
     row.convUnit = m.conv_unit ?? "";
     if((row.convFactor ?? "").toString().trim() === "") row.convFactor = (m.conv_factor ?? "");
   }else{
-    // 코드가 없으면 자동필드 유지(사용자 입력/공백)
+    // 코드 없으면 자동값 그대로 둠(수동 입력 없음 구조)
+    row.name = row.name ?? "";
+    row.spec = row.spec ?? "";
+    row.unit = row.unit ?? "";
   }
 
-  const varMap = buildVarMap(tabId);
   row.value = evalExprWithVars(row.formulaExpr, varMap);
 
   const E = num(row.value);
@@ -217,97 +266,63 @@ function recalcRow(row, tabId){
   row.finalQty = (I === 0 ? row.convQty : row.convQty * I);
 }
 
+function recalcTabAllSections(tabId){
+  const t = state.tabs[tabId];
+  if(!t) return;
+
+  for(let si=0; si<t.sections.length; si++){
+    // 섹션 si를 활성으로 두고 계산(변수맵이 섹션별이기 때문)
+    const prev = t.activeSection;
+    t.activeSection = si;
+
+    const varMap = buildVarMap(tabId);
+    const rows = t.calcBySection?.[si] ?? [];
+    rows.forEach(r => recalcRow(r, varMap));
+
+    t.activeSection = prev;
+  }
+}
+
 function recalcAll(){
-  for(const tabId of ["steel","steelSub","support"]){
-    const secIdx = state.activeSectionIndex[tabId] ?? 0;
-    const sec = state.sections[tabId]?.[secIdx];
-    if(!sec) continue;
-
-    // 1) 변수 먼저 계산 (변수 expr는 "산식"으로 계산)
-    const varMap = new Map();
-    for(const v of sec.vars){
-      const k = normalizeKey(v.key);
-      if(k && isValidVarName(k)) varMap.set(k, Number(v.value)||0);
-    }
-    // 변수 expr -> value 재계산(순서대로, 앞에서 계산된 변수 사용 가능)
-    for(const v of sec.vars){
-      const k = normalizeKey(v.key);
-      if(!k || !isValidVarName(k)) continue;
-      const val = evalExprWithVars(v.expr, varMap);
-      v.value = val;
-      varMap.set(k, val);
-    }
-
-    // 2) 산출표 계산
-    sec.rows.forEach(r => recalcRow(r, tabId));
-  }
+  recalcTabAllSections("steel");
+  recalcTabAllSections("steelSub");
+  recalcTabAllSections("support");
 }
 
-/* ===== Focus grid (Excel-like) ===== */
-const lastFocusCell = {
-  codes: { row: 0, col: 0 },
-  steel: { row: 0, col: 0 },
-  steelSub: { row: 0, col: 0 },
-  support: { row: 0, col: 0 },
-};
-function isGridEl(el){
-  return el && el.getAttribute && el.getAttribute("data-grid") === "1";
-}
-function isTextareaEl(el){
-  return (el?.tagName || "").toLowerCase() === "textarea";
-}
-function caretAtStart(el){
-  try{ return (el.selectionStart ?? 0) === 0 && (el.selectionEnd ?? 0) === 0; }catch{ return false; }
-}
-function caretAtEnd(el){
-  try{
-    const len = (el.value ?? "").length;
-    return (el.selectionStart ?? 0) === len && (el.selectionEnd ?? 0) === len;
-  }catch{ return false; }
-}
-function textareaAtTop(el){
-  const v = el.value ?? "";
-  const pos = el.selectionStart ?? 0;
-  return !v.slice(0, pos).includes("\n");
-}
-function textareaAtBottom(el){
-  const v = el.value ?? "";
-  const pos = el.selectionStart ?? 0;
-  return !v.slice(pos).includes("\n");
+/* =========================
+   Mouse click -> focus cell (delegation, once)
+   ========================= */
+let mouseFocusWired = false;
+function wireMouseFocus(){
+  if(mouseFocusWired) return;
+  mouseFocusWired = true;
+
+  document.addEventListener("click", (e)=>{
+    const sel = window.getSelection?.();
+    if(sel && !sel.isCollapsed) return;
+
+    const t = e.target;
+    if(t?.closest?.("button,a,label,select,option")) return;
+
+    // input/textarea 클릭은 그대로
+    if(t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+
+    const td = t?.closest?.("td");
+    if(!td) return;
+
+    const cell = td.querySelector("input.cell:not(.readonly), textarea.cell");
+    if(!cell) return;
+
+    editMode = false;
+    setEditingClass(false);
+
+    cell.focus();
+  });
 }
 
-function focusGrid(tab, row, col){
-  const selector = `[data-grid="1"][data-tab="${tab}"][data-row="${row}"][data-col="${col}"]`;
-  const el = document.querySelector(selector);
-  if(el){
-    el.focus();
-    el.scrollIntoView?.({block:"nearest", inline:"nearest"});
-    return true;
-  }
-  return false;
-}
-function moveGridFrom(el, dRow, dCol){
-  const tab = el.getAttribute("data-tab");
-  const row = Number(el.getAttribute("data-row") || 0);
-  const col = Number(el.getAttribute("data-col") || 0);
-
-  const targetRow = row + dRow;
-  const targetCol = col + dCol;
-
-  if(focusGrid(tab, targetRow, targetCol)) return true;
-
-  for(let offset=1; offset<=6; offset++){
-    if(focusGrid(tab, targetRow, targetCol - offset)) return true;
-    if(focusGrid(tab, targetRow, targetCol + offset)) return true;
-  }
-  return false;
-}
-
-/* ===== DOM ===== */
-const $tabs = document.getElementById("tabs");
-const $view = document.getElementById("view");
-
-/* ===== Tabs ===== */
+/* =========================
+   Tabs
+   ========================= */
 const tabsDef = [
   { id:"codes", label:'코드(Ctrl+".")' },
   { id:"steel", label:"철골(Steel)" },
@@ -319,30 +334,51 @@ const tabsDef = [
 
 let activeTabId = "steel";
 
-/* ===== Panels ===== */
+/* ===== DOM ===== */
+const $tabs = document.getElementById("tabs");
+const $view = document.getElementById("view");
+
+/* ===== Panel helper ===== */
 function panel(title, desc){
   const wrap = document.createElement("div");
   wrap.className = "panel";
-
   const h = document.createElement("div");
   h.className = "panel-header";
-
   const left = document.createElement("div");
   left.innerHTML = `<div class="panel-title">${title}</div><div class="panel-desc">${desc || ""}</div>`;
-
   h.appendChild(left);
   wrap.appendChild(h);
-
   return {wrap, header:h};
 }
 
-/* ===== Cells registry ===== */
+function renderTabs(){
+  $tabs.innerHTML = "";
+  for(const t of tabsDef){
+    const b = document.createElement("button");
+    b.className = "tab" + (t.id===activeTabId ? " active" : "");
+    b.textContent = t.label;
+    b.onclick = () => go(t.id);
+    $tabs.appendChild(b);
+  }
+}
+
+/* =========================
+   Grid registry + wiring
+   ========================= */
 const cellRegistry = [];
+const lastFocusCell = {
+  codes: { row: 0, col: 0 },
+  steel: { row: 0, col: 0 },
+  steelSub: { row: 0, col: 0 },
+  support: { row: 0, col: 0 },
+};
+
 function gridAttrString(gridAttrs){
   if(!gridAttrs) return "";
   const {tabId, rowIdx, colIdx} = gridAttrs;
   return `data-grid="1" data-tab="${tabId}" data-row="${rowIdx}" data-col="${colIdx}"`;
 }
+
 function inputCell(value, onChange, placeholder="", gridAttrs=null, extraAttrs=""){
   const id = crypto.randomUUID();
   cellRegistry.push({id, onChange});
@@ -359,39 +395,6 @@ function readonlyCell(value){
   return `<input class="cell readonly" value="${escapeAttr(value ?? "")}" readonly />`;
 }
 
-/* ===== Wire cells ===== */
-function refreshReadonlyInSameRow(activeEl){
-  const tabId = activeEl?.getAttribute?.("data-tab");
-  if(!tabId) return;
-  if(tabId === "codes") return;
-
-  const rowIdx = Number(activeEl.getAttribute("data-row") || -1);
-  if(rowIdx < 0) return;
-
-  const secIdx = state.activeSectionIndex[tabId] ?? 0;
-  const sec = state.sections[tabId]?.[secIdx];
-  if(!sec) return;
-  const r = sec.rows?.[rowIdx];
-  if(!r) return;
-
-  const tr = activeEl.closest("tr");
-  if(!tr) return;
-
-  const ro = tr.querySelectorAll("input.cell.readonly");
-  // readonly 순서: [name, spec, unit, value, surchargeMul, convUnit, convFactor, convQty, finalQty]
-  if(ro.length < 9) return;
-
-  ro[0].value = r.name ?? "";
-  ro[1].value = r.spec ?? "";
-  ro[2].value = r.unit ?? "";
-  ro[3].value = String(roundUp3(r.value));
-  ro[4].value = (r.surchargeMul === "" ? "" : String(r.surchargeMul));
-  ro[5].value = r.convUnit ?? "";
-  ro[6].value = (r.convFactor ?? "").toString();
-  ro[7].value = String(roundUp3(r.convQty));
-  ro[8].value = String(roundUp3(r.finalQty));
-}
-
 function wireCells(){
   document.querySelectorAll("[data-cell]").forEach(el=>{
     const id = el.getAttribute("data-cell");
@@ -400,8 +403,12 @@ function wireCells(){
 
     const handler = ()=>{
       meta.onChange(el.value);
+
+      // 계산/저장
       recalcAll();
       saveState();
+
+      // 같은 행 readonly 즉시 업데이트(산출표만)
       refreshReadonlyInSameRow(el);
     };
 
@@ -415,7 +422,10 @@ function wireCells(){
       if(el.tagName.toLowerCase() === "textarea") return;
 
       const col = Number(el.getAttribute("data-col") || -1);
+      const tab = el.getAttribute("data-tab");
+      // 산출표의 산출식 칸만 처리
       if(col !== 1) return;
+      if(!["steel","steelSub","support"].includes(tab)) return;
 
       e.preventDefault();
       handler();
@@ -439,108 +449,188 @@ function wireFocusTracking(){
   });
 }
 
-/* ===== Mouse click -> focus cell (delegation, once) ===== */
-let mouseFocusWired = false;
-function wireMouseFocus(){
-  if(mouseFocusWired) return;
-  mouseFocusWired = true;
-
-  document.addEventListener("click", (e)=>{
-    const sel = window.getSelection?.();
-    if(sel && !sel.isCollapsed) return;
-
-    const t = e.target;
-
-    if(t?.closest?.("button,a,label,select,option")) return;
-    if(t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
-
-    const td = t?.closest?.("td");
-    if(!td) return;
-
-    const cell = td.querySelector("input.cell:not(.readonly), textarea.cell");
-    if(!cell) return;
-
-    editMode = false;
-    setEditingClass(false);
-    cell.focus();
-  });
+function focusGrid(tab, row, col){
+  const selector = `[data-grid="1"][data-tab="${tab}"][data-row="${row}"][data-col="${col}"]`;
+  const el = document.querySelector(selector);
+  if(el){
+    el.focus();
+    if(el.scrollIntoView) el.scrollIntoView({block:"nearest", inline:"nearest"});
+    return true;
+  }
+  return false;
 }
 
-/* ===== Rows helpers ===== */
-function getActiveSection(tabId){
-  const idx = state.activeSectionIndex[tabId] ?? 0;
-  const list = state.sections[tabId] ?? [];
-  return { idx, list, sec: list[idx] };
+function moveGridFrom(el, dRow, dCol){
+  const tab = el.getAttribute("data-tab");
+  const row = Number(el.getAttribute("data-row") || 0);
+  const col = Number(el.getAttribute("data-col") || 0);
+
+  const targetRow = row + dRow;
+  const targetCol = col + dCol;
+
+  if(focusGrid(tab, targetRow, targetCol)) return true;
+
+  for(let offset=1; offset<=6; offset++){
+    if(focusGrid(tab, targetRow, targetCol - offset)) return true;
+    if(focusGrid(tab, targetRow, targetCol + offset)) return true;
+  }
+  return false;
 }
 
-function ensureSection(tabId){
-  if(!state.sections[tabId] || state.sections[tabId].length === 0){
-    state.sections[tabId] = [makeEmptySection()];
-    state.activeSectionIndex[tabId] = 0;
+/* ===== Readonly refresh (산출표에서만) ===== */
+function getActiveCalcRows(tabId){
+  const t = state.tabs[tabId];
+  if(!t) return null;
+  const si = t.activeSection || 0;
+  return t.calcBySection?.[si] ?? null;
+}
+function refreshReadonlyInSameRow(activeEl){
+  const tabId = activeEl?.getAttribute?.("data-tab");
+  if(!tabId) return;
+  if(!["steel","steelSub","support"].includes(tabId)) return;
+
+  const rowIdx = Number(activeEl.getAttribute("data-row") || -1);
+  if(rowIdx < 0) return;
+
+  const rows = getActiveCalcRows(tabId);
+  if(!rows || !rows[rowIdx]) return;
+  const r = rows[rowIdx];
+
+  const tr = activeEl.closest("tr");
+  if(!tr) return;
+
+  // readonly 순서: [name, spec, unit, value, surchargeMul, convUnit, convFactor, convQty, finalQty]
+  const ro = tr.querySelectorAll("input.cell.readonly");
+  if(ro.length < 9) return;
+
+  ro[0].value = r.name ?? "";
+  ro[1].value = r.spec ?? "";
+  ro[2].value = r.unit ?? "";
+  ro[3].value = String(roundUp3(r.value));
+  ro[4].value = (r.surchargeMul === "" ? "" : String(r.surchargeMul));
+  ro[5].value = r.convUnit ?? "";
+  ro[6].value = (r.convFactor ?? "").toString();
+  ro[7].value = String(roundUp3(r.convQty));
+  ro[8].value = String(roundUp3(r.finalQty));
+}
+
+/* =========================
+   Sections (구분)
+   ========================= */
+function ensureTabStructures(tabId){
+  if(!state.tabs) state.tabs = {};
+  if(!state.tabs[tabId]) state.tabs[tabId] = makeTabState();
+
+  const t = state.tabs[tabId];
+
+  if(!Array.isArray(t.sections) || t.sections.length === 0) t.sections = [{...SECTION_DEFAULT}];
+  if(typeof t.activeSection !== "number") t.activeSection = 0;
+  t.activeSection = Math.max(0, Math.min(t.activeSection, t.sections.length-1));
+
+  if(!Array.isArray(t.calcBySection)) t.calcBySection = [];
+  while(t.calcBySection.length < t.sections.length){
+    t.calcBySection.push(Array.from({length: 20}, makeEmptyCalcRow));
+  }
+  if(t.calcBySection.length > t.sections.length){
+    t.calcBySection = t.calcBySection.slice(0, t.sections.length);
+  }
+
+  if(!Array.isArray(t.varsBySection)) t.varsBySection = [];
+  while(t.varsBySection.length < t.sections.length){
+    t.varsBySection.push(Array.from({length: 12}, makeEmptyVarRow));
+  }
+  if(t.varsBySection.length > t.sections.length){
+    t.varsBySection = t.varsBySection.slice(0, t.sections.length);
   }
 }
 
-function insertSectionBelow(tabId){
-  ensureSection(tabId);
-  const { idx, list } = getActiveSection(tabId);
-  const insertAt = Math.min(idx + 1, list.length);
-  list.splice(insertAt, 0, makeEmptySection());
-  state.activeSectionIndex[tabId] = insertAt;
+function addSection(tabId){
+  ensureTabStructures(tabId);
+  const t = state.tabs[tabId];
+  const nextIdx = t.sections.length + 1;
+
+  t.sections.push({ name:`구분 ${nextIdx}`, count:"" });
+  t.calcBySection.push(Array.from({length: 20}, makeEmptyCalcRow));
+  t.varsBySection.push(Array.from({length: 12}, makeEmptyVarRow));
+  t.activeSection = t.sections.length - 1;
+
   saveState();
 }
 
 function deleteActiveSection(tabId){
-  ensureSection(tabId);
-  const { idx, list } = getActiveSection(tabId);
-  if(list.length <= 1){
-    // 최소 1개 유지
-    list[0] = makeEmptySection();
-    state.activeSectionIndex[tabId] = 0;
-  }else{
-    list.splice(idx, 1);
-    state.activeSectionIndex[tabId] = Math.max(0, idx - 1);
-  }
+  ensureTabStructures(tabId);
+  const t = state.tabs[tabId];
+  if(t.sections.length <= 1) return;
+
+  const i = t.activeSection || 0;
+  t.sections.splice(i,1);
+  t.calcBySection.splice(i,1);
+  t.varsBySection.splice(i,1);
+  t.activeSection = Math.max(0, i-1);
+
   saveState();
 }
 
-function insertRowBelowActive(){
+function setActiveSection(tabId, idx){
+  ensureTabStructures(tabId);
+  const t = state.tabs[tabId];
+  t.activeSection = Math.max(0, Math.min(idx, t.sections.length-1));
+  saveState();
+}
+
+/* =========================
+   Row insert/delete
+   ========================= */
+function insertCalcRowBelow(tabId){
+  if(!["steel","steelSub","support"].includes(tabId)) return;
+
+  const rows = getActiveCalcRows(tabId);
+  if(!rows) return;
+
+  const {row, col} = lastFocusCell[tabId] ?? {row:0, col:0};
+  const insertAt = Math.min(row + 1, rows.length);
+
+  rows.splice(insertAt, 0, makeEmptyCalcRow());
+  saveState();
+  go(tabId);
+  setTimeout(()=>focusGrid(tabId, insertAt, col), 0);
+}
+
+function deleteRowAtActiveFocus(){
+  if(!["codes","steel","steelSub","support"].includes(activeTabId)) return;
+
+  const { row } = lastFocusCell[activeTabId] ?? { row: 0 };
+  const r = Math.max(0, Number(row) || 0);
+
+  const ok = confirm("선택된 행을 정말 삭제할까요?");
+  if(!ok) return;
+
   if(activeTabId === "codes"){
-    const {row, col} = lastFocusCell.codes ?? {row:0,col:0};
-    const insertAt = Math.min(row + 1, state.codes.length);
-    state.codes.splice(insertAt, 0, makeEmptyCodeRow());
+    if(state.codes.length === 0) return;
+    if(r >= state.codes.length) return;
+    state.codes.splice(r, 1);
     saveState();
     go("codes");
-    setTimeout(()=>focusGrid("codes", insertAt, col), 0);
+    const newRow = Math.min(r, state.codes.length - 1);
+    if(newRow >= 0) setTimeout(()=>focusGrid("codes", newRow, 0), 0);
     return;
   }
 
-  if(!["steel","steelSub","support"].includes(activeTabId)) return;
+  const rows = getActiveCalcRows(activeTabId);
+  if(!rows || rows.length === 0) return;
+  if(r >= rows.length) return;
 
-  ensureSection(activeTabId);
-  const { sec } = getActiveSection(activeTabId);
-  if(!sec) return;
-
-  const {row, col} = lastFocusCell[activeTabId] ?? {row:0,col:0};
-  const insertAt = Math.min(row + 1, sec.rows.length);
-  sec.rows.splice(insertAt, 0, makeEmptyCalcRow());
+  rows.splice(r, 1);
   saveState();
   go(activeTabId);
-  setTimeout(()=>focusGrid(activeTabId, insertAt, col), 0);
+
+  const newRow = Math.min(r, rows.length - 1);
+  if(newRow >= 0) setTimeout(()=>focusGrid(activeTabId, newRow, 0), 0);
 }
 
-/* ===== Render Tabs ===== */
-function renderTabs(){
-  $tabs.innerHTML = "";
-  for(const t of tabsDef){
-    const b = document.createElement("button");
-    b.className = "tab" + (t.id===activeTabId ? " active" : "");
-    b.textContent = t.label;
-    b.onclick = () => go(t.id);
-    $tabs.appendChild(b);
-  }
-}
-
-/* ===== Render Codes ===== */
+/* =========================
+   Views
+   ========================= */
 function renderCodes(){
   $view.innerHTML = "";
   const {wrap, header} = panel('코드(Ctrl+".")', "코드 마스터(수정/추가). 엑셀 업로드(.xlsx)로 한 번에 등록 가능. (행 추가: Ctrl+F3)");
@@ -551,7 +641,14 @@ function renderCodes(){
   const addBtn = document.createElement("button");
   addBtn.className="smallbtn";
   addBtn.textContent="행 추가 (Ctrl+F3)";
-  addBtn.onclick = ()=> insertRowBelowActive();
+  addBtn.onclick = ()=>{
+    const {row, col} = lastFocusCell.codes ?? {row:0, col:0};
+    const insertAt = Math.min(row + 1, state.codes.length);
+    state.codes.splice(insertAt, 0, makeEmptyCodeRow());
+    saveState();
+    go("codes");
+    setTimeout(()=>focusGrid("codes", insertAt, col), 0);
+  };
 
   const uploadLabel = document.createElement("label");
   uploadLabel.className="smallbtn";
@@ -673,49 +770,31 @@ function renderCodes(){
   setTimeout(()=>focusGrid("codes", row, col), 0);
 }
 
-/* ===== Render Calc Sheet (with section+vars on TOP) ===== */
 function renderCalcSheet(title, tabId){
+  ensureTabStructures(tabId);
   $view.innerHTML = "";
 
-  ensureSection(tabId);
-  recalcAll();
+  const t = state.tabs[tabId];
+  const si = t.activeSection || 0;
+  const sections = t.sections;
+  const rows = t.calcBySection[si];
+  const vars = t.varsBySection[si];
 
-  const { idx, list, sec } = getActiveSection(tabId);
+  // ===== TOP (구분 + 변수표) : top-split (CSS로 위 배치 조정)
+  const top = document.createElement("div");
+  top.className = "top-split";
 
-  // ✅ (초록) 위 영역 + (노란) 아래 산출표 형태로 쌓기
-  const layout = document.createElement("div");
-  layout.className = "calc-layout";
+  // LEFT: section list + editor + buttons
+  const leftBox = document.createElement("div");
+  leftBox.className = "rail-box";
 
-  const left = document.createElement("div");
-  left.className = "left-rail";
-
-  const right = document.createElement("div");
-  right.className = "right-main";
-
-  /* ---------- 구분명 리스트 ---------- */
-  const box1 = document.createElement("div");
-  box1.className = "rail-box";
-
-  const sectionItems = list.map((s,i)=>{
-    const name = (s.label ?? "").trim() || `구분 ${i+1}`;
-    return `
-      <div class="section-item ${i===idx ? "active":""}" tabindex="0" data-sec="${i}">
-        <div>
-          <div>${escapeHtml(name)}</div>
-          <div class="meta">개소: ${escapeHtml((s.count ?? "").toString())}</div>
-        </div>
-        <div class="meta">${i===idx ? "선택" : ""}</div>
-      </div>
-    `;
-  }).join("");
-
-  box1.innerHTML = `
+  leftBox.innerHTML = `
     <div class="rail-title">구분명 리스트 (↑/↓ 이동)</div>
-    <div class="section-list" id="sectionList">${sectionItems}</div>
+    <div class="section-list" id="sectionList"></div>
 
     <div class="section-editor">
-      <input id="secLabel" placeholder="구분명(예: 2층 바닥 철골보)" value="${escapeAttr(sec.label)}" />
-      <input id="secCount" placeholder="개소(예: 0,1,2...)" value="${escapeAttr(sec.count)}" />
+      <input id="secName" placeholder="구분명(예: 2층 바닥 철골보)" />
+      <input id="secCount" placeholder="개소(예: 0,1,2...)" />
       <button class="smallbtn" id="btnSecSave">저장</button>
     </div>
 
@@ -725,65 +804,59 @@ function renderCalcSheet(title, tabId){
     </div>
   `;
 
-  /* ---------- 변수표 ---------- */
-  const box2 = document.createElement("div");
-  box2.className = "rail-box";
-
-  const varRowsHtml = sec.vars.map((v,i)=>{
-    return `
-      <tr>
-        <td>${inputCell(v.key, val=>{ v.key = val; }, "A/AB/A1", null, `data-var="key" data-vi="${i}"`)}</td>
-        <td>${inputCell(v.expr, val=>{ v.expr = val; }, "산식", null, `data-var="expr" data-vi="${i}"`)}</td>
-        <td><input class="cell readonly" value="${escapeAttr(String(roundUp3(v.value)))}" readonly /></td>
-        <td>${inputCell(v.note, val=>{ v.note = val; }, "비고", null, `data-var="note" data-vi="${i}"`)}</td>
-      </tr>
-    `;
-  }).join("");
-
-  box2.innerHTML = `
+  // RIGHT: variables table
+  const rightBox = document.createElement("div");
+  rightBox.className = "rail-box";
+  rightBox.innerHTML = `
     <div class="rail-title">변수표 (A, AB, A1, AB1... 최대 3자)</div>
     <div class="var-tablewrap">
       <table class="var-table">
         <thead>
-          <tr><th>변수</th><th>산식</th><th>값</th><th>비고</th></tr>
+          <tr>
+            <th style="min-width:140px;">변수</th>
+            <th style="min-width:220px;">산식</th>
+            <th style="min-width:120px;">값</th>
+            <th style="min-width:220px;">비고</th>
+          </tr>
         </thead>
-        <tbody>${varRowsHtml}</tbody>
+        <tbody id="varTbody"></tbody>
       </table>
     </div>
     <div class="var-hint">
       • 변수명은 영문으로 시작, 최대 3자 (예: A, AB, A1)<br/>
-      • 산식에 변수 사용 가능 (예: (A+0.5)*2 )<br/>
-      • &lt;...&gt; 안은 주석으로 계산 제외
+      • 산출식에서 변수 사용 가능 (예: (A+0.5)*2 )<br/>
+      • &lt;...&gt; 안은 주석(계산 제외)
     </div>
   `;
 
-  left.appendChild(box1);
-  left.appendChild(box2);
+  top.appendChild(leftBox);
+  top.appendChild(rightBox);
+  $view.appendChild(top);
 
-  /* ---------- (노란) 산출표 ---------- */
-  const desc = '구분(↑/↓) 이동 → 해당 구분의 변수/산출표로 전환 | 산출식 Enter 계산 | Ctrl+. 코드선택 | Ctrl+F3 구분추가/행추가';
+  // ===== Calc panel
+  const desc = '구분(↑/↓) 이동 → 해당 구분의 변수/산출표로 전환 | 산출식 Enter 계산 | Ctrl+. 코드선택 | Ctrl+F3 구분추가 | Shift+Ctrl+F3 행추가';
   const {wrap, header} = panel(title, desc);
 
-  const headerRight = document.createElement("div");
-  headerRight.style.display="flex"; headerRight.style.gap="8px"; headerRight.style.flexWrap="wrap";
+  const right = document.createElement("div");
+  right.style.display="flex"; right.style.gap="8px"; right.style.flexWrap="wrap";
 
   const addRowBtn = document.createElement("button");
   addRowBtn.className="smallbtn";
   addRowBtn.textContent="행 추가 (Shift+Ctrl+F3)";
-  addRowBtn.onclick=()=>insertRowBelowActive();
+  addRowBtn.onclick=()=>insertCalcRowBelow(tabId);
 
   const add10Btn = document.createElement("button");
   add10Btn.className="smallbtn";
   add10Btn.textContent="+10행";
   add10Btn.onclick=()=>{
-    sec.rows.push(...Array.from({length:10}, makeEmptyCalcRow));
+    for(let i=0;i<10;i++) rows.push(makeEmptyCalcRow());
     saveState();
     go(tabId);
   };
 
-  headerRight.appendChild(addRowBtn);
-  headerRight.appendChild(add10Btn);
-  header.appendChild(headerRight);
+  right.appendChild(addRowBtn);
+  right.appendChild(add10Btn);
+  header.appendChild(right);
 
   const tableWrap = document.createElement("div");
   tableWrap.className="table-wrap";
@@ -797,7 +870,7 @@ function renderCalcSheet(title, tabId){
           <th style="min-width:220px;">규격(자동)</th>
           <th style="min-width:90px;">단위(자동)</th>
           <th style="min-width:550px;">산출식</th>
-          <th style="min-width:80px;">물량(Value)</th>
+          <th style="min-width:110px;">물량(Value)</th>
           <th style="min-width:90px;">할증(배수)</th>
           <th style="min-width:90px;">환산단위</th>
           <th style="min-width:110px;">환산계수</th>
@@ -810,22 +883,27 @@ function renderCalcSheet(title, tabId){
     </table>
   `;
 
-  const tbody = tableWrap.querySelector("tbody");
+  // 현재 섹션 변수맵/행 계산
+  const varMap = buildVarMap(tabId);
+  rows.forEach(r => recalcRow(r, varMap));
 
-  sec.rows.forEach((r, idxRow)=>{
-    recalcRow(r, tabId);
+  const tbody = tableWrap.querySelector("tbody");
+  rows.forEach((r, idx)=>{
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${idxRow+1}</td>
-      <td>${inputCell(r.code, v=>{ r.code=v; }, "코드 입력", {tabId, rowIdx:idxRow, colIdx:0})}</td>
+      <td>${idx+1}</td>
+      <td>${inputCell(r.code, v=>{ r.code=v; }, "코드 입력", {tabId, rowIdx:idx, colIdx:0})}</td>
       <td>${readonlyCell(r.name)}</td>
       <td>${readonlyCell(r.spec)}</td>
       <td>${readonlyCell(r.unit)}</td>
-      <td>${inputCell(r.formulaExpr, v=>{ r.formulaExpr=v; }, "예: (A+0.5)*2  (<...>는 주석)", {tabId, rowIdx:idxRow, colIdx:1})}</td>
+
+      <td>${inputCell(r.formulaExpr, v=>{ r.formulaExpr=v; }, "예: (A+0.5)*2  (<...>는 주석)", {tabId, rowIdx:idx, colIdx:1})}</td>
       <td>${readonlyCell(String(roundUp3(r.value)))}</td>
+
       <td>${readonlyCell(r.surchargeMul === "" ? "" : String(r.surchargeMul))}</td>
       <td>${readonlyCell(r.convUnit)}</td>
       <td>${readonlyCell((r.convFactor ?? "").toString())}</td>
+
       <td>${readonlyCell(String(roundUp3(r.convQty)))}</td>
       <td>${readonlyCell(String(roundUp3(r.finalQty)))}</td>
       <td></td>
@@ -837,17 +915,11 @@ function renderCalcSheet(title, tabId){
 
     const dup = document.createElement("button");
     dup.className="smallbtn"; dup.textContent="복제";
-    dup.onclick=()=>{
-      sec.rows.splice(idxRow+1, 0, JSON.parse(JSON.stringify(r)));
-      saveState(); go(tabId);
-    };
+    dup.onclick=()=>{ rows.splice(idx+1,0, JSON.parse(JSON.stringify(r))); saveState(); go(tabId); };
 
     const del = document.createElement("button");
     del.className="smallbtn"; del.textContent="삭제";
-    del.onclick=()=>{
-      sec.rows.splice(idxRow, 1);
-      saveState(); go(tabId);
-    };
+    del.onclick=()=>{ rows.splice(idx,1); saveState(); go(tabId); };
 
     act.appendChild(dup);
     act.appendChild(del);
@@ -861,82 +933,144 @@ function renderCalcSheet(title, tabId){
   // 합계
   const sumBox = document.createElement("div");
   sumBox.style.marginTop="10px";
-  const sumVal = (tabId==="support")
-    ? sec.rows.reduce((a,b)=> a + num(b.value), 0)
-    : sec.rows.reduce((a,b)=> a + roundUp3(b.finalQty), 0);
+  const sumVal = (tabId === "support")
+    ? rows.reduce((a,b)=> a + num(b.value), 0)
+    : rows.reduce((a,b)=> a + num(b.finalQty), 0);
   sumBox.innerHTML = `<span class="badge">합계: ${roundUp3(sumVal)}</span>`;
   wrap.appendChild(sumBox);
 
-  right.appendChild(wrap);
+  $view.appendChild(wrap);
 
-  layout.appendChild(left);
-  layout.appendChild(right);
-  $view.appendChild(layout);
-
-  /* ---------- 섹션 이벤트 ---------- */
+  // ===== Wire section + vars UI
   const $sectionList = document.getElementById("sectionList");
-  const $label = document.getElementById("secLabel");
-  const $count = document.getElementById("secCount");
+  const $secName = document.getElementById("secName");
+  const $secCount = document.getElementById("secCount");
+  const $btnSecSave = document.getElementById("btnSecSave");
+  const $btnSecAdd = document.getElementById("btnSecAdd");
+  const $btnSecDel = document.getElementById("btnSecDel");
+  const $varTbody = document.getElementById("varTbody");
 
-  function setActiveSection(nextIdx){
-    const max = state.sections[tabId].length - 1;
-    const ni = Math.max(0, Math.min(nextIdx, max));
-    state.activeSectionIndex[tabId] = ni;
-    saveState();
-    go(tabId);
+  function renderSectionList(){
+    $sectionList.innerHTML = "";
+    sections.forEach((s, i)=>{
+      const div = document.createElement("div");
+      div.className = "section-item" + (i === t.activeSection ? " active" : "");
+      div.tabIndex = 0;
+      div.innerHTML = `
+        <div>
+          <div style="font-weight:900;">${escapeHtml(s.name || `구분 ${i+1}`)}</div>
+          <div class="meta">개소: ${escapeHtml(s.count ?? "")}</div>
+        </div>
+        <div class="meta">선택</div>
+      `;
+      div.addEventListener("click", ()=>{
+        setActiveSection(tabId, i);
+        go(tabId);
+      });
+      div.addEventListener("keydown", (e)=>{
+        if(e.key === "Enter"){
+          setActiveSection(tabId, i);
+          go(tabId);
+        }
+      });
+      $sectionList.appendChild(div);
+    });
+
+    const cur = sections[t.activeSection] || {name:"",count:""};
+    $secName.value = cur.name ?? "";
+    $secCount.value = cur.count ?? "";
   }
 
-  $sectionList?.addEventListener("click", (e)=>{
-    const item = e.target.closest("[data-sec]");
-    if(!item) return;
-    const i = Number(item.getAttribute("data-sec"));
-    setActiveSection(i);
+  function renderVarTable(){
+    $varTbody.innerHTML = "";
+    vars.forEach((v)=>{
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><input class="cell" value="${escapeAttr(v.key ?? "")}" placeholder="A / AB / A1" /></td>
+        <td><input class="cell" value="${escapeAttr(v.expr ?? "")}" placeholder="산식" /></td>
+        <td><input class="cell readonly" value="${escapeAttr(String(v.value ?? 0))}" readonly /></td>
+        <td><input class="cell" value="${escapeAttr(v.note ?? "")}" placeholder="비고" /></td>
+      `;
+
+      const $key  = tr.children[0].querySelector("input");
+      const $expr = tr.children[1].querySelector("input");
+      const $val  = tr.children[2].querySelector("input");
+      const $note = tr.children[3].querySelector("input");
+
+      const recalcVarsAndRows = ()=>{
+        v.key  = ($key.value ?? "").trim();
+        v.expr = ($expr.value ?? "").trim();
+        v.note = ($note.value ?? "").trim();
+
+        // 변수 전체 재계산
+        const map = buildVarMap(tabId);
+
+        // 값 UI 갱신
+        // buildVarMap에서 v.value도 업데이트됨
+        $val.value = String(v.value ?? 0);
+
+        // 산출표도 현재 섹션만 즉시 재계산 + readonly 갱신 위해 go 대신 전체 재렌더
+        // (행 수 많아도 안정적으로 동기화)
+        saveState();
+        go(tabId);
+      };
+
+      $key.addEventListener("input", recalcVarsAndRows);
+      $expr.addEventListener("input", recalcVarsAndRows);
+      $note.addEventListener("input", ()=>{
+        v.note = ($note.value ?? "").trim();
+        saveState();
+      });
+
+      $varTbody.appendChild(tr);
+    });
+  }
+
+  // 섹션 리스트 키보드 ↑/↓ 이동 (입력창과 충돌 없음)
+  $sectionList.addEventListener("keydown", (e)=>{
+    if(e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    const next = t.activeSection + (e.key === "ArrowDown" ? 1 : -1);
+    const clamped = Math.max(0, Math.min(next, sections.length-1));
+    if(clamped !== t.activeSection){
+      setActiveSection(tabId, clamped);
+      go(tabId);
+    }
   });
 
-  // ✅ 섹션 리스트에서 ↑/↓로 이동
-  $sectionList?.addEventListener("keydown", (e)=>{
-    if(e.key === "ArrowUp"){
-      e.preventDefault();
-      setActiveSection(idx - 1);
-    }
-    if(e.key === "ArrowDown"){
-      e.preventDefault();
-      setActiveSection(idx + 1);
-    }
-  });
-
-  document.getElementById("btnSecSave")?.addEventListener("click", ()=>{
-    sec.label = ($label?.value ?? "").toString();
-    sec.count = ($count?.value ?? "").toString();
+  $btnSecSave.addEventListener("click", ()=>{
+    const cur = sections[t.activeSection];
+    cur.name = ($secName.value ?? "").toString();
+    cur.count = ($secCount.value ?? "").toString();
     saveState();
+    renderSectionList();
+  });
+
+  $btnSecAdd.addEventListener("click", ()=>{
+    addSection(tabId);
     go(tabId);
   });
 
-  document.getElementById("btnSecAdd")?.addEventListener("click", ()=>{
-    insertSectionBelow(tabId);
-    go(tabId);
-  });
-
-  document.getElementById("btnSecDel")?.addEventListener("click", ()=>{
-    if(!confirm("현재 구분을 삭제할까요?")) return;
+  $btnSecDel.addEventListener("click", ()=>{
     deleteActiveSection(tabId);
     go(tabId);
   });
 
-  /* ---------- 변수표 입력 이벤트: 별도 바인딩(간단) ---------- */
-  // 변수표는 data-cell registry가 아니라 단순 inputCell로 만들었으므로 wireCells로도 들어감
-  // (inputCell로 만들었기 때문에 wireCells가 자동으로 값 반영 + recalcAll 수행)
+  renderSectionList();
+  renderVarTable();
 
+  // ===== Wire grids
   wireCells();
   wireFocusTracking();
   wireMouseFocus();
 
+  // 산출표 포커스 복원
   const last = lastFocusCell[tabId] ?? {row:0,col:0};
   setTimeout(()=>focusGrid(tabId, last.row, last.col), 0);
 }
 
-/* ===== Group sum (Totals) ===== */
-function groupSumCalc(rows, valueSelector){
+/* ===== Totals ===== */
+function groupSum(rows, valueSelector){
   const map = new Map();
   for(const r of rows){
     const code = (r.code ?? "").toString().trim();
@@ -955,19 +1089,24 @@ function groupSumCalc(rows, valueSelector){
   return Array.from(map.values()).sort((a,b)=>a.code.localeCompare(b.code));
 }
 
+function flattenAllRows(tabId){
+  const t = state.tabs[tabId];
+  if(!t) return [];
+  const out = [];
+  for(let si=0; si<t.sections.length; si++){
+    out.push(...(t.calcBySection?.[si] ?? []));
+  }
+  return out;
+}
+
 function renderSteelTotal(){
   $view.innerHTML = "";
-  recalcAll();
   const {wrap} = panel("철골_집계(Steel_Total quantity)", "코드별 합계(철골+부자재의 할증후수량 합산)");
+  recalcAll();
 
-  const rowsAll = [];
-  for(const tabId of ["steel","steelSub"]){
-    ensureSection(tabId);
-    for(const sec of state.sections[tabId]){
-      sec.rows.forEach(r=>rowsAll.push(r));
-    }
-  }
-  const grouped = groupSumCalc(rowsAll, r => roundUp3(r.finalQty));
+  const steelRows = flattenAllRows("steel");
+  const subRows   = flattenAllRows("steelSub");
+  const grouped = groupSum([...steelRows, ...subRows], r => num(r.finalQty));
 
   const tableWrap = document.createElement("div");
   tableWrap.className="table-wrap";
@@ -998,15 +1137,11 @@ function renderSteelTotal(){
 
 function renderSupportTotal(){
   $view.innerHTML = "";
-  recalcAll();
   const {wrap} = panel("동바리_집계(Support_Total quantity)", "코드별 합계(동바리의 물량(Value) 합계)");
+  recalcAll();
 
-  const rowsAll = [];
-  ensureSection("support");
-  for(const sec of state.sections.support){
-    sec.rows.forEach(r=>rowsAll.push(r));
-  }
-  const grouped = groupSumCalc(rowsAll, r => num(r.value));
+  const supportRows = flattenAllRows("support");
+  const grouped = groupSum(supportRows, r => num(r.value));
 
   const tableWrap = document.createElement("div");
   tableWrap.className="table-wrap";
@@ -1035,7 +1170,9 @@ function renderSupportTotal(){
   $view.appendChild(wrap);
 }
 
-/* ===== Router ===== */
+/* =========================
+   go()
+   ========================= */
 function go(id, opts={silentTabRender:false}){
   activeTabId = id;
   recalcAll();
@@ -1050,16 +1187,19 @@ function go(id, opts={silentTabRender:false}){
   else if(id==="supportTotal") renderSupportTotal();
 }
 
-/* ===== Picker window (Ctrl+.) ===== */
+renderTabs();
+go(activeTabId);
+
+/* =========================
+   Code Picker window (Ctrl+.)
+   ========================= */
 let pickerWin = null;
 
 function openPickerWindow(){
   let origin = activeTabId;
   if(!["steel","steelSub","support"].includes(origin)) origin = "steel";
 
-  // 현재 섹션의 포커스 행
   const focusRow = (lastFocusCell[origin]?.row ?? 0);
-
   const w = 1100, h = 720;
   const x = Math.max(0, (window.screenX || 0) + (window.outerWidth - w) / 2);
   const y = Math.max(0, (window.screenY || 0) + (window.outerHeight - h) / 2);
@@ -1089,12 +1229,13 @@ function openPickerWindow(){
 }
 
 function insertCodesBelow(tab, focusRow, codeList){
-  ensureSection(tab);
-  const { sec } = getActiveSection(tab);
-  if(!sec) return;
+  ensureTabStructures(tab);
 
-  const idx = Math.min(Math.max(0, Number(focusRow) || 0), sec.rows.length);
-  const insertAt = Math.min(idx + 1, sec.rows.length);
+  const rows = getActiveCalcRows(tab);
+  if(!rows) return;
+
+  const idx = Math.min(Math.max(0, Number(focusRow) || 0), rows.length);
+  const insertAt = Math.min(idx + 1, rows.length);
 
   const newRows = codeList.map(code=>{
     const r = makeEmptyCalcRow();
@@ -1102,7 +1243,7 @@ function insertCodesBelow(tab, focusRow, codeList){
     return r;
   });
 
-  sec.rows.splice(insertAt, 0, ...newRows);
+  rows.splice(insertAt, 0, ...newRows);
   recalcAll();
   saveState();
   go(tab);
@@ -1122,6 +1263,49 @@ window.addEventListener("message", (event)=>{
     return;
   }
 
+  if(msg.type === "UPDATE_CODES"){
+    const next = msg.codes;
+    if(!Array.isArray(next) || next.length === 0){
+      alert("코드 반영 실패: 전달된 codes가 비어있습니다.");
+      return;
+    }
+
+    const cleaned = next
+      .map(r => ({
+        code: (r.code ?? "").toString().trim(),
+        name: (r.name ?? "").toString().trim(),
+        spec: (r.spec ?? "").toString().trim(),
+        unit: (r.unit ?? "").toString().trim(),
+        surcharge: (r.surcharge ?? "").toString().trim(),
+        conv_unit: (r.conv_unit ?? "").toString().trim(),
+        conv_factor: (r.conv_factor ?? "").toString().trim(),
+        note: (r.note ?? "").toString().trim(),
+      }))
+      .filter(r => r.code);
+
+    if(cleaned.length === 0){
+      alert("코드 반영 실패: 유효한 code가 없습니다.");
+      return;
+    }
+
+    const seen = new Set();
+    const dup = [];
+    for(const r of cleaned){
+      if(seen.has(r.code)) dup.push(r.code);
+      else seen.add(r.code);
+    }
+    if(dup.length){
+      alert(`코드 반영 실패: 중복 코드 존재\n${dup.slice(0,20).join(", ")}${dup.length>20 ? "..." : ""}`);
+      return;
+    }
+
+    state.codes = cleaned;
+    recalcAll();
+    saveState();
+    go(activeTabId);
+    return;
+  }
+
   if(msg.type === "CLOSE_PICKER"){
     try{ pickerWin?.close(); }catch{}
     pickerWin = null;
@@ -1129,7 +1313,9 @@ window.addEventListener("message", (event)=>{
   }
 });
 
-/* ===== Hotkeys + Excel nav ===== */
+/* =========================
+   HOTKEYS + 방향키/편집모드 (capture)
+   ========================= */
 let editMode = false;
 
 function setEditingClass(on){
@@ -1139,38 +1325,30 @@ function setEditingClass(on){
     if(el && el.classList && el.classList.contains("cell")) el.classList.add("editing");
   }
 }
-
-function deleteRowAtActiveFocus(){
-  if(!["codes","steel","steelSub","support"].includes(activeTabId)) return;
-
-  const { row } = lastFocusCell[activeTabId] ?? { row: 0 };
-  const r = Math.max(0, Number(row) || 0);
-
-  const ok = confirm("선택된 행을 정말 삭제할까요?");
-  if(!ok) return;
-
-  if(activeTabId === "codes"){
-    if(state.codes.length === 0) return;
-    if(r >= state.codes.length) return;
-    state.codes.splice(r, 1);
-    saveState();
-    go("codes");
-    const newRow = Math.min(r, state.codes.length - 1);
-    if(newRow >= 0) setTimeout(()=>focusGrid("codes", newRow, 0), 0);
-    return;
-  }
-
-  ensureSection(activeTabId);
-  const { sec } = getActiveSection(activeTabId);
-  if(!sec) return;
-  if(r >= sec.rows.length) return;
-
-  sec.rows.splice(r, 1);
-  saveState();
-  go(activeTabId);
-
-  const newRow = Math.min(r, sec.rows.length - 1);
-  if(newRow >= 0) setTimeout(()=>focusGrid(activeTabId, newRow, 0), 0);
+function isGridEl(el){
+  return el && el.getAttribute && el.getAttribute("data-grid") === "1";
+}
+function isTextareaEl(el){
+  return (el?.tagName || "").toLowerCase() === "textarea";
+}
+function caretAtStart(el){
+  try{ return (el.selectionStart ?? 0) === 0 && (el.selectionEnd ?? 0) === 0; }catch{ return false; }
+}
+function caretAtEnd(el){
+  try{
+    const len = (el.value ?? "").length;
+    return (el.selectionStart ?? 0) === len && (el.selectionEnd ?? 0) === len;
+  }catch{ return false; }
+}
+function textareaAtTop(el){
+  const v = el.value ?? "";
+  const pos = el.selectionStart ?? 0;
+  return !v.slice(0, pos).includes("\n");
+}
+function textareaAtBottom(el){
+  const v = el.value ?? "";
+  const pos = el.selectionStart ?? 0;
+  return !v.slice(pos).includes("\n");
 }
 
 document.addEventListener("keydown", (e)=>{
@@ -1181,33 +1359,46 @@ document.addEventListener("keydown", (e)=>{
     return;
   }
 
-  // Ctrl+Delete delete row
+  // Ctrl+Delete = 행삭제
   if(e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "Delete" || e.code === "Delete")){
     e.preventDefault();
     deleteRowAtActiveFocus();
     return;
   }
 
-  // Ctrl+F3 : 구분 추가(steel/steelSub/support에서)
-  if(e.ctrlKey && !e.altKey && !e.metaKey && e.code === "F3"){
+  // Ctrl+F3 = (codes: 행추가) / (calc tabs: 구분추가)
+  if(e.ctrlKey && !e.altKey && !e.metaKey && e.code === "F3" && !e.shiftKey){
+    e.preventDefault();
+    if(activeTabId === "codes"){
+      const {row, col} = lastFocusCell.codes ?? {row:0, col:0};
+      const insertAt = Math.min(row + 1, state.codes.length);
+      state.codes.splice(insertAt, 0, makeEmptyCodeRow());
+      saveState();
+      go("codes");
+      setTimeout(()=>focusGrid("codes", insertAt, col), 0);
+      return;
+    }
     if(["steel","steelSub","support"].includes(activeTabId)){
-      e.preventDefault();
-      insertSectionBelow(activeTabId);
+      addSection(activeTabId);
       go(activeTabId);
       return;
     }
+    return;
   }
 
-  // Ctrl+Shift+F3 : 행 추가
+  // Shift+Ctrl+F3 = 행추가 (산출표)
   if(e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.code === "F3"){
     e.preventDefault();
-    insertRowBelowActive();
+    if(["steel","steelSub","support"].includes(activeTabId)){
+      insertCalcRowBelow(activeTabId);
+    }
     return;
   }
 
   const el = document.activeElement;
   if(!isGridEl(el)) return;
 
+  // F2 편집모드
   if(e.key === "F2"){
     e.preventDefault();
     editMode = true;
@@ -1236,6 +1427,7 @@ document.addEventListener("keydown", (e)=>{
 
   if(editMode) return;
 
+  // textarea: 커서가 끝/처음일 때만 이동
   if(isTextareaEl(el)){
     if(e.key === "ArrowUp"){
       if(!textareaAtTop(el)) return;
@@ -1264,6 +1456,7 @@ document.addEventListener("keydown", (e)=>{
     return;
   }
 
+  // Excel-like arrows
   if(e.key === "ArrowUp"){
     e.preventDefault();
     moveGridFrom(el, -1, 0);
@@ -1284,7 +1477,6 @@ document.addEventListener("keydown", (e)=>{
     moveGridFrom(el, 0, +1);
     return;
   }
-
 }, true); // capture
 
 /* ===== Buttons ===== */
@@ -1308,19 +1500,38 @@ document.getElementById("fileImport")?.addEventListener("change", async (e)=>{
   try{
     const parsed = JSON.parse(txt);
     state = parsed;
-    // 최소 보정
-    state = loadState(); // 안전하게 다시 로드/보정 로직 태우기 위해 저장 후 재로딩 방식 사용
-    saveState();
-    state = loadState();
+    // 로드 보정
+    state = loadStateFromObject(state);
     recalcAll();
     saveState();
     go("steel");
-  }catch{
+  }catch(err){
+    console.error(err);
     alert("JSON 파싱 실패: 파일 내용을 확인해 주세요.");
   }finally{
     e.target.value = "";
   }
 });
+
+// JSON import 보정(파일 import시)
+function loadStateFromObject(obj){
+  try{
+    const tmp = obj ?? {};
+    if(!tmp.codes) tmp.codes = SEED_CODES;
+    if(!Array.isArray(tmp.codes)) tmp.codes = SEED_CODES;
+
+    if(!tmp.tabs) tmp.tabs = {};
+    for(const k of ["steel","steelSub","support"]){
+      if(!tmp.tabs[k]) tmp.tabs[k] = makeTabState();
+      // ensure
+      state = tmp; // 임시로 state에 넣고 ensure 돌려도 됨
+      ensureTabStructures(k);
+    }
+    return tmp;
+  }catch{
+    return makeState();
+  }
+}
 
 document.getElementById("btnReset")?.addEventListener("click", ()=>{
   if(!confirm("정말 초기화할까요? (로컬 저장 데이터가 삭제됩니다)")) return;
@@ -1330,7 +1541,3 @@ document.getElementById("btnReset")?.addEventListener("click", ()=>{
   saveState();
   go("steel");
 });
-
-/* ===== Boot ===== */
-renderTabs();
-go(activeTabId);

@@ -861,18 +861,127 @@
     }
   });
 
-  /***************
+    /***************
    * Code Picker Popup
    ***************/
-  
+  let __pickerWin = null;
 
-  // popup -> opener hooks
+  function openCodePicker() {
+    // 기본: 현재 탭/0행
+    let originTab = state.activeTab || "steel";
+    let focusRow = 0;
+
+    // 산출표(calc) 셀에 포커스가 있으면 그 위치 기준
+    const a = document.activeElement;
+    if (a instanceof HTMLInputElement && a.dataset.grid === "calc") {
+      originTab = a.dataset.tab || originTab;
+      focusRow = Number(a.dataset.row || 0);
+    }
+
+    // picker가 기대하는 스키마(conv_unit/conv_factor)로 변환
+    const codesForPicker = (state.codeMaster || []).map(r => ({
+      code: (r.code ?? "").toString(),
+      name: (r.name ?? "").toString(),
+      spec: (r.spec ?? "").toString(),
+      unit: (r.unit ?? "").toString(),
+      surcharge: (r.surcharge ?? "").toString(),
+      conv_unit: (r.convUnit ?? "").toString(),
+      conv_factor: (r.convFactor ?? "").toString(),
+      note: (r.note ?? "").toString(),
+    }));
+
+    // ✅ picker 파일 경로 (네 프로젝트 구조에 맞게 필요시 변경)
+    const url = "picker.html";
+
+    __pickerWin = window.open(url, "FIN_CODE_PICKER", "width=1100,height=760");
+    if (!__pickerWin) {
+      alert("팝업이 차단되었습니다. 브라우저에서 팝업 허용 후 다시 시도해 주세요.");
+      return;
+    }
+
+    // 로드 타이밍 대비: INIT 여러 번 전송
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries++;
+      try {
+        __pickerWin.postMessage(
+          { type: "INIT", originTab, focusRow, codes: codesForPicker },
+          window.location.origin
+        );
+      } catch {}
+      if (tries >= 12) clearInterval(timer);
+    }, 120);
+  }
+
+  // picker → app 메시지 수신 (INSERT_SELECTED / UPDATE_CODES / CLOSE_PICKER)
+  window.addEventListener("message", (event) => {
+    if (event.origin !== window.location.origin) return;
+    const msg = event.data;
+    if (!msg || typeof msg !== "object") return;
+
+    // 1) 선택 코드 삽 hooking (picker.js insertToParent)
+    if (msg.type === "INSERT_SELECTED") {
+      const originTab = msg.originTab || state.activeTab;
+      const focusRow = Number(msg.focusRow || 0);
+      const selectedCodes = Array.isArray(msg.selectedCodes) ? msg.selectedCodes : [];
+      if (!selectedCodes.length) return;
+
+      // 탭 이동 → 렌더 → 해당 셀 포커스 → 삽입
+      state.activeTab = originTab;
+      saveState();
+      render();
+
+      requestAnimationFrame(() => {
+        const target = document.querySelector(
+          `input[data-grid="calc"][data-tab="${originTab}"][data-row="${focusRow}"][data-col="0"]`
+        );
+        if (target) target.focus();
+
+        if (selectedCodes.length > 1) window.__FIN_INSERT_CODES__?.(selectedCodes);
+        else window.__FIN_INSERT_CODE__?.(selectedCodes[0]);
+      });
+      return;
+    }
+
+    // 2) 코드마스터 반영(편집 탭 "코드저장/반영")
+    if (msg.type === "UPDATE_CODES") {
+      const incoming = Array.isArray(msg.codes) ? msg.codes : [];
+
+      // picker 스키마(conv_unit/conv_factor) → app 스키마(convUnit/convFactor)
+      state.codeMaster = incoming
+        .map(r => ({
+          code: (r.code ?? "").toString().trim(),
+          name: (r.name ?? "").toString(),
+          spec: (r.spec ?? "").toString(),
+          unit: (r.unit ?? "").toString(),
+          surcharge: (r.surcharge === "" || r.surcharge == null) ? null : Number(r.surcharge),
+          convUnit: (r.conv_unit ?? "").toString(),
+          convFactor: (r.conv_factor === "" || r.conv_factor == null) ? null : Number(r.conv_factor),
+          note: (r.note ?? "").toString(),
+        }))
+        .filter(x => x.code);
+
+      saveState();
+      render();
+      return;
+    }
+
+    // 3) 닫기(옵션)
+    if (msg.type === "CLOSE_PICKER") {
+      try { __pickerWin?.close(); } catch {}
+      __pickerWin = null;
+      return;
+    }
+  });
+
+  // popup -> opener hooks (기존 유지)
   window.__FIN_GET_CODEMASTER__ = () => state.codeMaster || [];
   window.__FIN_INSERT_CODE__ = (code) => {
     insertCodeToActiveCell(code, false);
   };
   window.__FIN_INSERT_CODES__ = (codes) => {
     insertCodeToActiveCell(codes[0] || "", false);
+
     // 멀티 삽입은: 현재 셀부터 아래로 채우기
     const a = document.activeElement;
     if (!(a instanceof HTMLInputElement) || a.dataset.grid !== "calc") return;
@@ -999,13 +1108,6 @@
     const items = [];
     let total = 0;
 
-    bucket.sections.forEach((sec, sIdx) => {
-      // 섹션별 최신 계산
-      const tempBucket = { activeSection: sIdx, sections: bucket.sections };
-      // 임시로 state[srcTabId].activeSection 바꾸지 않고 계산하려면 clone 필요하지만,
-      // 여기서는 정확성 위해 잠깐 저장->복구
-    });
-
     const prev = bucket.activeSection;
     for (let sIdx = 0; sIdx < bucket.sections.length; sIdx++) {
       bucket.activeSection = sIdx;
@@ -1056,4 +1158,3 @@
    ***************/
   render();
 
-})();

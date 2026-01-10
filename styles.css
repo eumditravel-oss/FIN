@@ -345,6 +345,130 @@ tr.section-row td input.cell{
 }
 
 
+/* ===== NEW: 좌(구분/변수) + 우(산출표) 레이아웃 ===== */
+.calc-layout{
+  display:flex;
+  gap:14px;
+  align-items:stretch;
+}
+
+.left-rail{
+  width:360px;
+  min-width:320px;
+}
+
+.rail-box{
+  background: rgba(255,250,240,.86);
+  border:1px solid rgba(0,0,0,.10);
+  border-radius:16px;
+  box-shadow: 0 10px 26px rgba(0,0,0,.08);
+  padding:12px;
+  margin-bottom:12px;
+}
+
+.rail-title{
+  font-weight:900;
+  margin-bottom:8px;
+}
+
+.section-list{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  max-height:260px;
+  overflow:auto;
+  padding-right:4px;
+}
+.section-item{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  border:1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.70);
+  border-radius:12px;
+  padding:10px 10px;
+  cursor:pointer;
+  font-weight:800;
+}
+.section-item.active{
+  background: rgba(26,61,124,.10);
+  border-color: rgba(26,61,124,.25);
+}
+.section-item .meta{
+  font-size:12px;
+  opacity:.75;
+  font-weight:800;
+}
+.section-item:focus{
+  outline: 2px solid rgba(26,61,124,.35);
+  outline-offset:2px;
+}
+
+.section-editor{
+  display:grid;
+  grid-template-columns: 1fr 120px;
+  gap:8px;
+  margin-top:10px;
+}
+.section-editor input{
+  border:1px solid rgba(0,0,0,.12);
+  background:rgba(255,255,255,.8);
+  border-radius:10px;
+  padding:9px 10px;
+  outline:none;
+  font-size:12px;
+}
+.section-editor .smallbtn{
+  border:1px solid rgba(0,0,0,.10);
+  background:#fffaf0;
+  border-radius:12px;
+  padding:10px 12px;
+  cursor:pointer;
+  box-shadow: 0 10px 26px rgba(0,0,0,.08);
+  font-weight:900;
+}
+
+/* 변수표 */
+.var-tablewrap{
+  border:1px solid rgba(0,0,0,.10);
+  border-radius:14px;
+  overflow:auto;
+  background: rgba(255,255,255,.55);
+  max-height: 54vh;
+}
+.var-table{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+  font-size:12px;
+}
+.var-table thead th{
+  position:sticky;
+  top:0;
+  background: rgba(255,250,240,.95);
+  border-bottom: 1px solid rgba(0,0,0,.10);
+  padding: 9px 8px;
+  text-align:left;
+  font-weight:900;
+}
+.var-table tbody td{
+  border-bottom:1px solid rgba(0,0,0,.06);
+  padding:6px 8px;
+}
+.var-hint{
+  font-size:12px;
+  opacity:.75;
+  margin-top:8px;
+  line-height:1.4;
+}
+
+.right-main{
+  flex:1;
+  min-width: 540px;
+}
+
+
 
 
 

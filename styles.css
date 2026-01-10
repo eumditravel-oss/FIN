@@ -330,6 +330,21 @@ tr.section-row td input.cell{
   font-weight: 900;
 }
 
+.secchips{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.secchip{
+  border:1px solid rgba(0,0,0,.12);
+  background:rgba(255,255,255,.75);
+  border-radius:999px;
+  padding:8px 10px;
+  font-weight:800;
+  cursor:pointer;
+}
+.secchip.active{
+  background:rgba(26,61,124,.10);
+  border-color:rgba(26,61,124,.25);
+}
+
+
 
 
 

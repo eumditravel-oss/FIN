@@ -1,1258 +1,1171 @@
-/* =========================================================
-   FIN 산출자료 (Web) - app.js (RESTORED)
-   - Code master logic restored (Excel-like)
-   - Arrow key navigation restored (boundary move)
-   - Shortcuts restored (Ctrl+., Ctrl+F3, Shift+Ctrl+F3, Ctrl+B, Ctrl+Enter)
-   ========================================================= */
+/* app.js (FINAL) - FIN 산출자료 (Web)
+   - 코드탭 복원(코드/품명/규격/단위/할증/환산단위/환산계수/비고)
+   - 엑셀 기반 코드마스터 기본값 내장
+   - 산출탭 방향키 이동: 산출표(빨간영역) 안에서만 동작
+   - Ctrl+F3: 산출표에서만 현재 행 아래 행 추가
+   - Ctrl+Shift+F3: 산출표 +10행
+   - Ctrl+Del: 셀 비우기
+   - Ctrl+. : 코드 선택 창
+*/
 
-const LS_KEY = "FIN_CALC_STATE_v10";
+(() => {
+  "use strict";
 
-/* -----------------------------
-   Tabs (requested names)
------------------------------- */
-const TAB_KEYS = [
-  { key: "code", label: "코드(Ctrl+.)" },
-  { key: "steel", label: "철골" },
-  { key: "steel_sum", label: "철골_집계" },
-  { key: "steel_sub", label: "철골_부자재" },
-  { key: "support", label: "구조이기/동바리" },
-  { key: "support_sum", label: "구조이기/동바리_집계" },
-];
+  /***************
+   * Storage
+   ***************/
+  const LS_KEY = "FIN_WEB_STATE_V11";
 
-/* top-split needed tabs */
-const TOP_SPLIT_TABS = new Set(["steel", "steel_sub", "support"]);
+  const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
+  const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 
-/* -----------------------------
-   Helpers
------------------------------- */
-const $ = (sel, root = document) => root.querySelector(sel);
-const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  /***************
+   * Code Master (엑셀 동일 구조)
+   * columns: code, name, spec, unit, surcharge, convUnit, convFactor, note
+   ***************/
+  const DEFAULT_CODE_MASTER = [
+    {"code":"A0SM355150","name":"RH형강 / SM355","spec":"150*150*7*10","unit":"M","surcharge":7,"convUnit":"TON","convFactor":0.0315,"note":""},
+    {"code":"A0SM355200","name":"RH형강 / SM355","spec":"200*100*5.5*8","unit":"M","surcharge":7,"convUnit":"TON","convFactor":0.0213,"note":""},
+    {"code":"A0SM355201","name":"RH형강 / SM355","spec":"200*200*8*12","unit":"M","surcharge":null,"convUnit":"","convFactor":null,"note":""},
+    {"code":"A0SM355294","name":"RH형강 / SM355","spec":"294*200*8*12","unit":"M","surcharge":null,"convUnit":"","convFactor":null,"note":""},
+    {"code":"A0SM355300","name":"RH형강 / SM355","spec":"300*300*10*15, CAMBER 35mm","unit":"M","surcharge":null,"convUnit":"","convFactor":null,"note":""},
 
-function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+    {"code":"B0SM355800","name":"BH형강 / SM355","spec":"800*300*25*40","unit":"M","surcharge":10,"convUnit":"TON","convFactor":0.3297,"note":""},
+    {"code":"B0SM355900","name":"BH형강 / SM355","spec":"900*350*30*60","unit":"M","surcharge":10,"convUnit":"TON","convFactor":0.35796,"note":""},
 
-function safeNum(x){
-  if (x === "" || x == null) return 0;
-  const n = Number(x);
-  return Number.isFinite(n) ? n : 0;
-}
+    {"code":"C0SS275009","name":"강판 / SS275","spec":"9mm","unit":"M2","surcharge":null,"convUnit":"","convFactor":null,"note":"Plate / Đĩa"},
+    {"code":"C0SS275010","name":"강판 / SS275","spec":"10mm","unit":"M2","surcharge":null,"convUnit":"","convFactor":null,"note":"Plate / Đĩa"},
+    {"code":"C0SS275011","name":"강판 / SS275","spec":"11mm","unit":"M2","surcharge":null,"convUnit":"","convFactor":null,"note":"Plate / Đĩa"},
+    {"code":"C0SS275012","name":"강판 / SS275","spec":"12mm","unit":"M2","surcharge":null,"convUnit":"","convFactor":null,"note":"Plate / Đĩa"},
+    {"code":"C0SS275013","name":"강판 / SS275","spec":"13mm","unit":"M2","surcharge":null,"convUnit":"","convFactor":null,"note":"Plate / Đĩa"},
+    {"code":"C0SS275014","name":"강판 / SS275","spec":"14mm","unit":"M2","surcharge":null,"convUnit":"","convFactor":null,"note":"Plate / Đĩa"},
+    {"code":"C0SS275025","name":"강판 / SS275","spec":"25mm","unit":"M2","surcharge":null,"convUnit":"","convFactor":null,"note":"Plate / Đĩa"},
+    {"code":"C0SM355009","name":"강판 / SM355","spec":"9mm","unit":"M2","surcharge":null,"convUnit":"","convFactor":null,"note":"Plate / Đĩa"},
+    {"code":"C0SM355010","name":"강판 / SM355","spec":"10mm","unit":"M2","surcharge":null,"convUnit":"","convFactor":null,"note":"Plate / Đĩa"},
+    {"code":"C0SM355011","name":"강판 / SM355","spec":"11mm","unit":"M2","surcharge":null,"convUnit":"","convFactor":null,"note":"Plate / Đĩa"},
+    {"code":"C0SM355012","name":"강판 / SM355","spec":"12mm","unit":"M2","surcharge":null,"convUnit":"","convFactor":null,"note":"Plate / Đĩa"},
+    {"code":"C0SM355013","name":"강판 / SM355","spec":"13mm","unit":"M2","surcharge":null,"convUnit":"","convFactor":null,"note":"Plate / Đĩa"},
+    {"code":"C0SM355014","name":"강판 / SM355","spec":"14mm","unit":"M2","surcharge":null,"convUnit":"","convFactor":null,"note":"Plate / Đĩa"},
+    {"code":"C0SM355025","name":"강판 / SM355","spec":"25mm","unit":"M2","surcharge":null,"convUnit":"","convFactor":null,"note":"Plate / Đĩa"},
+  ];
 
-/* remove "<...>" comment blocks */
-function stripAngleComments(s){
-  if (!s) return "";
-  return String(s).replace(/<[^>]*>/g, "");
-}
+  /***************
+   * Tabs
+   ***************/
+  const TABS = [
+    { id: "code", title: "코드(Ctrl+.)" },
+    { id: "steel", title: "철골" },
+    { id: "steel_sum", title: "철골_집계" },
+    { id: "steel_sub", title: "철골_부자재" },
+    { id: "support", title: "구조이기/동바리" },
+    { id: "support_sum", title: "구조이기/동바리_집계" },
+  ];
 
-/* validate variable name: starts with letter, up to 3 chars, alnum */
-function isValidVarName(name){
-  if (!name) return false;
-  const s = String(name).trim();
-  return /^[A-Za-z][A-Za-z0-9]{0,2}$/.test(s);
-}
-
-/* Build variable map from current section vars */
-function varsToMap(varsArr){
-  const map = {};
-  for (const v of varsArr){
-    const k = String(v.name || "").trim();
-    if (!isValidVarName(k)) continue;
-    map[k] = safeNum(v.value);
-  }
-  return map;
-}
-
-/* Expression evaluator (numbers + + - * / ( ) .) with variables */
-function evalExpr(expr, varMap){
-  const raw = stripAngleComments(expr || "").trim();
-  if (!raw) return 0;
-
-  // replace variables (word boundary)
-  let s = raw;
-  // sort keys longest first to avoid partial replacement
-  const keys = Object.keys(varMap || {}).sort((a,b)=>b.length-a.length);
-  for (const k of keys){
-    const v = varMap[k];
-    const re = new RegExp(`\\b${k}\\b`, "g");
-    s = s.replace(re, String(v));
-  }
-
-  // allow only safe characters
-  if (!/^[0-9+\-*/().\s]+$/.test(s)){
-    throw new Error("INVALID_EXPR");
-  }
-
-  // eslint-disable-next-line no-new-func
-  const fn = new Function(`"use strict"; return (${s});`);
-  const out = fn();
-  if (!Number.isFinite(out)) return 0;
-  return out;
-}
-
-/* -----------------------------
-   Default state
------------------------------- */
-function makeEmptyCodeRow(){
-  return {
-    code: "",
-    name: "",
-    spec: "",
-    unit: "",
-    addPct: "",      // 할증(%)
-    convUnit: "",    // 환산단위
-    convFactor: "",  // 환산계수
-    note: ""
-  };
-}
-
-function makeEmptyCalcRow(){
-  return {
+  /***************
+   * Default State
+   ***************/
+  const defaultCalcRow = () => ({
     code: "",
     name: "",
     spec: "",
     unit: "",
     formula: "",
-    value: 0,          // 물량
-    addMul: "",        // 할증(배수) ex) 1.05
+    value: 0,
+    surchargePct: null,     // override; null이면 코드마스터 적용
+    surchargeMul: 1,        // 표시용
     convUnit: "",
-    convFactor: "",
-    convQty: 0,        // 환산수량
-    finalQty: 0,       // 할증후수량
-    note: ""
+    convFactor: null,
+    converted: 0,
+    note: "",
+  });
+
+  const defaultVarRow = () => ({
+    key: "",      // A / AB / A1 등 (최대 3자, 영문 시작)
+    expr: "",
+    value: 0,
+    note: "",
+  });
+
+  const defaultSection = (name = "구분 1", count = 1) => ({
+    name,
+    count,
+    vars: Array.from({ length: 12 }, () => defaultVarRow()),
+    rows: Array.from({ length: 12 }, () => defaultCalcRow()),
+  });
+
+  const DEFAULT_STATE = {
+    activeTab: "code",
+    codeMaster: deepClone(DEFAULT_CODE_MASTER),
+    steel: {
+      activeSection: 0,
+      sections: [defaultSection("구분 1", 1)],
+    },
+    steel_sub: {
+      activeSection: 0,
+      sections: [defaultSection("구분 1", 1)],
+    },
+    support: {
+      activeSection: 0,
+      sections: [defaultSection("구분 1", 1)],
+    },
   };
-}
 
-function makeEmptyVarRow(){
-  return { name: "", expr: "", value: 0, memo: "" };
-}
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return deepClone(DEFAULT_STATE);
+      const parsed = JSON.parse(raw);
 
-function makeDefaultSection(){
-  return {
-    title: "구분 1",
-    count: 1, // 개소
-    vars: Array.from({length: 12}, ()=>makeEmptyVarRow()),
-    rows: Array.from({length: 12}, ()=>makeEmptyCalcRow()),
-  };
-}
+      // 최소 보정
+      const s = { ...deepClone(DEFAULT_STATE), ...parsed };
+      s.codeMaster = Array.isArray(parsed?.codeMaster) ? parsed.codeMaster : deepClone(DEFAULT_CODE_MASTER);
 
-function defaultState(){
-  return {
-    activeTab: "steel",
-    // code master
-    codes: Array.from({length: 30}, ()=>makeEmptyCodeRow()),
-    // calc tabs sections
-    steel: { sections: [ makeDefaultSection() ], activeSection: 0 },
-    steel_sub: { sections: [ makeDefaultSection() ], activeSection: 0 },
-    support: { sections: [ makeDefaultSection() ], activeSection: 0 },
-  };
-}
-
-/* -----------------------------
-   Load / Save
------------------------------- */
-function loadState(){
-  try{
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return defaultState();
-    const st = JSON.parse(raw);
-
-    // minimal migrations / ensure shapes
-    if (!st.codes) st.codes = Array.from({length: 30}, ()=>makeEmptyCodeRow());
-    for (const k of ["steel","steel_sub","support"]){
-      if (!st[k]) st[k] = { sections: [ makeDefaultSection() ], activeSection: 0 };
-      if (!Array.isArray(st[k].sections) || st[k].sections.length === 0){
-        st[k].sections = [ makeDefaultSection() ];
+      for (const k of ["steel", "steel_sub", "support"]) {
+        if (!s[k] || !Array.isArray(s[k].sections) || s[k].sections.length === 0) {
+          s[k] = deepClone(DEFAULT_STATE[k]);
+        }
+        s[k].activeSection = clamp(Number(s[k].activeSection || 0), 0, s[k].sections.length - 1);
       }
-      st[k].activeSection = clamp(safeNum(st[k].activeSection), 0, st[k].sections.length-1);
+
+      if (!TABS.some(t => t.id === s.activeTab)) s.activeTab = "code";
+      return s;
+    } catch (e) {
+      console.warn("loadState failed:", e);
+      return deepClone(DEFAULT_STATE);
     }
-    if (!st.activeTab) st.activeTab = "steel";
-    return st;
-  }catch(e){
-    console.warn("loadState failed", e);
-    return defaultState();
   }
-}
 
-function saveState(){
-  localStorage.setItem(LS_KEY, JSON.stringify(state));
-}
+  function saveState() {
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+  }
 
-/* -----------------------------
-   Global state
------------------------------- */
-let state = loadState();
+  let state = loadState();
 
-// used by code picker
-let picker = {
-  open: false,
-  filter: "",
-  selectedCodes: new Set(),
-  targetInput: null, // input element where to insert code
-  targetTab: null,
-  targetRowIndex: null,
-};
+  /***************
+   * DOM
+   ***************/
+  const $tabs = document.getElementById("tabs");
+  const $view = document.getElementById("view");
 
-/* -----------------------------
-   DOM roots
------------------------------- */
-const tabsEl = $("#tabs");
-const viewEl = $("#view");
+  function el(tag, attrs = {}, children = []) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "class") node.className = v;
+      else if (k === "dataset") Object.assign(node.dataset, v);
+      else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
+      else if (v === false || v == null) continue;
+      else node.setAttribute(k, String(v));
+    }
+    for (const ch of children) {
+      if (ch == null) continue;
+      node.appendChild(typeof ch === "string" ? document.createTextNode(ch) : ch);
+    }
+    return node;
+  }
 
-/* -----------------------------
-   Render Tabs
------------------------------- */
-function renderTabs(){
-  tabsEl.innerHTML = "";
-  for (const t of TAB_KEYS){
-    const btn = document.createElement("button");
-    btn.className = "tab" + (state.activeTab === t.key ? " active" : "");
-    btn.textContent = t.label;
-    btn.addEventListener("click", ()=>{
-      state.activeTab = t.key;
+  function clear(node) {
+    while (node.firstChild) node.removeChild(node.firstChild);
+  }
+
+  /***************
+   * Helpers: Code master lookup
+   ***************/
+  function codeLookup(code) {
+    const c = String(code || "").trim();
+    if (!c) return null;
+    return state.codeMaster.find(x => String(x.code).trim().toUpperCase() === c.toUpperCase()) || null;
+  }
+
+  /***************
+   * Expression evaluator
+   * - <> 주석 제거
+   * - 변수명(A/AB/A1/AB1 등 최대3자, 영문시작) 치환
+   ***************/
+  function stripAngleComments(expr) {
+    if (!expr) return "";
+    // <> 안의 내용 제거(중첩은 고려 안 함)
+    return String(expr).replace(/<[^>]*>/g, "");
+  }
+
+  function buildVarMap(section) {
+    const map = Object.create(null);
+
+    // 먼저 key 정리
+    for (const v of section.vars) {
+      const key = (v.key || "").trim();
+      if (!key) continue;
+      map[key.toUpperCase()] = 0;
+    }
+
+    // 여러 번 반복하며 expr 계산
+    for (let pass = 0; pass < 6; pass++) {
+      for (const v of section.vars) {
+        const key = (v.key || "").trim();
+        if (!key) continue;
+
+        const exprRaw = stripAngleComments(v.expr || "");
+        const val = safeEvalWithVars(exprRaw, map);
+        if (Number.isFinite(val)) {
+          map[key.toUpperCase()] = val;
+        }
+      }
+    }
+
+    // 최종 값을 var row에도 반영
+    for (const v of section.vars) {
+      const key = (v.key || "").trim();
+      if (!key) {
+        v.value = 0;
+        continue;
+      }
+      v.value = Number(map[key.toUpperCase()] ?? 0) || 0;
+    }
+
+    return map;
+  }
+
+  function safeEvalWithVars(expr, varMap) {
+    const raw = String(expr || "").trim();
+    if (!raw) return 0;
+
+    // 변수 토큰 치환 (영문 시작, 최대3자: A, AB, A1, AB1, ABC 등)
+    const replaced = raw.replace(/\b([A-Za-z][A-Za-z0-9]{0,2})\b/g, (m, p1) => {
+      const k = p1.toUpperCase();
+      if (Object.prototype.hasOwnProperty.call(varMap, k)) return String(varMap[k] ?? 0);
+      // 정의되지 않은 변수는 0으로
+      return "0";
+    });
+
+    // 허용문자 검증
+    const cleaned = replaced.replace(/\s+/g, "");
+    if (!/^[0-9+\-*/().]*$/.test(cleaned)) return NaN;
+
+    try {
+      // eslint-disable-next-line no-new-func
+      const fn = new Function(`return (${replaced});`);
+      const v = fn();
+      const n = Number(v);
+      return Number.isFinite(n) ? n : NaN;
+    } catch {
+      return NaN;
+    }
+  }
+
+  function recomputeSection(tabId) {
+    const bucket = state[tabId];
+    const sec = bucket.sections[bucket.activeSection];
+    const varMap = buildVarMap(sec);
+
+    for (const r of sec.rows) {
+      // 코드마스터 동기화
+      const info = codeLookup(r.code);
+      if (info) {
+        r.name = info.name || "";
+        r.spec = info.spec || "";
+        r.unit = info.unit || "";
+        r.note = info.note || "";
+        r.convUnit = info.convUnit || "";
+        r.convFactor = info.convFactor ?? null;
+
+        const sPct = (r.surchargePct == null || r.surchargePct === "") ? (info.surcharge ?? null) : Number(r.surchargePct);
+        r.surchargePct = (sPct == null || sPct === "") ? null : Number(sPct);
+      } else {
+        r.name = r.name || "";
+        r.spec = r.spec || "";
+        r.unit = r.unit || "";
+        r.note = r.note || "";
+        r.convUnit = r.convUnit || "";
+      }
+
+      const expr = stripAngleComments(r.formula || "");
+      const base = safeEvalWithVars(expr, varMap);
+      r.value = Number.isFinite(base) ? base : 0;
+
+      const pct = (r.surchargePct == null || r.surchargePct === "") ? null : Number(r.surchargePct);
+      const mul = pct == null || !Number.isFinite(pct) ? 1 : (1 + pct / 100);
+      r.surchargeMul = mul;
+
+      const after = r.value * mul;
+      const cf = r.convFactor;
+      if (cf != null && Number.isFinite(Number(cf)) && Number(cf) !== 0) {
+        r.converted = after * Number(cf);
+      } else {
+        r.converted = after;
+      }
+    }
+  }
+
+  /***************
+   * UI: Tabs
+   ***************/
+  function renderTabs() {
+    clear($tabs);
+    for (const t of TABS) {
+      const btn = el("button", {
+        class: "tab" + (state.activeTab === t.id ? " active" : ""),
+        onclick: () => {
+          state.activeTab = t.id;
+          saveState();
+          render();
+        }
+      }, [t.title]);
+      $tabs.appendChild(btn);
+    }
+  }
+
+  /***************
+   * UI: Code tab
+   ***************/
+  function renderCodeTab() {
+    const panel = el("div", { class: "panel" }, [
+      el("div", { class: "panel-header" }, [
+        el("div", {}, [
+          el("div", { class: "panel-title" }, ["코드"]),
+          el("div", { class: "panel-desc" }, ["코드 선택 팝업/산출 자동연동은 기존 로직과 연결 지점"])
+        ]),
+        el("div", { class: "row-actions" }, [
+          el("button", {
+            class: "smallbtn",
+            onclick: () => {
+              state.codeMaster.push({ code:"", name:"", spec:"", unit:"", surcharge:null, convUnit:"", convFactor:null, note:"" });
+              saveState(); render();
+            }
+          }, ["행 추가"]),
+        ])
+      ]),
+      el("div", { class: "table-wrap" }, [
+        buildCodeMasterTable()
+      ])
+    ]);
+    return panel;
+  }
+
+  function buildCodeMasterTable() {
+    const table = el("table", {}, []);
+    const thead = el("thead", {}, [
+      el("tr", {}, [
+        el("th", {}, ["코드(Code)"]),
+        el("th", {}, ["품명(Product name)"]),
+        el("th", {}, ["규격(Specifications)"]),
+        el("th", {}, ["단위(unit)"]),
+        el("th", {}, ["할증(surcharge)"]),
+        el("th", {}, ["환산단위(Conversion unit)"]),
+        el("th", {}, ["환산계수(Conversion factor)"]),
+        el("th", {}, ["비고(Note)"]),
+        el("th", {}, [""])
+      ])
+    ]);
+    const tbody = el("tbody", {}, []);
+
+    state.codeMaster.forEach((row, idx) => {
+      const tr = el("tr", {}, [
+        tdInput("codeMaster", idx, "code", row.code),
+        tdInput("codeMaster", idx, "name", row.name),
+        tdInput("codeMaster", idx, "spec", row.spec),
+        tdInput("codeMaster", idx, "unit", row.unit),
+        tdInput("codeMaster", idx, "surcharge", row.surcharge ?? ""),
+        tdInput("codeMaster", idx, "convUnit", row.convUnit),
+        tdInput("codeMaster", idx, "convFactor", row.convFactor ?? ""),
+        tdInput("codeMaster", idx, "note", row.note),
+        el("td", {}, [
+          el("button", {
+            class: "smallbtn",
+            onclick: () => {
+              state.codeMaster.splice(idx, 1);
+              saveState(); render();
+            }
+          }, ["삭제"])
+        ])
+      ]);
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    return table;
+  }
+
+  function tdInput(scope, rowIndex, field, value, opts = {}) {
+    const input = el("input", {
+      class: "cell" + (opts.readonly ? " readonly" : ""),
+      value: value ?? "",
+      readonly: opts.readonly ? "readonly" : null,
+      dataset: opts.dataset || null,
+      oninput: (e) => {
+        const v = e.target.value;
+        if (scope === "codeMaster") {
+          const r = state.codeMaster[rowIndex];
+          if (!r) return;
+          if (field === "surcharge" || field === "convFactor") {
+            r[field] = v === "" ? null : Number(v);
+          } else {
+            r[field] = v;
+          }
+          saveState();
+        }
+      }
+    });
+    return el("td", {}, [input]);
+  }
+
+  /***************
+   * UI: Section + Vars + Calc (for steel/steel_sub/support)
+   ***************/
+  function renderCalcTab(tabId, title) {
+    const bucket = state[tabId];
+    const sec = bucket.sections[bucket.activeSection];
+
+    // 계산 갱신
+    recomputeSection(tabId);
+
+    // 상단(구분/변수) 묶음
+    const top = el("div", { class: "top-split" }, [
+      el("div", { class: "calc-layout top-grid" }, [
+        // LEFT: section
+        el("div", { class: "rail-box section-box", dataset: { region: "section" } }, [
+          el("div", { class: "rail-title" }, ["구분명 리스트 (↑/↓ 이동)"]),
+          buildSectionList(tabId),
+          buildSectionEditor(tabId),
+        ]),
+        // RIGHT: vars
+        el("div", { class: "rail-box var-box", dataset: { region: "var" } }, [
+          el("div", { class: "rail-title" }, ["변수표 (A, AB, A1, AB1... 최대 3자)"]),
+          buildVarTable(tabId),
+        ]),
+      ])
+    ]);
+
+    // 하단 산출표
+    const panel = el("div", { class: "panel" }, [
+      el("div", { class: "panel-header" }, [
+        el("div", {}, [
+          el("div", { class: "panel-title" }, [title]),
+          el("div", { class: "panel-desc" }, [
+            "방향키: 산출표 셀 이동 | 산출식 Enter 계산 | Ctrl+. 코드선택 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+Del 셀지우기"
+          ])
+        ]),
+        el("div", { class: "row-actions" }, [
+          el("button", {
+            class: "smallbtn",
+            onclick: () => addRows(tabId, 1)
+          }, ["행 추가 (Ctrl+F3)"]),
+          el("button", {
+            class: "smallbtn",
+            onclick: () => addRows(tabId, 10)
+          }, ["+10행"]),
+        ])
+      ]),
+      el("div", { class: "table-wrap" }, [buildCalcTable(tabId)])
+    ]);
+
+    return el("div", {}, [top, panel]);
+  }
+
+  function buildSectionList(tabId) {
+    const bucket = state[tabId];
+    const list = el("div", { class: "section-list", dataset: { nav: "sectionList" } }, []);
+
+    bucket.sections.forEach((s, idx) => {
+      const item = el("div", {
+        class: "section-item" + (bucket.activeSection === idx ? " active" : ""),
+        tabindex: "0",
+        onclick: () => {
+          bucket.activeSection = idx;
+          saveState();
+          render();
+        },
+      }, [
+        el("div", { class: "name" }, [s.name || `구분 ${idx + 1}`]),
+        el("div", { class: "meta-inline" }, [`개소: ${s.count ?? ""}`]),
+        el("div", { class: "meta" }, ["선택"])
+      ]);
+      list.appendChild(item);
+    });
+
+    // 구분 리스트에서 ↑/↓ 이동 지원
+    list.addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+      e.preventDefault();
+
+      const dir = e.key === "ArrowDown" ? 1 : -1;
+      bucket.activeSection = clamp(bucket.activeSection + dir, 0, bucket.sections.length - 1);
       saveState();
       render();
+
+      // 다음 렌더 후 포커스
+      requestAnimationFrame(() => {
+        const newList = document.querySelector(".section-list");
+        const items = newList ? [...newList.querySelectorAll(".section-item")] : [];
+        if (items[bucket.activeSection]) items[bucket.activeSection].focus();
+      });
     });
-    tabsEl.appendChild(btn);
-  }
-}
 
-/* -----------------------------
-   Code master lookup (Excel-like)
------------------------------- */
-function findCodeRow(code){
-  const c = String(code || "").trim();
-  if (!c) return null;
-  return state.codes.find(r => String(r.code || "").trim() === c) || null;
-}
-
-/* Excel mapping
-   - addMul: if addPct <= 0 => "" else addPct/100 + 1
-*/
-function computeAddMul(addPct){
-  const p = safeNum(addPct);
-  if (p <= 0) return "";
-  return (p/100 + 1);
-}
-
-/* -----------------------------
-   Recompute a calc row using code master + formula + vars
------------------------------- */
-function recomputeCalcRow(tabKey, secIdx, rowIdx){
-  const tab = state[tabKey];
-  if (!tab) return;
-  const sec = tab.sections[secIdx];
-  if (!sec) return;
-  const row = sec.rows[rowIdx];
-  if (!row) return;
-
-  // pull code master
-  const m = findCodeRow(row.code);
-  if (m){
-    row.name = m.name || "";
-    row.spec = m.spec || "";
-    row.unit = m.unit || "";
-    row.convUnit = m.convUnit || "";
-    row.convFactor = m.convFactor || "";
-    const mul = computeAddMul(m.addPct);
-    row.addMul = mul === "" ? "" : String(mul);
-  }else{
-    row.name = row.name || "";
-    row.spec = row.spec || "";
-    row.unit = row.unit || "";
-    row.convUnit = row.convUnit || "";
-    row.convFactor = row.convFactor || "";
-    row.addMul = row.addMul || "";
+    return list;
   }
 
-  // eval value from formula
-  const varMap = varsToMap(sec.vars);
-  let value = 0;
-  try{
-    value = evalExpr(row.formula, varMap);
-  }catch(e){
-    value = 0;
-  }
-  row.value = Number.isFinite(value) ? value : 0;
+  function buildSectionEditor(tabId) {
+    const bucket = state[tabId];
+    const sec = bucket.sections[bucket.activeSection];
 
-  // Excel formula:
-  // convQty(M) = IF(K==0 or blank, E, E*K)
-  // finalQty(N)= IF(I==0 or blank, M, M*I)
-  const K = safeNum(row.convFactor);
-  row.convQty = (K === 0) ? row.value : row.value * K;
-
-  const I = safeNum(row.addMul);
-  row.finalQty = (I === 0) ? row.convQty : row.convQty * I;
-}
-
-/* recompute all rows in section */
-function recomputeSection(tabKey, secIdx){
-  const tab = state[tabKey];
-  if (!tab) return;
-  const sec = tab.sections[secIdx];
-  if (!sec) return;
-
-  // recompute vars first
-  const varMap = {};
-  for (const v of sec.vars){
-    const k = String(v.name || "").trim();
-    if (!isValidVarName(k)) continue;
-    // evaluate v.expr -> v.value
-    let out = 0;
-    try{
-      out = evalExpr(v.expr, varMap); // allow earlier vars
-    }catch(e){
-      out = safeNum(v.value);
-    }
-    v.value = Number.isFinite(out) ? out : 0;
-    varMap[k] = v.value;
-  }
-
-  for (let i=0;i<sec.rows.length;i++){
-    recomputeCalcRow(tabKey, secIdx, i);
-  }
-}
-
-/* -----------------------------
-   Section operations
------------------------------- */
-function addSection(tabKey){
-  const tab = state[tabKey];
-  if (!tab) return;
-  tab.sections.push({
-    title: `구분 ${tab.sections.length+1}`,
-    count: 1,
-    vars: Array.from({length: 12}, ()=>makeEmptyVarRow()),
-    rows: Array.from({length: 12}, ()=>makeEmptyCalcRow()),
-  });
-  tab.activeSection = tab.sections.length - 1;
-  saveState();
-  render();
-}
-
-function deleteSection(tabKey){
-  const tab = state[tabKey];
-  if (!tab) return;
-  if (tab.sections.length <= 1) return;
-  tab.sections.splice(tab.activeSection, 1);
-  tab.activeSection = clamp(tab.activeSection, 0, tab.sections.length-1);
-  saveState();
-  render();
-}
-
-/* -----------------------------
-   Render: Code tab
------------------------------- */
-function renderCodeTab(){
-  const wrap = document.createElement("section");
-  wrap.className = "panel";
-
-  const head = document.createElement("div");
-  head.className = "panel-header";
-  head.innerHTML = `
-    <div>
-      <div class="panel-title">코드(Ctrl+.)</div>
-      <div class="panel-desc">코드 선택 팝업/셀 연동은 기존 로직 연결 지점</div>
-    </div>
-  `;
-  wrap.appendChild(head);
-
-  const tableWrap = document.createElement("div");
-  tableWrap.className = "table-wrap";
-
-  const table = document.createElement("table");
-  table.innerHTML = `
-    <thead>
-      <tr>
-        <th style="min-width:140px;">코드</th>
-        <th style="min-width:180px;">품명</th>
-        <th style="min-width:180px;">규격</th>
-        <th style="min-width:80px;">단위</th>
-        <th style="min-width:90px;">할증(%)</th>
-        <th style="min-width:110px;">환산단위</th>
-        <th style="min-width:110px;">환산계수</th>
-        <th style="min-width:160px;">비고</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  `;
-  const tbody = $("tbody", table);
-
-  state.codes.forEach((r, i)=>{
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><input class="cell" data-grid="code" data-r="${i}" data-c="0" value="${escapeHtml(r.code)}" /></td>
-      <td><input class="cell" data-grid="code" data-r="${i}" data-c="1" value="${escapeHtml(r.name)}" /></td>
-      <td><input class="cell" data-grid="code" data-r="${i}" data-c="2" value="${escapeHtml(r.spec)}" /></td>
-      <td><input class="cell" data-grid="code" data-r="${i}" data-c="3" value="${escapeHtml(r.unit)}" /></td>
-      <td><input class="cell" data-grid="code" data-r="${i}" data-c="4" value="${escapeHtml(r.addPct)}" /></td>
-      <td><input class="cell" data-grid="code" data-r="${i}" data-c="5" value="${escapeHtml(r.convUnit)}" /></td>
-      <td><input class="cell" data-grid="code" data-r="${i}" data-c="6" value="${escapeHtml(r.convFactor)}" /></td>
-      <td><input class="cell" data-grid="code" data-r="${i}" data-c="7" value="${escapeHtml(r.note)}" /></td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  tableWrap.appendChild(table);
-  wrap.appendChild(tableWrap);
-
-  viewEl.appendChild(wrap);
-}
-
-/* -----------------------------
-   Render: top split (sections + vars)
------------------------------- */
-function renderTopSplit(tabKey){
-  const tab = state[tabKey];
-  const secIdx = tab.activeSection;
-  const sec = tab.sections[secIdx];
-
-  const topSplit = document.createElement("div");
-  topSplit.className = "top-split";
-
-  const grid = document.createElement("div");
-  grid.className = "calc-layout top-grid";
-
-  // left: section list
-  const left = document.createElement("div");
-  left.className = "rail-box section-box";
-  left.innerHTML = `
-    <div class="rail-title">구분명 리스트 (↑/↓ 이동)</div>
-    <div class="section-list" id="sectionList"></div>
-    <div class="section-editor">
-      <input id="secTitle" class="cell" placeholder="구분명" value="${escapeHtml(sec.title)}" />
-      <input id="secCount" class="cell" placeholder="개소" value="${escapeHtml(sec.count)}" />
-      <button id="btnSecSave" class="smallbtn">저장</button>
-    </div>
-    <div style="display:flex; gap:8px;">
-      <button id="btnSecAdd" class="smallbtn" style="flex:1;">구분 추가 (Ctrl+F3)</button>
-      <button id="btnSecDel" class="smallbtn" style="flex:1;">구분 삭제</button>
-    </div>
-  `;
-
-  // fill list
-  const list = $(".section-list", left);
-  tab.sections.forEach((s, idx)=>{
-    const item = document.createElement("div");
-    item.className = "section-item" + (idx === secIdx ? " active" : "");
-    item.tabIndex = 0;
-    item.innerHTML = `
-      <div class="name">${escapeHtml(s.title)}</div>
-      <div class="meta-inline">개소: ${escapeHtml(s.count)} · <b>선택</b></div>
-    `;
-    item.addEventListener("click", ()=>{
-      tab.activeSection = idx;
-      saveState();
-      render();
-    });
-    item.addEventListener("keydown", (e)=>{
-      if (e.key === "Enter"){
-        tab.activeSection = idx;
+    const nameInput = el("input", {
+      class: "cell",
+      value: sec.name || "",
+      placeholder: "구분명 (예: 2층 바닥 철골보)",
+      oninput: (e) => {
+        sec.name = e.target.value;
         saveState();
-        render();
+        // 리스트 즉시 반영은 render() 대신 최소로
+        const item = document.querySelectorAll(".section-item .name")[bucket.activeSection];
+        if (item) item.textContent = sec.name || `구분 ${bucket.activeSection + 1}`;
       }
     });
-    list.appendChild(item);
-  });
 
-  // right: vars table
-  const right = document.createElement("div");
-  right.className = "rail-box var-box";
-  right.innerHTML = `
-    <div class="rail-title">변수표 (A, AB, A1, AB1... 최대 3자)</div>
-    <div class="var-tablewrap">
-      <table class="var-table">
-        <thead>
-          <tr>
-            <th style="min-width:140px;">변수</th>
-            <th style="min-width:220px;">산식</th>
-            <th style="min-width:120px;">값</th>
-            <th style="min-width:220px;">비고</th>
-          </tr>
-        </thead>
-        <tbody id="varBody"></tbody>
-      </table>
-    </div>
-  `;
-
-  const vbody = $("#varBody", right);
-  sec.vars.forEach((v, rIdx)=>{
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><input class="cell" data-grid="vars" data-tab="${tabKey}" data-s="${secIdx}" data-r="${rIdx}" data-c="0" value="${escapeHtml(v.name)}" placeholder="예: A / AB / A1" /></td>
-      <td><input class="cell" data-grid="vars" data-tab="${tabKey}" data-s="${secIdx}" data-r="${rIdx}" data-c="1" value="${escapeHtml(v.expr)}" placeholder="예: (A+0.5)*2 (<...> 주석)" /></td>
-      <td><input class="cell readonly" tabindex="-1" value="${formatNum(v.value)}" readonly /></td>
-      <td><input class="cell" data-grid="vars" data-tab="${tabKey}" data-s="${secIdx}" data-r="${rIdx}" data-c="3" value="${escapeHtml(v.memo)}" placeholder="비고" /></td>
-    `;
-    vbody.appendChild(tr);
-  });
-
-  grid.appendChild(left);
-  grid.appendChild(right);
-  topSplit.appendChild(grid);
-
-  // wire section editor
-  setTimeout(()=>{
-    const btnSave = $("#btnSecSave", topSplit);
-    const btnAdd = $("#btnSecAdd", topSplit);
-    const btnDel = $("#btnSecDel", topSplit);
-    const inpTitle = $("#secTitle", topSplit);
-    const inpCount = $("#secCount", topSplit);
-
-    btnSave.addEventListener("click", ()=>{
-      sec.title = (inpTitle.value || "").trim() || sec.title;
-      sec.count = safeNum(inpCount.value || 0) || 0;
-      saveState();
-      render();
+    const countInput = el("input", {
+      class: "cell",
+      value: sec.count ?? "",
+      placeholder: "개소(예: 0,1,2...)",
+      oninput: (e) => {
+        const v = e.target.value.trim();
+        sec.count = v === "" ? "" : Number(v);
+        saveState();
+        const meta = document.querySelectorAll(".section-item .meta-inline")[bucket.activeSection];
+        if (meta) meta.textContent = `개소: ${sec.count ?? ""}`;
+      }
     });
-    btnAdd.addEventListener("click", ()=>addSection(tabKey));
-    btnDel.addEventListener("click", ()=>deleteSection(tabKey));
-  }, 0);
 
-  return topSplit;
-}
+    const saveBtn = el("button", {
+      class: "smallbtn",
+      onclick: () => { saveState(); render(); }
+    }, ["저장"]);
 
-/* -----------------------------
-   Render: calculation table (steel-like)
------------------------------- */
-function renderCalcTab(tabKey, title){
-  const tab = state[tabKey];
-  const secIdx = tab.activeSection;
-  const sec = tab.sections[secIdx];
+    const addBtn = el("button", {
+      class: "smallbtn",
+      onclick: () => {
+        bucket.sections.push(defaultSection(`구분 ${bucket.sections.length + 1}`, 1));
+        bucket.activeSection = bucket.sections.length - 1;
+        saveState(); render();
+      }
+    }, ["구분 추가"]);
 
-  // top split only for needed tabs
-  if (TOP_SPLIT_TABS.has(tabKey)){
-    viewEl.appendChild(renderTopSplit(tabKey));
+    const delBtn = el("button", {
+      class: "smallbtn",
+      onclick: () => {
+        if (bucket.sections.length <= 1) return alert("구분은 최소 1개가 필요합니다.");
+        bucket.sections.splice(bucket.activeSection, 1);
+        bucket.activeSection = clamp(bucket.activeSection, 0, bucket.sections.length - 1);
+        saveState(); render();
+      }
+    }, ["구분 삭제"]);
+
+    return el("div", { class: "section-editor" }, [nameInput, countInput, saveBtn, addBtn, delBtn]);
   }
 
-  const wrap = document.createElement("section");
-  wrap.className = "panel";
+  function buildVarTable(tabId) {
+    const bucket = state[tabId];
+    const sec = bucket.sections[bucket.activeSection];
 
-  const head = document.createElement("div");
-  head.className = "panel-header";
-  head.innerHTML = `
-    <div>
-      <div class="panel-title">${escapeHtml(title)}</div>
-      <div class="panel-desc">
-        구분(↑/↓) 이동 → 해당 구분의 변수/산출표로 전환 | 산출식 Enter 계산 |
-        Ctrl+. 코드선택 | Ctrl+F3 구분추가 | Shift+Ctrl+F3 행추가
-      </div>
-    </div>
-    <div style="display:flex; gap:8px; align-items:center;">
-      <button class="smallbtn" id="btnAddRow">행 추가 (Shift+Ctrl+F3)</button>
-      <button class="smallbtn" id="btnAdd10Row">+10행</button>
-    </div>
-  `;
-  wrap.appendChild(head);
+    const wrap = el("div", { class: "var-tablewrap" }, []);
+    const table = el("table", { class: "var-table" }, []);
+    const thead = el("thead", {}, [
+      el("tr", {}, [
+        el("th", {}, ["변수"]),
+        el("th", {}, ["산식"]),
+        el("th", {}, ["값"]),
+        el("th", {}, ["비고"])
+      ])
+    ]);
+    const tbody = el("tbody", {}, []);
 
-  const tableWrap = document.createElement("div");
-  tableWrap.className = "table-wrap";
-
-  const table = document.createElement("table");
-  table.innerHTML = `
-    <thead>
-      <tr>
-        <th style="min-width:60px;">No</th>
-        <th style="min-width:140px;">코드</th>
-        <th style="min-width:180px;">품명(자동)</th>
-        <th style="min-width:180px;">규격(자동)</th>
-        <th style="min-width:90px;">단위(자동)</th>
-        <th style="min-width:260px;">산출식</th>
-        <th style="min-width:120px;">물량(Value)</th>
-        <th style="min-width:110px;">할증(배수)</th>
-        <th style="min-width:120px;">환산단위</th>
-        <th style="min-width:120px;">환산계수</th>
-        <th style="min-width:130px;">환산수량</th>
-        <th style="min-width:140px;">할증후수량</th>
-        <th style="min-width:160px;">비고</th>
-      </tr>
-    </thead>
-    <tbody id="calcBody"></tbody>
-  `;
-  const tbody = $("#calcBody", table);
-
-  sec.rows.forEach((r, i)=>{
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${i+1}</td>
-      <td><input class="cell" data-grid="calc" data-tab="${tabKey}" data-s="${secIdx}" data-r="${i}" data-c="0" value="${escapeHtml(r.code)}" placeholder="코드 입력" /></td>
-      <td><input class="cell readonly" tabindex="-1" value="${escapeHtml(r.name)}" readonly /></td>
-      <td><input class="cell readonly" tabindex="-1" value="${escapeHtml(r.spec)}" readonly /></td>
-      <td><input class="cell readonly" tabindex="-1" value="${escapeHtml(r.unit)}" readonly /></td>
-      <td><input class="cell" data-grid="calc" data-tab="${tabKey}" data-s="${secIdx}" data-r="${i}" data-c="5" value="${escapeHtml(r.formula)}" placeholder="예: (A+0.5)*2 (<...>는 주석)" /></td>
-      <td><input class="cell readonly" tabindex="-1" value="${formatNum(r.value)}" readonly /></td>
-      <td><input class="cell readonly" tabindex="-1" value="${escapeHtml(r.addMul)}" readonly /></td>
-      <td><input class="cell readonly" tabindex="-1" value="${escapeHtml(r.convUnit)}" readonly /></td>
-      <td><input class="cell readonly" tabindex="-1" value="${escapeHtml(r.convFactor)}" readonly /></td>
-      <td><input class="cell readonly" tabindex="-1" value="${formatNum(r.convQty)}" readonly /></td>
-      <td><input class="cell readonly" tabindex="-1" value="${formatNum(r.finalQty)}" readonly /></td>
-      <td><input class="cell" data-grid="calc" data-tab="${tabKey}" data-s="${secIdx}" data-r="${i}" data-c="12" value="${escapeHtml(r.note)}" placeholder="비고" /></td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  tableWrap.appendChild(table);
-  wrap.appendChild(tableWrap);
-  viewEl.appendChild(wrap);
-
-  // add row buttons
-  setTimeout(()=>{
-    $("#btnAddRow")?.addEventListener("click", ()=>{
-      sec.rows.push(makeEmptyCalcRow());
-      saveState();
-      render();
+    sec.vars.forEach((v, r) => {
+      const tr = el("tr", {}, [
+        tdNavInputVar(tabId, r, 0, "key", v.key, { placeholder: "예: A / AB / A1" }),
+        tdNavInputVar(tabId, r, 1, "expr", v.expr, { placeholder: "예: (A+0.5)*2  (<...> 주석)" }),
+        tdNavInputVar(tabId, r, 2, "value", String(v.value ?? 0), { readonly: true }),
+        tdNavInputVar(tabId, r, 3, "note", v.note, { placeholder: "비고" }),
+      ]);
+      tbody.appendChild(tr);
     });
-    $("#btnAdd10Row")?.addEventListener("click", ()=>{
-      for (let k=0;k<10;k++) sec.rows.push(makeEmptyCalcRow());
+
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+
+    // 변수 변경 시 재계산
+    wrap.addEventListener("input", () => {
+      recomputeSection(tabId);
       saveState();
-      render();
+      // 값 셀 갱신
+      const valueInputs = wrap.querySelectorAll('input[data-grid="var"][data-col="2"]');
+      sec.vars.forEach((vv, i) => {
+        if (valueInputs[i]) valueInputs[i].value = String(vv.value ?? 0);
+      });
+      // 산출표 값들 갱신
+      refreshCalcComputed(tabId);
     });
-  }, 0);
-}
 
-/* -----------------------------
-   Render: summaries (simple)
------------------------------- */
-function renderSummaryTab(tabKey, title, sumField){
-  const wrap = document.createElement("section");
-  wrap.className = "panel";
+    // 변수표에서도 방향키 이동은 "표 내부"에서만 (영역 이탈 방지)
+    attachGridNav(wrap);
 
-  const total = computeTotal(tabKey, sumField);
-
-  wrap.innerHTML = `
-    <div class="panel-header">
-      <div>
-        <div class="panel-title">${escapeHtml(title)}</div>
-        <div class="panel-desc">합계 표시</div>
-      </div>
-      <div class="badge">합계: ${formatNum(total)}</div>
-    </div>
-  `;
-  viewEl.appendChild(wrap);
-}
-
-function computeTotal(tabKey, sumField){
-  const tab = state[tabKey];
-  if (!tab) return 0;
-
-  // for steel_sum: sum finalQty across steel sections
-  if (tabKey === "steel_sum"){
-    let s = 0;
-    for (const sec of state.steel.sections){
-      recomputeSection("steel", state.steel.sections.indexOf(sec));
-      for (const r of sec.rows) s += safeNum(r.finalQty);
-    }
-    return s;
+    return wrap;
   }
 
-  if (tabKey === "support_sum"){
-    let s = 0;
-    for (const sec of state.support.sections){
-      recomputeSection("support", state.support.sections.indexOf(sec));
-      for (const r of sec.rows) s += safeNum(r.value); // 동바리 집계는 물량 합계
-    }
-    return s;
+  function tdNavInputVar(tabId, row, col, field, value, opts = {}) {
+    const bucket = state[tabId];
+    const sec = bucket.sections[bucket.activeSection];
+
+    const input = el("input", {
+      class: "cell" + (opts.readonly ? " readonly" : ""),
+      value: value ?? "",
+      placeholder: opts.placeholder || "",
+      readonly: opts.readonly ? "readonly" : null,
+      dataset: { grid: "var", tab: tabId, row: String(row), col: String(col), field },
+      oninput: (e) => {
+        if (opts.readonly) return;
+        const rr = sec.vars[row];
+        if (!rr) return;
+
+        if (field === "key") {
+          // 영문 시작 + 최대 3자 (영문/숫자)
+          let val = e.target.value.toUpperCase();
+          val = val.replace(/[^A-Z0-9]/g, "");
+          if (val.length > 3) val = val.slice(0, 3);
+          // 반드시 영문 시작
+          if (val && !/^[A-Z]/.test(val)) val = val.replace(/^[^A-Z]+/, "");
+          e.target.value = val;
+          rr.key = val;
+        } else {
+          rr[field] = e.target.value;
+        }
+      }
+    });
+    return el("td", {}, [input]);
   }
 
-  return 0;
-}
+  function buildCalcTable(tabId) {
+    const bucket = state[tabId];
+    const sec = bucket.sections[bucket.activeSection];
 
-/* -----------------------------
-   Modal: Code picker
------------------------------- */
-function ensurePickerModal(){
-  let bd = $("#codePickerBackdrop");
-  if (bd) return bd;
+    const table = el("table", {}, []);
+    const thead = el("thead", {}, [
+      el("tr", {}, [
+        el("th", {}, ["No"]),
+        el("th", {}, ["코드"]),
+        el("th", {}, ["품명(자동)"]),
+        el("th", {}, ["규격(자동)"]),
+        el("th", {}, ["단위(자동)"]),
+        el("th", {}, ["산출식"]),
+        el("th", {}, ["물량(Value)"]),
+        el("th", {}, ["할증(%)"]),
+        el("th", {}, ["환산단위"]),
+        el("th", {}, ["환산계수"]),
+        el("th", {}, ["환산후수량"]),
+        el("th", {}, ["비고"]),
+      ])
+    ]);
 
-  bd = document.createElement("div");
-  bd.id = "codePickerBackdrop";
-  bd.className = "modal-backdrop";
-  bd.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true">
-      <div class="modal-head">
-        <div class="modal-title">코드 선택</div>
-        <div class="modal-tools">
-          <input id="pickerSearch" class="modal-search" placeholder="검색(코드/품명/규격)..." />
-          <button id="pickerInsert" class="smallbtn">삽입 (Ctrl+Enter)</button>
-          <button id="pickerClose" class="smallbtn">닫기 (Esc)</button>
-        </div>
-      </div>
-      <div class="modal-body">
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th style="min-width:64px;">선택</th>
-                <th style="min-width:140px;">코드</th>
-                <th style="min-width:180px;">품명</th>
-                <th style="min-width:200px;">규격</th>
-                <th style="min-width:90px;">단위</th>
-                <th style="min-width:90px;">할증(%)</th>
-                <th style="min-width:110px;">환산단위</th>
-                <th style="min-width:110px;">환산계수</th>
-                <th style="min-width:160px;">비고</th>
-              </tr>
-            </thead>
-            <tbody id="pickerBody"></tbody>
-          </table>
-        </div>
-        <div style="margin-top:10px; font-size:12px; color:rgba(0,0,0,.65);">
-          · 다중선택: Ctrl+B (현재 선택 토글) · 삽입: Ctrl+Enter
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(bd);
-
-  $("#pickerClose", bd).addEventListener("click", closePicker);
-  bd.addEventListener("click", (e)=>{
-    if (e.target === bd) closePicker();
-  });
-  $("#pickerInsert", bd).addEventListener("click", insertPickedCodes);
-  $("#pickerSearch", bd).addEventListener("input", (e)=>{
-    picker.filter = e.target.value || "";
-    renderPickerRows();
-  });
-
-  return bd;
-}
-
-function openPicker(targetInput){
-  const bd = ensurePickerModal();
-  picker.open = true;
-  picker.filter = "";
-  picker.selectedCodes = new Set();
-  picker.targetInput = targetInput;
-
-  bd.classList.add("show");
-  $("#pickerSearch", bd).value = "";
-  $("#pickerSearch", bd).focus();
-  renderPickerRows();
-}
-
-function closePicker(){
-  const bd = $("#codePickerBackdrop");
-  if (!bd) return;
-  picker.open = false;
-  picker.targetInput = null;
-  bd.classList.remove("show");
-}
-
-function renderPickerRows(){
-  const bd = $("#codePickerBackdrop");
-  if (!bd) return;
-  const body = $("#pickerBody", bd);
-  body.innerHTML = "";
-
-  const q = (picker.filter || "").trim().toLowerCase();
-
-  const rows = state.codes
-    .map(r => ({...r, _code: String(r.code||"").trim()}))
-    .filter(r => r._code)
-    .filter(r=>{
-      if (!q) return true;
-      return (
-        String(r.code||"").toLowerCase().includes(q) ||
-        String(r.name||"").toLowerCase().includes(q) ||
-        String(r.spec||"").toLowerCase().includes(q)
-      );
+    const tbody = el("tbody", {}, []);
+    sec.rows.forEach((r, i) => {
+      const tr = el("tr", {}, [
+        el("td", {}, [String(i + 1)]),
+        tdNavInputCalc(tabId, i, 0, "code", r.code, { placeholder: "코드 입력" }),
+        tdNavInputCalc(tabId, i, 1, "name", r.name, { readonly: true }),
+        tdNavInputCalc(tabId, i, 2, "spec", r.spec, { readonly: true }),
+        tdNavInputCalc(tabId, i, 3, "unit", r.unit, { readonly: true }),
+        tdNavInputCalc(tabId, i, 4, "formula", r.formula, { placeholder: "예: (A+0.5)*2  (<...> 주석)" }),
+        tdNavInputCalc(tabId, i, 5, "value", String(r.value ?? 0), { readonly: true }),
+        tdNavInputCalc(tabId, i, 6, "surchargePct", r.surchargePct ?? "", { placeholder: "자동/직접입력" }),
+        tdNavInputCalc(tabId, i, 7, "convUnit", r.convUnit || "", { readonly: true }),
+        tdNavInputCalc(tabId, i, 8, "convFactor", r.convFactor ?? "", { readonly: true }),
+        tdNavInputCalc(tabId, i, 9, "converted", String(r.converted ?? 0), { readonly: true }),
+        tdNavInputCalc(tabId, i, 10, "note", r.note || "", { readonly: true }),
+      ]);
+      tbody.appendChild(tr);
     });
 
-  rows.forEach((r)=>{
-    const tr = document.createElement("tr");
-    const checked = picker.selectedCodes.has(r._code);
-    tr.innerHTML = `
-      <td>
-        <input type="checkbox" ${checked ? "checked" : ""} />
-      </td>
-      <td>${escapeHtml(r._code)}</td>
-      <td>${escapeHtml(r.name)}</td>
-      <td>${escapeHtml(r.spec)}</td>
-      <td>${escapeHtml(r.unit)}</td>
-      <td>${escapeHtml(r.addPct)}</td>
-      <td>${escapeHtml(r.convUnit)}</td>
-      <td>${escapeHtml(r.convFactor)}</td>
-      <td>${escapeHtml(r.note)}</td>
-    `;
+    table.appendChild(thead);
+    table.appendChild(tbody);
 
-    const cb = $("input[type='checkbox']", tr);
-    cb.addEventListener("change", ()=>{
-      if (cb.checked) picker.selectedCodes.add(r._code);
-      else picker.selectedCodes.delete(r._code);
-    });
+    // 산출표 “빨간영역” 전용 방향키 네비게이션 적용
+    const wrap = el("div", {}, [table]);
+    attachGridNav(wrap);
 
-    tr.addEventListener("dblclick", ()=>{
-      picker.selectedCodes = new Set([r._code]);
-      insertPickedCodes();
-    });
-
-    body.appendChild(tr);
-  });
-}
-
-function togglePickCurrent(){
-  const bd = $("#codePickerBackdrop");
-  if (!bd) return;
-  // 토글: 현재 hover/첫번째 선택 행 기준이 애매해서
-  // "검색결과 첫번째 코드" 토글로 단순 처리
-  const first = $("#pickerBody tr td:nth-child(2)", bd);
-  if (!first) return;
-  const code = first.textContent.trim();
-  if (!code) return;
-  if (picker.selectedCodes.has(code)) picker.selectedCodes.delete(code);
-  else picker.selectedCodes.add(code);
-  renderPickerRows();
-}
-
-function insertPickedCodes(){
-  if (!picker.targetInput) return;
-
-  const codes = Array.from(picker.selectedCodes);
-  if (codes.length === 0) return;
-
-  // insert into current cell (calc tab code column),
-  // if multiple: fill downward starting from current row
-  const t = picker.targetInput;
-  const grid = t.dataset.grid;
-  if (grid !== "calc"){
-    // for now only calc grid insertion
-    t.value = codes[0];
-    t.dispatchEvent(new Event("change", {bubbles:true}));
-    closePicker();
-    return;
-  }
-
-  const tabKey = t.dataset.tab;
-  const s = Number(t.dataset.s);
-  const r0 = Number(t.dataset.r);
-  const tab = state[tabKey];
-  const sec = tab.sections[s];
-
-  for (let i=0;i<codes.length;i++){
-    const r = r0 + i;
-    while (sec.rows.length <= r) sec.rows.push(makeEmptyCalcRow());
-    sec.rows[r].code = codes[i];
-    // recompute for that row
-    recomputeCalcRow(tabKey, s, r);
-  }
-
-  saveState();
-  render();
-
-  // focus next cell after insertion
-  setTimeout(()=>{
-    const next = document.querySelector(`input[data-grid="calc"][data-tab="${tabKey}"][data-s="${s}"][data-r="${r0}"][data-c="5"]`);
-    next?.focus();
-  }, 0);
-
-  closePicker();
-}
-
-/* -----------------------------
-   Render main
------------------------------- */
-function render(){
-  viewEl.innerHTML = "";
-  renderTabs();
-
-  // recompute visible tab section before render
-  if (state.activeTab === "steel") recomputeSection("steel", state.steel.activeSection);
-  if (state.activeTab === "steel_sub") recomputeSection("steel_sub", state.steel_sub.activeSection);
-  if (state.activeTab === "support") recomputeSection("support", state.support.activeSection);
-
-  switch(state.activeTab){
-    case "code": renderCodeTab(); break;
-    case "steel": renderCalcTab("steel", "철골"); break;
-    case "steel_sub": renderCalcTab("steel_sub", "철골_부자재"); break;
-    case "support": renderCalcTab("support", "구조이기/동바리"); break;
-    case "steel_sum": renderSummaryTab("steel_sum", "철골_집계", "finalQty"); break;
-    case "support_sum": renderSummaryTab("support_sum", "구조이기/동바리_집계", "value"); break;
-    default:
-      renderCodeTab();
-  }
-
-  wireInputs();
-}
-
-/* -----------------------------
-   Input wiring (change handlers)
------------------------------- */
-function wireInputs(){
-  // code master inputs
-  $$(".cell[data-grid='code']").forEach(inp=>{
-    inp.addEventListener("input", ()=>{
-      const r = Number(inp.dataset.r);
-      const c = Number(inp.dataset.c);
-      const row = state.codes[r];
-      if (!row) return;
-
-      const v = inp.value;
-      if (c===0) row.code = v;
-      if (c===1) row.name = v;
-      if (c===2) row.spec = v;
-      if (c===3) row.unit = v;
-      if (c===4) row.addPct = v;
-      if (c===5) row.convUnit = v;
-      if (c===6) row.convFactor = v;
-      if (c===7) row.note = v;
-
-      saveState();
-    });
-  });
-
-  // vars inputs
-  $$(".cell[data-grid='vars']").forEach(inp=>{
-    inp.addEventListener("input", ()=>{
-      const tabKey = inp.dataset.tab;
-      const s = Number(inp.dataset.s);
-      const r = Number(inp.dataset.r);
-      const c = Number(inp.dataset.c);
-
-      const sec = state[tabKey].sections[s];
-      const vrow = sec.vars[r];
-      if (!vrow) return;
-
-      if (c===0) vrow.name = inp.value;
-      if (c===1) vrow.expr = inp.value;
-      if (c===3) vrow.memo = inp.value;
-
-      // do not auto-jump on single 'A' (fix)
-      // only recompute when leaving cell (on blur) or Enter
-      saveState();
-    });
-
-    inp.addEventListener("blur", ()=>{
-      const tabKey = inp.dataset.tab;
-      const s = Number(inp.dataset.s);
-      recomputeSection(tabKey, s);
-      saveState();
-      render();
-    });
-
-    inp.addEventListener("keydown", (e)=>{
-      if (e.key === "Enter"){
+    // 산출식 Enter 시 즉시 재계산
+    wrap.addEventListener("keydown", (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLInputElement)) return;
+      if (t.dataset.grid !== "calc") return;
+      if (e.key === "Enter") {
         e.preventDefault();
-        const tabKey = inp.dataset.tab;
-        const s = Number(inp.dataset.s);
-        recomputeSection(tabKey, s);
+        recomputeSection(tabId);
         saveState();
-        render();
+        refreshCalcComputed(tabId);
       }
     });
-  });
 
-  // calc inputs
-  $$(".cell[data-grid='calc']").forEach(inp=>{
-    inp.addEventListener("input", ()=>{
-      const tabKey = inp.dataset.tab;
-      const s = Number(inp.dataset.s);
-      const r = Number(inp.dataset.r);
-      const c = Number(inp.dataset.c);
+    return wrap;
+  }
 
-      const sec = state[tabKey].sections[s];
+  function tdNavInputCalc(tabId, row, col, field, value, opts = {}) {
+    const bucket = state[tabId];
+    const sec = bucket.sections[bucket.activeSection];
+
+    const input = el("input", {
+      class: "cell" + (opts.readonly ? " readonly" : ""),
+      value: value ?? "",
+      placeholder: opts.placeholder || "",
+      readonly: opts.readonly ? "readonly" : null,
+      dataset: { grid: "calc", tab: tabId, row: String(row), col: String(col), field },
+      oninput: (e) => {
+        if (opts.readonly) return;
+
+        const rr = sec.rows[row];
+        if (!rr) return;
+
+        if (field === "code") {
+          rr.code = e.target.value.toUpperCase().trim();
+          // 코드 변경 즉시 자동 동기화/재계산
+          recomputeSection(tabId);
+          saveState();
+          refreshCalcComputed(tabId);
+        } else if (field === "surchargePct") {
+          const v = e.target.value.trim();
+          rr.surchargePct = v === "" ? null : Number(v);
+          recomputeSection(tabId);
+          saveState();
+          refreshCalcComputed(tabId);
+        } else {
+          rr[field] = e.target.value;
+        }
+      }
+    });
+
+    return el("td", {}, [input]);
+  }
+
+  function refreshCalcComputed(tabId) {
+    const wrap = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"]`)?.closest(".table-wrap") || document.body;
+
+    // 값/자동필드만 업데이트
+    const inputs = wrap.querySelectorAll(`input[data-grid="calc"][data-tab="${tabId}"]`);
+    const bucket = state[tabId];
+    const sec = bucket.sections[bucket.activeSection];
+
+    inputs.forEach((inp) => {
+      const r = Number(inp.dataset.row);
+      const f = inp.dataset.field;
       const row = sec.rows[r];
       if (!row) return;
 
-      if (c===0) row.code = inp.value;
-      if (c===5) row.formula = inp.value;
-      if (c===12) row.note = inp.value;
-
-      saveState();
-    });
-
-    inp.addEventListener("blur", ()=>{
-      const tabKey = inp.dataset.tab;
-      const s = Number(inp.dataset.s);
-      const r = Number(inp.dataset.r);
-      recomputeCalcRow(tabKey, s, r);
-      saveState();
-      render();
-    });
-
-    inp.addEventListener("keydown", (e)=>{
-      if (e.key === "Enter"){
-        e.preventDefault();
-        const tabKey = inp.dataset.tab;
-        const s = Number(inp.dataset.s);
-        const r = Number(inp.dataset.r);
-        recomputeCalcRow(tabKey, s, r);
-        saveState();
-        render();
+      if (["name", "spec", "unit", "value", "convUnit", "convFactor", "converted", "note"].includes(f)) {
+        inp.value = (row[f] ?? "") + "";
       }
     });
-  });
-}
-
-/* -----------------------------
-   Arrow key navigation (Excel-like at boundaries)
-   - only move cell when caret is at boundary (leftmost/rightmost)
------------------------------- */
-function getCaretInfo(input){
-  try{
-    return { start: input.selectionStart, end: input.selectionEnd, len: input.value.length };
-  }catch{
-    return { start: 0, end: 0, len: 0 };
-  }
-}
-
-function focusCellByData(grid, tabKey, s, r, c){
-  let sel = `input[data-grid="${grid}"][data-r="${r}"][data-c="${c}"]`;
-  if (grid === "vars" || grid === "calc"){
-    sel = `input[data-grid="${grid}"][data-tab="${tabKey}"][data-s="${s}"][data-r="${r}"][data-c="${c}"]`;
-  }
-  const el = document.querySelector(sel);
-  if (el){
-    el.focus();
-    // place caret at end for convenience
-    try{
-      const L = el.value.length;
-      el.setSelectionRange(L, L);
-    }catch{}
-    return true;
-  }
-  return false;
-}
-
-function handleArrowNav(e){
-  const t = e.target;
-  if (!(t instanceof HTMLInputElement)) return;
-  if (!t.classList.contains("cell")) return;
-
-  const grid = t.dataset.grid;
-  if (!grid) return;
-
-  const key = e.key;
-  if (!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(key)) return;
-
-  // don’t hijack readonly
-  if (t.readOnly) return;
-
-  // allow normal editing unless boundary
-  const { start, end, len } = getCaretInfo(t);
-  const atLeft = (start === 0 && end === 0);
-  const atRight = (start === len && end === len);
-
-  let wantMove = false;
-  if (key === "ArrowLeft" && atLeft) wantMove = true;
-  if (key === "ArrowRight" && atRight) wantMove = true;
-  if (key === "ArrowUp") wantMove = true;
-  if (key === "ArrowDown") wantMove = true;
-
-  if (!wantMove) return;
-
-  // if user is selecting text (range), keep native behavior
-  if (start !== end && (key==="ArrowLeft" || key==="ArrowRight")) return;
-
-  // compute next cell
-  if (grid === "code"){
-    const r = Number(t.dataset.r);
-    const c = Number(t.dataset.c);
-    const maxC = 7;
-    let nr=r, nc=c;
-    if (key==="ArrowLeft") nc = clamp(c-1,0,maxC);
-    if (key==="ArrowRight") nc = clamp(c+1,0,maxC);
-    if (key==="ArrowUp") nr = Math.max(0, r-1);
-    if (key==="ArrowDown") nr = r+1;
-
-    e.preventDefault();
-    focusCellByData("code", null, null, nr, nc);
-    return;
   }
 
-  if (grid === "vars"){
-    const tabKey = t.dataset.tab;
-    const s = Number(t.dataset.s);
-    const r = Number(t.dataset.r);
-    const c = Number(t.dataset.c);
-    // editable columns: 0,1,3 (2 is readonly)
-    const order = [0,1,3];
-    const idx = order.indexOf(c);
-    if (idx < 0) return;
+  /***************
+   * Grid navigation (방향키: 표 내부에서만)
+   * - data-grid="calc" or "var"
+   * - data-row, data-col
+   ***************/
+  function attachGridNav(container) {
+    container.addEventListener("keydown", (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLInputElement)) return;
 
-    let nr=r, nc=c;
-    if (key==="ArrowLeft") nc = order[Math.max(0, idx-1)];
-    if (key==="ArrowRight") nc = order[Math.min(order.length-1, idx+1)];
-    if (key==="ArrowUp") nr = Math.max(0, r-1);
-    if (key==="ArrowDown") nr = r+1;
+      const grid = t.dataset.grid;
+      if (grid !== "calc" && grid !== "var") return;
 
-    e.preventDefault();
-    focusCellByData("vars", tabKey, s, nr, nc);
-    return;
-  }
+      const key = e.key;
+      if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) return;
 
-  if (grid === "calc"){
-    const tabKey = t.dataset.tab;
-    const s = Number(t.dataset.s);
-    const r = Number(t.dataset.r);
-    const c = Number(t.dataset.c);
-    // editable columns: code(0), formula(5), note(12)
-    const order = [0,5,12];
-    const idx = order.indexOf(c);
-    if (idx < 0) return;
-
-    let nr=r, nc=c;
-    if (key==="ArrowLeft") nc = order[Math.max(0, idx-1)];
-    if (key==="ArrowRight") nc = order[Math.min(order.length-1, idx+1)];
-    if (key==="ArrowUp") nr = Math.max(0, r-1);
-    if (key==="ArrowDown") nr = r+1;
-
-    e.preventDefault();
-    focusCellByData("calc", tabKey, s, nr, nc);
-    return;
-  }
-}
-
-/* -----------------------------
-   Shortcuts
------------------------------- */
-function onGlobalKeyDown(e){
-  // allow ctrl combinations even inside inputs
-  const isCtrl = e.ctrlKey || e.metaKey;
-
-  // open picker
-  if (isCtrl && e.key === "."){
-    e.preventDefault();
-    // if focused on calc code cell, use it, else open and insert single later
-    const active = document.activeElement;
-    if (active && active instanceof HTMLInputElement && active.dataset.grid === "calc" && Number(active.dataset.c) === 0){
-      openPicker(active);
-    }else{
-      // open picker anyway; insert into first available code cell
-      const first = document.querySelector(`input[data-grid="calc"][data-c="0"]`);
-      if (first) openPicker(first);
-    }
-    return;
-  }
-
-  // picker shortcuts
-  if (picker.open){
-    if (isCtrl && e.key.toLowerCase() === "b"){
+      // 표 내부 이동만 (영역 이탈 방지)
       e.preventDefault();
-      togglePickCurrent();
-      return;
-    }
-    if (isCtrl && e.key === "Enter"){
-      e.preventDefault();
-      insertPickedCodes();
-      return;
-    }
-    if (e.key === "Escape"){
-      e.preventDefault();
-      closePicker();
-      return;
-    }
+
+      const row = Number(t.dataset.row);
+      const col = Number(t.dataset.col);
+      let nr = row, nc = col;
+
+      if (key === "ArrowUp") nr = row - 1;
+      if (key === "ArrowDown") nr = row + 1;
+      if (key === "ArrowLeft") nc = col - 1;
+      if (key === "ArrowRight") nc = col + 1;
+
+      // 같은 grid 내부에서만 찾기
+      const selector = `input[data-grid="${grid}"][data-row="${nr}"][data-col="${nc}"]`;
+      const next = container.querySelector(selector);
+
+      if (next) next.focus();
+    });
   }
 
-  // Ctrl+F3 add section (only for calc tabs)
-  if (isCtrl && e.key === "F3"){
-    if (TOP_SPLIT_TABS.has(state.activeTab)){
-      e.preventDefault();
-      addSection(state.activeTab);
-    }
-    return;
-  }
+  /***************
+   * Row add (Ctrl+F3 / +10)
+   ***************/
+  function addRows(tabId, n, insertAfterRow = null) {
+    const bucket = state[tabId];
+    const sec = bucket.sections[bucket.activeSection];
 
-  // Shift+Ctrl+F3 add row
-  if (isCtrl && e.shiftKey && e.key === "F3"){
-    if (state.activeTab === "steel" || state.activeTab === "steel_sub" || state.activeTab === "support"){
-      e.preventDefault();
-      const tab = state[state.activeTab];
-      const sec = tab.sections[tab.activeSection];
-      sec.rows.push(makeEmptyCalcRow());
-      saveState();
-      render();
-    }
-    return;
-  }
+    const idx = (insertAfterRow == null) ? (sec.rows.length - 1) : insertAfterRow;
+    const insertPos = clamp(idx + 1, 0, sec.rows.length);
 
-  // section up/down (when not typing in modal)
-  if (!picker.open && (e.key === "ArrowUp" || e.key === "ArrowDown") && TOP_SPLIT_TABS.has(state.activeTab)){
-    // if focused in an input, do not hijack (arrow nav handler will do boundary moves)
-    const ae = document.activeElement;
-    if (ae && ae instanceof HTMLInputElement) return;
+    const newRows = Array.from({ length: n }, () => defaultCalcRow());
+    sec.rows.splice(insertPos, 0, ...newRows);
 
-    const tab = state[state.activeTab];
-    const dir = (e.key === "ArrowUp") ? -1 : 1;
-    const next = clamp(tab.activeSection + dir, 0, tab.sections.length-1);
-    if (next !== tab.activeSection){
-      e.preventDefault();
-      tab.activeSection = next;
-      saveState();
-      render();
-    }
-  }
-}
-
-/* -----------------------------
-   Export / Import / Reset buttons
------------------------------- */
-function wireTopButtons(){
-  $("#btnOpenPicker")?.addEventListener("click", ()=>{
-    const active = document.activeElement;
-    if (active && active instanceof HTMLInputElement && active.dataset.grid === "calc" && Number(active.dataset.c) === 0){
-      openPicker(active);
-    }else{
-      const first = document.querySelector(`input[data-grid="calc"][data-c="0"]`);
-      if (first) openPicker(first);
-      else openPicker(document.createElement("input"));
-    }
-  });
-
-  $("#btnExport")?.addEventListener("click", ()=>{
-    const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "FIN_state.json";
-    a.click();
-    URL.revokeObjectURL(a.href);
-  });
-
-  $("#fileImport")?.addEventListener("change", async (e)=>{
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const txt = await f.text();
-    try{
-      const imported = JSON.parse(txt);
-      state = imported;
-      saveState();
-      render();
-    }catch(err){
-      alert("가져오기 실패: JSON 형식 확인");
-    }finally{
-      e.target.value = "";
-    }
-  });
-
-  $("#btnReset")?.addEventListener("click", ()=>{
-    if (!confirm("초기화할까요? (로컬저장 데이터 삭제)")) return;
-    state = defaultState();
     saveState();
     render();
+
+    // 포커스 복귀
+    requestAnimationFrame(() => {
+      const first = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${insertPos}"][data-col="0"]`);
+      if (first) first.focus();
+    });
+  }
+
+  /***************
+   * Shortcuts
+   ***************/
+  function isEditableTarget(elm) {
+    return elm instanceof HTMLInputElement || elm instanceof HTMLTextAreaElement;
+  }
+
+  window.addEventListener("keydown", (e) => {
+    // Ctrl+. : 코드 선택
+    if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") {
+      e.preventDefault();
+      openCodePicker();
+      return;
+    }
+
+    // Ctrl+Del : 셀 비우기
+    if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === "Delete" || e.key === "Del")) {
+      const a = document.activeElement;
+      if (a instanceof HTMLInputElement) {
+        e.preventDefault();
+        a.value = "";
+        a.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      return;
+    }
+
+    // Ctrl+F3 / Ctrl+Shift+F3 : 산출표에서만 행 추가
+    if (e.ctrlKey && (e.key === "F3")) {
+      const a = document.activeElement;
+      if (a instanceof HTMLInputElement && a.dataset.grid === "calc") {
+        e.preventDefault();
+        const tabId = a.dataset.tab;
+        const row = Number(a.dataset.row);
+        if (e.shiftKey) addRows(tabId, 10, row);
+        else addRows(tabId, 1, row);
+      }
+      return;
+    }
   });
-}
 
-/* -----------------------------
-   Utils: HTML escape + number format
------------------------------- */
-function escapeHtml(s){
-  const x = (s ?? "").toString();
-  return x
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
-}
+  /***************
+   * Code Picker Popup
+   ***************/
+  function openCodePicker() {
+    const w = window.open("", "FIN_CODE_PICKER", "width=980,height=720");
+    if (!w) {
+      alert("팝업이 차단되었습니다. 브라우저 팝업 허용 후 다시 시도해주세요.");
+      return;
+    }
 
-function formatNum(n){
-  const x = safeNum(n);
-  // keep simple: show up to 3 decimals
-  const s = (Math.round(x*1000)/1000).toString();
-  return s;
-}
+    const html = `
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>코드 선택</title>
+<style>
+  body{ font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR"; margin:16px; }
+  .top{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  input{ padding:10px 12px; border:1px solid #ccc; border-radius:10px; width:360px; }
+  button{ padding:10px 12px; border:1px solid #bbb; border-radius:10px; background:#fff; cursor:pointer; font-weight:700; }
+  table{ width:100%; border-collapse:collapse; margin-top:12px; font-size:12px; }
+  th,td{ border-bottom:1px solid #eee; padding:8px 8px; text-align:left; }
+  tr:hover{ background:#fafafa; }
+  tr.sel{ background:#eaf2ff; }
+  .hint{ margin-top:8px; font-size:12px; color:#666; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <input id="q" placeholder="검색: 코드/품명/규격/비고" />
+    <button id="btnInsert">삽입(Enter)</button>
+    <button id="btnInsertMulti">다중삽입(Ctrl+Enter)</button>
+    <button id="btnClose">닫기</button>
+  </div>
+  <div class="hint">행 클릭으로 선택. Enter=삽입, Ctrl+Enter=선택된 모든 코드 삽입</div>
+  <table>
+    <thead>
+      <tr>
+        <th>코드</th><th>품명</th><th>규격</th><th>단위</th><th>할증</th><th>환산단위</th><th>환산계수</th><th>비고</th>
+      </tr>
+    </thead>
+    <tbody id="tb"></tbody>
+  </table>
 
-/* -----------------------------
-   Boot
------------------------------- */
-document.addEventListener("keydown", onGlobalKeyDown, true);
-document.addEventListener("keydown", handleArrowNav, true);
+<script>
+  const openerState = window.opener && window.opener.__FIN_GET_CODEMASTER__ ? window.opener.__FIN_GET_CODEMASTER__() : [];
+  let data = openerState;
+  let selected = new Set();
 
-wireTopButtons();
-render();
+  const $q = document.getElementById("q");
+  const $tb = document.getElementById("tb");
+
+  function render(){
+    const q = ($q.value||"").toLowerCase().trim();
+    const rows = !q ? data : data.filter(r=>{
+      const s = [r.code,r.name,r.spec,r.note].join(" ").toLowerCase();
+      return s.includes(q);
+    });
+
+    $tb.innerHTML = "";
+    rows.forEach(r=>{
+      const tr = document.createElement("tr");
+      if(selected.has(r.code)) tr.classList.add("sel");
+      tr.innerHTML = \`
+        <td>\${r.code||""}</td>
+        <td>\${r.name||""}</td>
+        <td>\${r.spec||""}</td>
+        <td>\${r.unit||""}</td>
+        <td>\${r.surcharge??""}</td>
+        <td>\${r.convUnit||""}</td>
+        <td>\${r.convFactor??""}</td>
+        <td>\${r.note||""}</td>\`;
+      tr.addEventListener("click", ()=>{
+        if(selected.has(r.code)) selected.delete(r.code);
+        else selected.add(r.code);
+        render();
+      });
+      $tb.appendChild(tr);
+    });
+  }
+
+  function insertOne(){
+    const code = [...selected][0];
+    if(!code) return alert("선택된 코드가 없습니다.");
+    window.opener.__FIN_INSERT_CODE__(code);
+    window.close();
+  }
+
+  function insertMulti(){
+    if(selected.size===0) return alert("선택된 코드가 없습니다.");
+    window.opener.__FIN_INSERT_CODES__([...selected]);
+    window.close();
+  }
+
+  document.getElementById("btnInsert").addEventListener("click", insertOne);
+  document.getElementById("btnInsertMulti").addEventListener("click", insertMulti);
+  document.getElementById("btnClose").addEventListener("click", ()=>window.close());
+
+  $q.addEventListener("input", render);
+  window.addEventListener("keydown",(e)=>{
+    if(e.key==="Enter" && e.ctrlKey){ e.preventDefault(); insertMulti(); }
+    else if(e.key==="Enter"){ e.preventDefault(); insertOne(); }
+    else if(e.key==="Escape"){ window.close(); }
+  });
+
+  render();
+</script>
+</body>
+</html>`;
+
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  }
+
+  // popup -> opener hooks
+  window.__FIN_GET_CODEMASTER__ = () => state.codeMaster || [];
+  window.__FIN_INSERT_CODE__ = (code) => {
+    insertCodeToActiveCell(code, false);
+  };
+  window.__FIN_INSERT_CODES__ = (codes) => {
+    insertCodeToActiveCell(codes[0] || "", false);
+    // 멀티 삽입은: 현재 셀부터 아래로 채우기
+    const a = document.activeElement;
+    if (!(a instanceof HTMLInputElement) || a.dataset.grid !== "calc") return;
+    const tabId = a.dataset.tab;
+    const startRow = Number(a.dataset.row);
+    const col = Number(a.dataset.col); // code col=0
+
+    const bucket = state[tabId];
+    const sec = bucket.sections[bucket.activeSection];
+
+    for (let i = 0; i < codes.length; i++) {
+      const rIdx = startRow + i;
+      if (rIdx >= sec.rows.length) sec.rows.push(defaultCalcRow());
+      sec.rows[rIdx].code = String(codes[i] || "").toUpperCase();
+    }
+    recomputeSection(tabId);
+    saveState();
+    render();
+
+    requestAnimationFrame(() => {
+      const target = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${startRow}"][data-col="${col}"]`);
+      if (target) target.focus();
+    });
+  };
+
+  function insertCodeToActiveCell(code) {
+    const a = document.activeElement;
+    if (!(a instanceof HTMLInputElement) || a.dataset.grid !== "calc") return;
+
+    const tabId = a.dataset.tab;
+    const row = Number(a.dataset.row);
+
+    const bucket = state[tabId];
+    const sec = bucket.sections[bucket.activeSection];
+    if (!sec.rows[row]) return;
+
+    sec.rows[row].code = String(code || "").toUpperCase().trim();
+    recomputeSection(tabId);
+    saveState();
+    render();
+
+    requestAnimationFrame(() => {
+      const next = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${row}"][data-col="4"]`);
+      if (next) next.focus();
+    });
+  }
+
+  /***************
+   * Export/Import/Reset buttons
+   ***************/
+  function bindTopButtons() {
+    const btnOpen = document.getElementById("btnOpenPicker");
+    const btnExport = document.getElementById("btnExport");
+    const btnReset = document.getElementById("btnReset");
+    const fileImport = document.getElementById("fileImport");
+
+    if (btnOpen) btnOpen.onclick = openCodePicker;
+    if (btnExport) btnExport.onclick = () => {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "FIN_state.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    if (fileImport) fileImport.onchange = async (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+      const txt = await f.text();
+      try {
+        const obj = JSON.parse(txt);
+        state = { ...deepClone(DEFAULT_STATE), ...obj };
+        saveState();
+        render();
+      } catch {
+        alert("가져오기(JSON) 실패: 파일 형식이 올바르지 않습니다.");
+      }
+      e.target.value = "";
+    };
+
+    if (btnReset) btnReset.onclick = () => {
+      if (!confirm("정말 초기화할까요? (로컬 저장 데이터가 삭제됩니다)")) return;
+      localStorage.removeItem(LS_KEY);
+      state = loadState();
+      render();
+    };
+  }
+
+  /***************
+   * Render
+   ***************/
+  function render() {
+    renderTabs();
+    clear($view);
+
+    let content = null;
+
+    if (state.activeTab === "code") {
+      content = renderCodeTab();
+    } else if (state.activeTab === "steel") {
+      content = renderCalcTab("steel", "철골");
+    } else if (state.activeTab === "steel_sub") {
+      content = renderCalcTab("steel_sub", "철골_부자재");
+    } else if (state.activeTab === "support") {
+      content = renderCalcTab("support", "구조이기/동바리");
+    } else if (state.activeTab === "steel_sum") {
+      // 집계(간단)
+      content = renderSummaryTab("steel", "철골_집계", "converted");
+    } else if (state.activeTab === "support_sum") {
+      content = renderSummaryTab("support", "구조이기/동바리_집계", "value");
+    }
+
+    $view.appendChild(content);
+
+    // 버튼 바인딩(최초 1회만 해도 되지만, 안전하게 매 렌더 후)
+    bindTopButtons();
+  }
+
+  function renderSummaryTab(srcTabId, title, sumField) {
+    // srcTabId의 모든 구분 rows 합산
+    const bucket = state[srcTabId];
+    const items = [];
+    let total = 0;
+
+    bucket.sections.forEach((sec, sIdx) => {
+      // 섹션별 최신 계산
+      const tempBucket = { activeSection: sIdx, sections: bucket.sections };
+      // 임시로 state[srcTabId].activeSection 바꾸지 않고 계산하려면 clone 필요하지만,
+      // 여기서는 정확성 위해 잠깐 저장->복구
+    });
+
+    const prev = bucket.activeSection;
+    for (let sIdx = 0; sIdx < bucket.sections.length; sIdx++) {
+      bucket.activeSection = sIdx;
+      recomputeSection(srcTabId);
+      const sec = bucket.sections[sIdx];
+      const sum = sec.rows.reduce((acc, r) => acc + (Number(r[sumField]) || 0), 0);
+      items.push({ name: sec.name || `구분 ${sIdx + 1}`, sum });
+      total += sum;
+    }
+    bucket.activeSection = prev;
+    saveState();
+
+    const panel = el("div", { class: "panel" }, [
+      el("div", { class: "panel-header" }, [
+        el("div", {}, [
+          el("div", { class: "panel-title" }, [title]),
+          el("div", { class: "panel-desc" }, [
+            title.includes("동바리") ? "물량(Value) 합계" : "환산후수량 합계"
+          ])
+        ])
+      ]),
+      el("div", { class: "table-wrap" }, [
+        el("table", {}, [
+          el("thead", {}, [
+            el("tr", {}, [
+              el("th", {}, ["구분"]),
+              el("th", {}, ["합계"])
+            ])
+          ]),
+          el("tbody", {}, [
+            ...items.map(x => el("tr", {}, [el("td", {}, [x.name]), el("td", {}, [String(round4(x.sum))])])),
+            el("tr", {}, [el("td", {}, ["TOTAL"]), el("td", {}, [String(round4(total))])])
+          ])
+        ])
+      ])
+    ]);
+
+    return panel;
+  }
+
+  function round4(n) {
+    const v = Number(n) || 0;
+    return Math.round(v * 10000) / 10000;
+  }
+
+  /***************
+   * Init
+   ***************/
+  render();
+
+})();

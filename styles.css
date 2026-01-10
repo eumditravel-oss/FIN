@@ -9,12 +9,11 @@
   --accent:#1a3d7c;
   --accent2:#d6b25e;
 
-  /* JS가 자동으로 채움 */
   --topbarH: 72px;
   --tabsH: 46px;
 
-  /* ✅ 상단(구분/변수) 고정영역 높이(초록영역) */
-  --topSplitH: 200px; /* 기존 260 -> 200으로 축소 */
+  /* 상단(구분/변수) 고정영역 높이 */
+  --topSplitH: 200px;
 }
 
 *{ box-sizing:border-box; }
@@ -74,6 +73,7 @@ body{
   gap:8px;
   user-select:none;
   box-shadow: var(--shadow);
+  white-space: nowrap; /* ✅ 버튼 줄바꿈 방지 */
 }
 .btn{ padding: 10px 12px; }
 .smallbtn{ padding: 8px 10px; box-shadow: 0 10px 24px rgba(0,0,0,.08); }
@@ -89,7 +89,6 @@ body{
 .smallbtn input[type="file"]{ display:none; }
 
 /* ===== Tabs ===== */
-/* ✅ 핵심 수정: tabs top은 "topbar 높이"만 */
 .tabs{
   position: sticky;
   top: var(--topbarH);
@@ -217,31 +216,20 @@ tbody td{
    =========================== */
 .top-split{
   position: sticky;
-  top: calc(var(--topbarH) + var(--tabsH) + 6px); /* ✅ 정확한 위치 */
+  top: calc(var(--topbarH) + var(--tabsH) + 6px);
   z-index: 70;
   margin-bottom: 12px;
 }
 
+/* ✅ 핵심: FLEX → GRID 로 변경 (겹침/침범 방지) */
 .calc-layout.top-grid{
-  display:flex;
+  display:grid;
+  grid-template-columns: 360px minmax(0, 1fr);
   gap:12px;
   align-items:stretch;
-  flex-wrap: nowrap; /* ✅ 기본은 절대 줄바꿈 금지 */
 }
 
-/* 좌측 구분 */
-.section-box{
-  flex: 0 0 360px;
-  min-width: 360px;
-}
-
-/* 우측 변수 */
-.var-box{
-  flex: 1 1 auto;
-  min-width: 640px;
-}
-
-/* ✅ 핵심 수정: rail-box 내부를 flex column으로 -> 버튼/입력/리스트가 "박스 안"에서만 배치 */
+/* 박스 공통 */
 .rail-box{
   background: rgba(255,250,240,.88);
   border:1px solid rgba(0,0,0,.10);
@@ -254,7 +242,11 @@ tbody td{
   display:flex;
   flex-direction:column;
   gap:8px;
+  min-width: 0; /* ✅ grid 안에서 내용 침범 방지 */
 }
+
+.section-box{ width:360px; min-width:0; }
+.var-box{ min-width:0; }
 
 .rail-title{
   font-weight:900;
@@ -262,17 +254,15 @@ tbody td{
   margin:0;
 }
 
-/* ✅ 리스트는 flex:1로 남은 높이를 꽉 채움 */
+/* 구분 리스트 */
 .section-list{
   flex: 1 1 auto;
   overflow:auto;
   padding-right:4px;
-
   display:flex;
   flex-direction:column;
   gap:6px;
 }
-
 .section-item{
   display:flex;
   align-items:center;
@@ -284,31 +274,26 @@ tbody td{
   cursor:pointer;
   font-weight:800;
   font-size:12px;
+  min-width:0;
 }
 .section-item.active{
   background: rgba(26,61,124,.10);
   border-color: rgba(26,61,124,.25);
 }
-.section-item .name{ flex:1; min-width:0; }
-.section-item .meta-inline{
-  font-size:12px;
-  opacity:.75;
-  font-weight:800;
-  white-space: nowrap;
-}
-.section-item .meta{
-  font-size:12px;
-  opacity:.75;
-  font-weight:800;
-}
+.section-item .name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.section-item .meta-inline{ font-size:12px; opacity:.75; font-weight:800; white-space: nowrap; }
+.section-item .meta{ font-size:12px; opacity:.75; font-weight:800; white-space: nowrap; }
 
-/* 구분 편집 1줄 */
+/* 구분 편집 */
 .section-editor{
   display:grid;
-  grid-template-columns: 1fr 140px 80px;
+  grid-template-columns: 1fr 90px 72px; /* ✅ 침범 방지 */
   gap:8px;
+  align-items:center;
+  min-width:0;
 }
 .section-editor input{
+  min-width:0;
   border:1px solid rgba(0,0,0,.12);
   background:rgba(255,255,255,.85);
   border-radius:10px;
@@ -317,7 +302,7 @@ tbody td{
   font-size:12px;
 }
 
-/* 변수표 wrapper도 flex:1 */
+/* 변수표 */
 .var-tablewrap{
   flex: 1 1 auto;
   border:1px solid rgba(0,0,0,.10);
@@ -325,8 +310,6 @@ tbody td{
   overflow:auto;
   background: rgba(255,255,255,.55);
 }
-
-/* 변수표 */
 .var-table{
   width:100%;
   border-collapse:separate;
@@ -348,13 +331,10 @@ tbody td{
   padding:6px 8px;
 }
 
-/* ✅ 좁은 화면에서만 wrap */
-@media (max-width: 1100px){
-  .calc-layout.top-grid{ flex-wrap: wrap; }
-  .section-box, .var-box{ flex: 1 1 100%; min-width:0; }
+/* 좁은 화면이면 세로로 */
+@media (max-width: 980px){
+  .calc-layout.top-grid{
+    grid-template-columns: 1fr;
+  }
+  .section-box{ width:auto; }
 }
-
-/* 클릭/키보드 안전 */
-.table-wrap, .table-wrap *{ pointer-events:auto; }
-.var-tablewrap, .var-tablewrap *{ pointer-events:auto; }
-.section-list, .section-list *{ pointer-events:auto; }

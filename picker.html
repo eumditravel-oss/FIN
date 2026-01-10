@@ -14,6 +14,8 @@
       --shadow:0 10px 26px rgba(0,0,0,.08);
       --radius:16px;
       --accent:#1a3d7c;
+      --accent2:#d6b25e;
+      --danger:#b42318;
     }
     *{ box-sizing:border-box; }
     body{
@@ -36,7 +38,8 @@
     .title{ font-weight:900; font-size:16px; }
     .sub{ font-size:12px; color:var(--muted); margin-top:4px; line-height:1.4; }
     .right{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    button{
+
+    button, .btnlike{
       border:1px solid var(--line);
       background:var(--paper);
       border-radius:12px;
@@ -44,7 +47,17 @@
       cursor:pointer;
       box-shadow: var(--shadow);
       font-weight:900;
+      user-select:none;
     }
+    button.ghost{
+      background: rgba(255,255,255,.35);
+    }
+    button.danger{
+      border-color: rgba(180,35,24,.25);
+      background: rgba(180,35,24,.08);
+      color: var(--danger);
+    }
+
     main{ padding: 12px 14px 16px; }
     .panel{
       background: rgba(255,250,240,.86);
@@ -53,8 +66,28 @@
       box-shadow: var(--shadow);
       padding:12px;
     }
+
+    .tabs{
+      display:flex; gap:8px; flex-wrap:wrap;
+      margin-bottom:10px;
+    }
+    .tabbtn{
+      padding:9px 12px;
+      border-radius: 999px;
+      border:1px solid rgba(0,0,0,.12);
+      background: rgba(255,255,255,.55);
+      font-weight:900;
+      cursor:pointer;
+      user-select:none;
+    }
+    .tabbtn.active{
+      border-color: rgba(26,61,124,.35);
+      background: rgba(26,61,124,.10);
+      color: var(--accent);
+    }
+
     .tools{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
-    select, input{
+    select, input, textarea{
       border:1px solid rgba(0,0,0,.12);
       background:rgba(255,255,255,.8);
       border-radius:10px;
@@ -62,7 +95,9 @@
       outline:none;
       font-size:12px;
     }
+    textarea{ resize: vertical; min-height: 34px; }
     .status{ margin-left:auto; font-size:12px; color:var(--muted); }
+
     .tablewrap{
       border:1px solid var(--line);
       border-radius: 14px;
@@ -78,10 +113,12 @@
       padding: 9px 8px;
       text-align:left;
       font-weight:900;
+      white-space:nowrap;
     }
-    tbody td{ border-bottom:1px solid rgba(0,0,0,.06); padding:6px 8px; }
+    tbody td{ border-bottom:1px solid rgba(0,0,0,.06); padding:6px 8px; vertical-align: top; }
     tr.cursor td{ background: rgba(26,61,124,.10) !important; }
     tr.sel td{ outline: 2px solid rgba(26,61,124,.35); outline-offset:-2px; }
+
     .foot{
       display:flex; gap:10px; align-items:center; justify-content:space-between;
       margin-top:10px;
@@ -94,68 +131,154 @@
       border:1px solid rgba(26,61,124,.18);
       font-weight:900;
       font-size:12px;
+      white-space:nowrap;
     }
     .kbd{ font-weight:900; color: var(--accent); }
+
+    .cell{
+      width:100%;
+      min-width: 80px;
+    }
+    .cell.small{ min-width: 70px; }
+    .cell.mid{ min-width: 140px; }
+    .cell.wide{ min-width: 220px; }
+    .cell.note{ min-width: 240px; }
+
+    .row-actions{
+      display:flex; gap:8px; align-items:center;
+    }
+
+    .hint{
+      font-size:12px;
+      color: var(--muted);
+      margin-left: 2px;
+    }
+
+    .hr{
+      height:1px;
+      background: rgba(0,0,0,.08);
+      margin: 10px 0;
+    }
+    .filebtn{
+      display:inline-flex; align-items:center; gap:8px;
+    }
   </style>
 </head>
 <body>
   <header>
     <div>
       <div class="title">0.코드(Code) 선택</div>
-      <div class="sub">
+      <div class="sub" id="subHelp">
         검색어 입력 후 <span class="kbd">Enter</span> → 결과 리스트<br/>
-        <span class="kbd">↑/↓</span> 커서 이동 · <span class="kbd">Ctrl+B</span> 다중선택 · <span class="kbd">Ctrl+Enter</span> 삽입
+        <span class="kbd">↑/↓</span> 커서 이동 · <span class="kbd">Ctrl+B</span> 다중선택 · <span class="kbd">Ctrl+Enter</span> 삽입 · <span class="kbd">Esc</span> 닫기
       </div>
     </div>
     <div class="right">
       <button id="btnInsert">삽입 (Ctrl+Enter)</button>
+      <button id="btnApplyCodes" class="ghost">코드저장/반영</button>
       <button id="btnClose">닫기</button>
     </div>
   </header>
 
   <main>
     <div class="panel">
-      <div class="tools">
-        <select id="searchMode">
-          <option value="code">코드</option>
-          <option value="name">품명</option>
-          <option value="spec">규격</option>
-          <option value="name_spec">품명+규격</option>
-        </select>
-        <input id="q" placeholder="검색어 입력 후 Enter" style="min-width:320px;" />
-        <div class="status" id="status">대기중…</div>
+
+      <div class="tabs">
+        <div class="tabbtn active" data-tab="pick">코드 선택</div>
+        <div class="tabbtn" data-tab="edit">코드 편집(마스터)</div>
       </div>
 
-      <div class="tablewrap">
-        <table>
-          <thead>
-            <tr>
-              <th style="min-width:160px;">코드</th>
-              <th style="min-width:220px;">품명</th>
-              <th style="min-width:220px;">규격</th>
-              <th style="min-width:90px;">단위</th>
-              <th style="min-width:110px;">할증(%)</th>
-              <th style="min-width:120px;">환산단위</th>
-              <th style="min-width:140px;">환산계수</th>
-              <th style="min-width:220px;">비고</th>
-            </tr>
-          </thead>
-          <tbody id="tbody"></tbody>
-        </table>
-      </div>
+      <!-- ===== PICK VIEW ===== -->
+      <section id="viewPick">
+        <div class="tools">
+          <select id="searchMode">
+            <option value="code">코드</option>
+            <option value="name">품명</option>
+            <option value="spec">규격</option>
+            <option value="name_spec">품명+규격</option>
+          </select>
+          <input id="q" placeholder="검색어 입력 후 Enter (비우면 전체)" style="min-width:320px;" />
+          <div class="status" id="status">대기중…</div>
+        </div>
 
-  <div class="foot">
-    <div class="badge" id="pickInfo">선택 0개</div>
-    <div class="badge" id="originInfo">대상: -</div>
-  </div>
-</div>
-</main>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="min-width:160px;">코드</th>
+                <th style="min-width:220px;">품명</th>
+                <th style="min-width:220px;">규격</th>
+                <th style="min-width:90px;">단위</th>
+                <th style="min-width:110px;">할증(%)</th>
+                <th style="min-width:120px;">환산단위</th>
+                <th style="min-width:140px;">환산계수</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
 
-<!-- ✅ SheetJS(XLSX) 먼저 로드 -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+        <div class="foot">
+          <div class="badge" id="pickInfo">선택 0개</div>
+          <div class="badge" id="originInfo">대상: -</div>
+        </div>
+      </section>
 
-<!-- ✅ 그 다음 picker 로직 -->
-<script src="picker.js"></script>
+      <!-- ===== EDIT VIEW ===== -->
+      <section id="viewEdit" style="display:none;">
+        <div class="tools">
+          <button id="btnAddRow">행 추가</button>
+
+          <label class="btnlike filebtn">
+            엑셀 업로드(.xlsx)
+            <input id="fileXlsx" type="file" accept=".xlsx,.xls" hidden />
+          </label>
+
+          <button id="btnExportCodes" class="ghost">코드 내보내기(JSON)</button>
+
+          <span class="status" id="editStatus">코드 0개</span>
+        </div>
+
+        <div class="hint">
+          - 이 화면에서 수정한 코드는 <b>임시 상태</b>입니다. 상단의 <b>“코드저장/반영”</b>을 눌러야 부모창(app)에 반영됩니다.<br/>
+          - 엑셀 헤더: <b>코드/품명/규격/단위/할증/환산단위/환산계수/비고</b> (또는 code/name/spec/unit/surcharge/conv_unit/conv_factor/note)
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="min-width:70px;">No</th>
+                <th style="min-width:170px;">코드</th>
+                <th style="min-width:220px;">품명</th>
+                <th style="min-width:220px;">규격</th>
+                <th style="min-width:90px;">단위</th>
+                <th style="min-width:110px;">할증(%)</th>
+                <th style="min-width:120px;">환산단위</th>
+                <th style="min-width:140px;">환산계수</th>
+                <th style="min-width:240px;">비고</th>
+                <th style="min-width:120px;">작업</th>
+              </tr>
+            </thead>
+            <tbody id="editBody"></tbody>
+          </table>
+        </div>
+
+        <div class="foot">
+          <div class="badge" id="editInfo">변경사항: 0</div>
+          <div class="badge">저장/반영: 상단 버튼</div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- SheetJS -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+  <!-- picker logic (캐시버스터 권장) -->
+  <script src="picker.js?v=9"></script>
 </body>
 </html>
-

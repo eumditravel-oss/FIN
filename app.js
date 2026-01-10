@@ -818,32 +818,70 @@ window.addEventListener("message", (event)=>{
   const msg = event.data;
   if(!msg || typeof msg !== "object") return;
 
-     if(msg.type === "CODES_UPDATE"){
-    // picker에서 코드 마스터 전체를 갱신해 달라는 요청
-    if(Array.isArray(msg.codes)){
-      state.codes = msg.codes;
-      recalcAll();
-      saveState();
-
-      // 현재 탭이 steel/steelSub/support면 readonly 자동 갱신이 필요할 수 있으니 리렌더 1회
-      go(activeTabId);
-    }
-    return;
-  }
-
-
   if(msg.type === "INSERT_SELECTED"){
     const { originTab, focusRow, selectedCodes } = msg;
     if(Array.isArray(selectedCodes) && selectedCodes.length){
       insertCodesBelow(originTab, focusRow, selectedCodes);
     }
+    return;
   }
+
+  // ✅✅✅ 여기(INSERT_SELECTED 다음, CLOSE_PICKER 전에) 붙여넣기 ✅✅✅
+  if(msg.type === "UPDATE_CODES"){
+    const next = msg.codes;
+
+    if(!Array.isArray(next) || next.length === 0){
+      alert("코드 반영 실패: 전달된 codes가 비어있습니다.");
+      return;
+    }
+
+    const cleaned = next
+      .map(r => ({
+        code: (r.code ?? "").toString().trim(),
+        name: (r.name ?? "").toString().trim(),
+        spec: (r.spec ?? "").toString().trim(),
+        unit: (r.unit ?? "").toString().trim(),
+        surcharge: (r.surcharge ?? "").toString().trim(),
+        conv_unit: (r.conv_unit ?? "").toString().trim(),
+        conv_factor: (r.conv_factor ?? "").toString().trim(),
+        note: (r.note ?? "").toString().trim(),
+      }))
+      .filter(r => r.code);
+
+    if(cleaned.length === 0){
+      alert("코드 반영 실패: 유효한 code가 없습니다.");
+      return;
+    }
+
+    const seen = new Set();
+    const dup = [];
+    for(const r of cleaned){
+      if(seen.has(r.code)) dup.push(r.code);
+      else seen.add(r.code);
+    }
+    if(dup.length){
+      alert(`코드 반영 실패: 중복 코드 존재\n${dup.slice(0,20).join(", ")}${dup.length>20 ? "..." : ""}`);
+      return;
+    }
+
+    state.codes = cleaned;
+    recalcAll();
+    saveState();
+
+    // 현재 화면 갱신(탭 유지)
+    go(activeTabId);
+
+    return;
+  }
+  // ✅✅✅ 여기까지 ✅✅✅
 
   if(msg.type === "CLOSE_PICKER"){
     try{ pickerWin?.close(); }catch{}
     pickerWin = null;
+    return;
   }
 });
+
 
 /* =========================
    ✅ HOTKEYS + ✅ 방향키/편집모드 (capture)

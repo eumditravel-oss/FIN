@@ -1,8 +1,13 @@
 /* app.js (FINAL) - FIN 산출자료 (Web)
-   ✅ 노란영역(Topbar + Tabs + Panel-header) 스크롤 고정
-   ✅ 코드탭 방향키 이동 (data-grid="code" + row/col)
-   ✅ Ctrl+F3 / Ctrl+Shift+F3 : 산출표 + 코드탭 동일 동작
-   ✅ 패널 헤더 sticky를 “topbar/tabs 높이 자동 계산”으로 정확히 맞춤
+   - 코드탭 복원(코드/품명/규격/단위/할증/환산단위/환산계수/비고)
+   - 엑셀 기반 코드마스터 기본값 내장
+   - 산출탭 방향키 이동: 산출표(빨간영역) 안에서만 동작
+   - Ctrl+F3: 산출표에서만 현재 행 아래 행 추가  ✅ + 코드탭도 동일 동작
+   - Ctrl+Shift+F3: 산출표 +10행               ✅ + 코드탭도 동일 동작
+   - Ctrl+Del: 셀 비우기
+   - Ctrl+. : 코드 선택 창
+   - ✅ 상단(topbar/tabs/top-split) 실제 높이 측정 → sticky offset 자동 보정
+   - ✅ 노란 영역(패널 헤더) sticky 고정
 */
 
 (() => {
@@ -12,13 +17,43 @@
    * Storage
    ***************/
   const LS_KEY = "FIN_WEB_STATE_V11";
-
   const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 
   /***************
+   * Sticky height auto-measure
+   ***************/
+  function updateStickyVars() {
+    const root = document.documentElement;
+
+    const topbar = document.querySelector(".topbar");
+    const tabs = document.querySelector(".tabs");
+    const topSplit = document.querySelector(".top-split"); // 산출탭에서만 존재
+
+    const topbarH = topbar ? topbar.getBoundingClientRect().height : 0;
+    const tabsH = tabs ? tabs.getBoundingClientRect().height : 0;
+    const topSplitH = topSplit ? topSplit.getBoundingClientRect().height : 0;
+
+    root.style.setProperty("--topbarH", `${Math.ceil(topbarH)}px`);
+    root.style.setProperty("--tabsH", `${Math.ceil(tabsH)}px`);
+    root.style.setProperty("--topSplitActualH", `${Math.ceil(topSplitH)}px`);
+
+    // 기본(코드탭/집계탭): topbar+tabs 아래에 패널헤더 고정
+    const base = Math.ceil(topbarH + tabsH);
+    root.style.setProperty("--stickyBaseTop", `${base}px`);
+
+    // 산출탭: topbar+tabs+topSplit 아래에 패널헤더 고정
+    const withTopSplit = Math.ceil(topbarH + tabsH + topSplitH + 10); // 10px 여유
+    root.style.setProperty("--stickyWithTopSplitTop", `${withTopSplit}px`);
+  }
+
+  // resize/폰 회전/버튼 줄바꿈 대응
+  window.addEventListener("resize", () => {
+    requestAnimationFrame(updateStickyVars);
+  });
+
+  /***************
    * Code Master (엑셀 동일 구조)
-   * columns: code, name, spec, unit, surcharge, convUnit, convFactor, note
    ***************/
   const DEFAULT_CODE_MASTER = [
     {"code":"A0SM355150","name":"RH형강 / SM355","spec":"150*150*7*10","unit":"M","surcharge":7,"convUnit":"TON","convFactor":0.0315,"note":""},
@@ -187,21 +222,15 @@
 
         const exprRaw = stripAngleComments(v.expr || "");
         const val = safeEvalWithVars(exprRaw, map);
-        if (Number.isFinite(val)) {
-          map[key.toUpperCase()] = val;
-        }
+        if (Number.isFinite(val)) map[key.toUpperCase()] = val;
       }
     }
 
     for (const v of section.vars) {
       const key = (v.key || "").trim();
-      if (!key) {
-        v.value = 0;
-        continue;
-      }
-      v.value = Number(map[key.toUpperCase()] ?? 0) || 0;
+      if (!key) v.value = 0;
+      else v.value = Number(map[key.toUpperCase()] ?? 0) || 0;
     }
-
     return map;
   }
 
@@ -270,47 +299,6 @@
   }
 
   /***************
-   * ✅ Sticky helpers (노란영역 고정)
-   ***************/
-  function applyStickyHeights() {
-    const topbar = document.querySelector(".topbar");
-    const tabs = document.querySelector(".tabs");
-    const root = document.documentElement;
-
-    const topbarH = topbar ? Math.round(topbar.getBoundingClientRect().height) : 72;
-    const tabsH = tabs ? Math.round(tabs.getBoundingClientRect().height) : 52;
-
-    root.style.setProperty("--topbarH", `${topbarH}px`);
-    root.style.setProperty("--tabsH", `${tabsH}px`);
-
-    // panel-header를 탭 아래로 고정(노란 영역)
-    const top = topbarH + tabsH;
-
-    const headers = document.querySelectorAll("#view .panel-header");
-    headers.forEach((ph) => {
-      ph.style.position = "sticky";
-      ph.style.top = `${top}px`;
-      ph.style.zIndex = "170";
-      ph.style.background = "rgba(255,250,240,.92)";
-      ph.style.backdropFilter = "blur(8px)";
-      ph.style.borderBottom = "1px solid rgba(0,0,0,.08)";
-      ph.style.paddingBottom = ph.style.paddingBottom || "10px";
-    });
-  }
-
-  function bindStickyResize() {
-    let raf = 0;
-    const on = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(applyStickyHeights);
-    };
-    window.addEventListener("resize", on);
-    window.addEventListener("load", on);
-    window.addEventListener("scroll", on, { passive: true });
-    on();
-  }
-
-  /***************
    * UI: Tabs
    ***************/
   function renderTabs() {
@@ -332,27 +320,23 @@
    * ✅ Code tab (방향키/행추가 지원)
    ***************/
   function renderCodeTab() {
-    const wrap = el("div", { class: "table-wrap" }, [ buildCodeMasterTable() ]);
-
-    // ✅ 코드 탭도 표 네비게이션 활성화
+    const wrap = el("div", { class: "table-wrap" }, [buildCodeMasterTable()]);
     attachGridNav(wrap);
 
-    const panel = el("div", { class: "panel" }, [
-      el("div", { class: "panel-header" }, [
-        el("div", {}, [
-          el("div", { class: "panel-title" }, ["코드"]),
-          el("div", { class: "panel-desc" }, [
-            "방향키: 코드표 셀 이동 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+. 코드선택(산출표에서)"
-          ])
-        ]),
-        el("div", { class: "row-actions" }, [
-          el("button", { class: "smallbtn", onclick: () => addCodeRows(1) }, ["행 추가 (Ctrl+F3)"]),
-          el("button", { class: "smallbtn", onclick: () => addCodeRows(10) }, ["+10행"]),
+    const panelHeader = el("div", { class: "panel-header sticky-head", dataset: { sticky: "panel" } }, [
+      el("div", {}, [
+        el("div", { class: "panel-title" }, ["코드"]),
+        el("div", { class: "panel-desc" }, [
+          "방향키: 코드표 셀 이동 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+. 코드선택(산출표에서)"
         ])
       ]),
-      wrap
+      el("div", { class: "row-actions" }, [
+        el("button", { class: "smallbtn", onclick: () => addCodeRows(1) }, ["행 추가 (Ctrl+F3)"]),
+        el("button", { class: "smallbtn", onclick: () => addCodeRows(10) }, ["+10행"]),
+      ])
     ]);
-    return panel;
+
+    return el("div", { class: "panel" }, [panelHeader, wrap]);
   }
 
   function buildCodeMasterTable() {
@@ -400,7 +384,6 @@
     return table;
   }
 
-  // ✅ 코드탭도 grid/row/col 부여
   const CODE_COL_INDEX = {
     code: 0, name: 1, spec: 2, unit: 3, surcharge: 4, convUnit: 5, convFactor: 6, note: 7
   };
@@ -421,8 +404,7 @@
         if (scope === "codeMaster") {
           const r = state.codeMaster[rowIndex];
           if (!r) return;
-          if (field === "code") r.code = v.toUpperCase().trim();
-          else if (field === "surcharge" || field === "convFactor") r[field] = v === "" ? null : Number(v);
+          if (field === "surcharge" || field === "convFactor") r[field] = v === "" ? null : Number(v);
           else r[field] = v;
           saveState();
         }
@@ -432,7 +414,6 @@
     return el("td", {}, [input]);
   }
 
-  // ✅ 코드탭 행추가: 현재 행 아래에 삽입(산출표와 동일)
   function addCodeRows(n, insertAfterRow = null) {
     const idx = insertAfterRow == null ? (state.codeMaster.length - 1) : insertAfterRow;
     const insertPos = clamp(idx + 1, 0, state.codeMaster.length);
@@ -451,11 +432,9 @@
   }
 
   /***************
-   * UI: Section + Vars + Calc (for steel/steel_sub/support)
+   * UI: Section + Vars + Calc
    ***************/
   function renderCalcTab(tabId, title) {
-    const bucket = state[tabId];
-
     recomputeSection(tabId);
 
     const top = el("div", { class: "top-split" }, [
@@ -472,19 +451,21 @@
       ])
     ]);
 
-    const panel = el("div", { class: "panel" }, [
-      el("div", { class: "panel-header" }, [
-        el("div", {}, [
-          el("div", { class: "panel-title" }, [title]),
-          el("div", { class: "panel-desc" }, [
-            "방향키: 산출표 셀 이동 | 산출식 Enter 계산 | Ctrl+. 코드선택 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+Del 셀지우기"
-          ])
-        ]),
-        el("div", { class: "row-actions" }, [
-          el("button", { class: "smallbtn", onclick: () => addRows(tabId, 1) }, ["행 추가 (Ctrl+F3)"]),
-          el("button", { class: "smallbtn", onclick: () => addRows(tabId, 10) }, ["+10행"]),
+    const panelHeader = el("div", { class: "panel-header sticky-head", dataset: { sticky: "panel" } }, [
+      el("div", {}, [
+        el("div", { class: "panel-title" }, [title]),
+        el("div", { class: "panel-desc" }, [
+          "방향키: 산출표 셀 이동 | 산출식 Enter 계산 | Ctrl+. 코드선택 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+Del 셀지우기"
         ])
       ]),
+      el("div", { class: "row-actions" }, [
+        el("button", { class: "smallbtn", onclick: () => addRows(tabId, 1) }, ["행 추가 (Ctrl+F3)"]),
+        el("button", { class: "smallbtn", onclick: () => addRows(tabId, 10) }, ["+10행"]),
+      ])
+    ]);
+
+    const panel = el("div", { class: "panel" }, [
+      panelHeader,
       el("div", { class: "table-wrap" }, [buildCalcTable(tabId)])
     ]);
 
@@ -561,7 +542,6 @@
     });
 
     const saveBtn = el("button", { class: "smallbtn", onclick: () => { saveState(); render(); } }, ["저장"]);
-
     const addBtn = el("button", {
       class: "smallbtn",
       onclick: () => {
@@ -570,7 +550,6 @@
         saveState(); render();
       }
     }, ["구분 추가"]);
-
     const delBtn = el("button", {
       class: "smallbtn",
       onclick: () => {
@@ -758,7 +737,6 @@
 
   function refreshCalcComputed(tabId) {
     const wrap = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"]`)?.closest(".table-wrap") || document.body;
-
     const inputs = wrap.querySelectorAll(`input[data-grid="calc"][data-tab="${tabId}"]`);
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
@@ -777,7 +755,6 @@
 
   /***************
    * ✅ Grid navigation (방향키: 표 내부에서만)
-   * - data-grid="calc" or "var" or "code"
    ***************/
   function attachGridNav(container) {
     container.addEventListener("keydown", (e) => {
@@ -809,7 +786,7 @@
   }
 
   /***************
-   * Row add (Ctrl+F3 / +10)  ✅ 코드탭도 지원
+   * Row add (Ctrl+F3 / +10)
    ***************/
   function addRows(tabId, n, insertAfterRow = null) {
     const bucket = state[tabId];
@@ -834,14 +811,12 @@
    * Shortcuts
    ***************/
   window.addEventListener("keydown", (e) => {
-    // Ctrl+. : 코드 선택
     if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") {
       e.preventDefault();
       openCodePicker();
       return;
     }
 
-    // Ctrl+Del : 셀 비우기
     if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === "Delete" || e.key === "Del")) {
       const a = document.activeElement;
       if (a instanceof HTMLInputElement) {
@@ -852,13 +827,11 @@
       return;
     }
 
-    // Ctrl+F3 / Ctrl+Shift+F3 : 산출표 + ✅코드탭에서도 동일 동작
     if (e.ctrlKey && (e.key === "F3")) {
       const a = document.activeElement;
       if (a instanceof HTMLInputElement) {
         const grid = a.dataset.grid;
 
-        // 산출표
         if (grid === "calc") {
           e.preventDefault();
           const tabId = a.dataset.tab;
@@ -868,7 +841,6 @@
           return;
         }
 
-        // 코드탭
         if (grid === "code") {
           e.preventDefault();
           const row = Number(a.dataset.row);
@@ -877,7 +849,6 @@
           return;
         }
       }
-      return;
     }
   });
 
@@ -979,15 +950,13 @@
     if (msg.type === "CLOSE_PICKER") {
       try { __pickerWin?.close(); } catch {}
       __pickerWin = null;
-      return;
     }
   });
 
-  // popup -> opener hooks (기존 유지)
   window.__FIN_GET_CODEMASTER__ = () => state.codeMaster || [];
-  window.__FIN_INSERT_CODE__ = (code) => { insertCodeToActiveCell(code, false); };
+  window.__FIN_INSERT_CODE__ = (code) => { insertCodeToActiveCell(code); };
   window.__FIN_INSERT_CODES__ = (codes) => {
-    insertCodeToActiveCell(codes[0] || "", false);
+    insertCodeToActiveCell(codes[0] || "");
 
     const a = document.activeElement;
     if (!(a instanceof HTMLInputElement) || a.dataset.grid !== "calc") return;
@@ -1036,7 +1005,7 @@
   }
 
   /***************
-   * Export/Import/Reset buttons
+   * Export/Import/Reset
    ***************/
   function bindTopButtons() {
     const btnOpen = document.getElementById("btnOpenPicker");
@@ -1045,6 +1014,7 @@
     const fileImport = document.getElementById("fileImport");
 
     if (btnOpen) btnOpen.onclick = openCodePicker;
+
     if (btnExport) btnExport.onclick = () => {
       const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -1081,6 +1051,13 @@
   /***************
    * Render
    ***************/
+  function applyPanelStickyTop() {
+    // 산출탭(상단 top-split 존재)은 withTopSplit, 나머지는 base
+    const root = document.documentElement;
+    const isCalcTab = (state.activeTab === "steel" || state.activeTab === "steel_sub" || state.activeTab === "support");
+    root.style.setProperty("--panelStickyTop", isCalcTab ? "var(--stickyWithTopSplitTop)" : "var(--stickyBaseTop)");
+  }
+
   function render() {
     renderTabs();
     clear($view);
@@ -1097,8 +1074,13 @@
     $view.appendChild(content);
     bindTopButtons();
 
-    // ✅ 렌더 이후 sticky offset 재계산(노란영역 딱 맞게)
-    applyStickyHeights();
+    // ✅ 렌더 후 실제 높이 측정 → sticky offset 보정
+    requestAnimationFrame(() => {
+      updateStickyVars();
+      applyPanelStickyTop();
+      // 한 번 더(폰/브라우저에서 레이아웃 확정 후)
+      requestAnimationFrame(updateStickyVars);
+    });
   }
 
   function renderSummaryTab(srcTabId, title, sumField) {
@@ -1118,15 +1100,17 @@
     bucket.activeSection = prev;
     saveState();
 
-    const panel = el("div", { class: "panel" }, [
-      el("div", { class: "panel-header" }, [
-        el("div", {}, [
-          el("div", { class: "panel-title" }, [title]),
-          el("div", { class: "panel-desc" }, [
-            title.includes("동바리") ? "물량(Value) 합계" : "환산후수량 합계"
-          ])
+    const panelHeader = el("div", { class: "panel-header sticky-head", dataset: { sticky: "panel" } }, [
+      el("div", {}, [
+        el("div", { class: "panel-title" }, [title]),
+        el("div", { class: "panel-desc" }, [
+          title.includes("동바리") ? "물량(Value) 합계" : "환산후수량 합계"
         ])
-      ]),
+      ])
+    ]);
+
+    return el("div", { class: "panel" }, [
+      panelHeader,
       el("div", { class: "table-wrap" }, [
         el("table", {}, [
           el("thead", {}, [
@@ -1148,8 +1132,6 @@
         ])
       ])
     ]);
-
-    return panel;
   }
 
   function round4(n) {
@@ -1161,5 +1143,4 @@
    * Init
    ***************/
   render();
-  bindStickyResize();
 })();

@@ -810,36 +810,45 @@
   /***************
    * Shortcuts
    ***************/
-  /***************
- * Shortcuts
- ***************/
-window.addEventListener("keydown", (e) => {
+  window.addEventListener("keydown", (e) => {
+  // Ctrl+.
   if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") {
     e.preventDefault();
+    e.stopPropagation();
     openCodePicker();
     return;
   }
 
-  // ✅ Ctrl+Del : OS/키보드별 key 값 차이 대응 (Delete / Del / Backspace)
-  if (
+  // ✅ Ctrl+Del : 다양한 브라우저/키보드 대응 (key + code + keyCode)
+  const isCtrlDel =
     e.ctrlKey &&
     !e.shiftKey &&
     !e.altKey &&
-    (e.key === "Delete" || e.key === "Del" || e.key === "Backspace")
-  ) {
-    const a = document.activeElement;
-    if (!(a instanceof HTMLInputElement)) return;
+    (
+      e.key === "Delete" || e.key === "Del" || e.key === "Backspace" ||
+      e.code === "Delete" || e.code === "Backspace" ||
+      e.keyCode === 46 || e.keyCode === 8 // 46: Delete, 8: Backspace
+    );
 
-    const grid = a.dataset.grid;
+  if (isCtrlDel) {
+    const a = document.activeElement;
+
+    // input/textarea 모두 허용
+    const isEditableEl = (a instanceof HTMLInputElement) || (a instanceof HTMLTextAreaElement);
+    if (!isEditableEl) return;
+
+    const grid = a.dataset?.grid;
     if (grid !== "calc" && grid !== "var" && grid !== "code") return; // 표 밖 제외
     if (a.hasAttribute("readonly")) return; // readonly 셀 제외
 
     e.preventDefault();
+    e.stopPropagation();
     a.value = "";
     a.dispatchEvent(new Event("input", { bubbles: true }));
     return;
   }
 
+  // Ctrl+F3 / Ctrl+Shift+F3
   if (e.ctrlKey && (e.key === "F3")) {
     const a = document.activeElement;
     if (a instanceof HTMLInputElement) {
@@ -847,6 +856,7 @@ window.addEventListener("keydown", (e) => {
 
       if (grid === "calc") {
         e.preventDefault();
+        e.stopPropagation();
         const tabId = a.dataset.tab;
         const row = Number(a.dataset.row);
         if (e.shiftKey) addRows(tabId, 10, row);
@@ -856,6 +866,7 @@ window.addEventListener("keydown", (e) => {
 
       if (grid === "code") {
         e.preventDefault();
+        e.stopPropagation();
         const row = Number(a.dataset.row);
         if (e.shiftKey) addCodeRows(10, row);
         else addCodeRows(1, row);
@@ -863,7 +874,8 @@ window.addEventListener("keydown", (e) => {
       }
     }
   }
-});
+}, { capture: true }); // ✅ 이 옵션까지 포함해서 교체!
+
 
 
 

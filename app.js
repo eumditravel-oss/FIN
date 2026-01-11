@@ -2,8 +2,8 @@
    - 코드탭 복원(코드/품명/규격/단위/할증/환산단위/환산계수/비고)
    - 엑셀 기반 코드마스터 기본값 내장
    - 산출탭 방향키 이동: 산출표(빨간영역) 안에서만 동작
-   - Ctrl+F3: 산출표에서만 현재 행 아래 행 추가
-   - Ctrl+Shift+F3: 산출표 +10행
+   - Ctrl+F3: 산출표에서만 현재 행 아래 행 추가  ✅ + 코드탭도 동일 동작
+   - Ctrl+Shift+F3: 산출표 +10행               ✅ + 코드탭도 동일 동작
    - Ctrl+Del: 셀 비우기
    - Ctrl+. : 코드 선택 창
 */
@@ -71,8 +71,8 @@
     unit: "",
     formula: "",
     value: 0,
-    surchargePct: null,     // override; null이면 코드마스터 적용
-    surchargeMul: 1,        // 표시용
+    surchargePct: null,
+    surchargeMul: 1,
     convUnit: "",
     convFactor: null,
     converted: 0,
@@ -80,7 +80,7 @@
   });
 
   const defaultVarRow = () => ({
-    key: "",      // A / AB / A1 등 (최대 3자, 영문 시작)
+    key: "",
     expr: "",
     value: 0,
     note: "",
@@ -96,18 +96,9 @@
   const DEFAULT_STATE = {
     activeTab: "code",
     codeMaster: deepClone(DEFAULT_CODE_MASTER),
-    steel: {
-      activeSection: 0,
-      sections: [defaultSection("구분 1", 1)],
-    },
-    steel_sub: {
-      activeSection: 0,
-      sections: [defaultSection("구분 1", 1)],
-    },
-    support: {
-      activeSection: 0,
-      sections: [defaultSection("구분 1", 1)],
-    },
+    steel: { activeSection: 0, sections: [defaultSection("구분 1", 1)] },
+    steel_sub: { activeSection: 0, sections: [defaultSection("구분 1", 1)] },
+    support: { activeSection: 0, sections: [defaultSection("구분 1", 1)] },
   };
 
   function loadState() {
@@ -116,7 +107,6 @@
       if (!raw) return deepClone(DEFAULT_STATE);
       const parsed = JSON.parse(raw);
 
-      // 최소 보정
       const s = { ...deepClone(DEFAULT_STATE), ...parsed };
       s.codeMaster = Array.isArray(parsed?.codeMaster) ? parsed.codeMaster : deepClone(DEFAULT_CODE_MASTER);
 
@@ -178,26 +168,21 @@
 
   /***************
    * Expression evaluator
-   * - <> 주석 제거
-   * - 변수명(A/AB/A1/AB1 등 최대3자, 영문시작) 치환
    ***************/
   function stripAngleComments(expr) {
     if (!expr) return "";
-    // <> 안의 내용 제거(중첩은 고려 안 함)
     return String(expr).replace(/<[^>]*>/g, "");
   }
 
   function buildVarMap(section) {
     const map = Object.create(null);
 
-    // 먼저 key 정리
     for (const v of section.vars) {
       const key = (v.key || "").trim();
       if (!key) continue;
       map[key.toUpperCase()] = 0;
     }
 
-    // 여러 번 반복하며 expr 계산
     for (let pass = 0; pass < 6; pass++) {
       for (const v of section.vars) {
         const key = (v.key || "").trim();
@@ -211,7 +196,6 @@
       }
     }
 
-    // 최종 값을 var row에도 반영
     for (const v of section.vars) {
       const key = (v.key || "").trim();
       if (!key) {
@@ -228,15 +212,12 @@
     const raw = String(expr || "").trim();
     if (!raw) return 0;
 
-    // 변수 토큰 치환 (영문 시작, 최대3자: A, AB, A1, AB1, ABC 등)
     const replaced = raw.replace(/\b([A-Za-z][A-Za-z0-9]{0,2})\b/g, (m, p1) => {
       const k = p1.toUpperCase();
       if (Object.prototype.hasOwnProperty.call(varMap, k)) return String(varMap[k] ?? 0);
-      // 정의되지 않은 변수는 0으로
       return "0";
     });
 
-    // 허용문자 검증
     const cleaned = replaced.replace(/\s+/g, "");
     if (!/^[0-9+\-*/().]*$/.test(cleaned)) return NaN;
 
@@ -257,7 +238,6 @@
     const varMap = buildVarMap(sec);
 
     for (const r of sec.rows) {
-      // 코드마스터 동기화
       const info = codeLookup(r.code);
       if (info) {
         r.name = info.name || "";
@@ -287,11 +267,8 @@
 
       const after = r.value * mul;
       const cf = r.convFactor;
-      if (cf != null && Number.isFinite(Number(cf)) && Number(cf) !== 0) {
-        r.converted = after * Number(cf);
-      } else {
-        r.converted = after;
-      }
+      if (cf != null && Number.isFinite(Number(cf)) && Number(cf) !== 0) r.converted = after * Number(cf);
+      else r.converted = after;
     }
   }
 
@@ -314,28 +291,28 @@
   }
 
   /***************
-   * UI: Code tab
+   * ✅ Code tab (방향키/행추가 지원)
    ***************/
   function renderCodeTab() {
+    const wrap = el("div", { class: "table-wrap" }, [ buildCodeMasterTable() ]);
+
+    // ✅ 코드 탭도 표 네비게이션 활성화
+    attachGridNav(wrap);
+
     const panel = el("div", { class: "panel" }, [
       el("div", { class: "panel-header" }, [
         el("div", {}, [
           el("div", { class: "panel-title" }, ["코드"]),
-          el("div", { class: "panel-desc" }, ["코드 선택 팝업/산출 자동연동은 기존 로직과 연결 지점"])
+          el("div", { class: "panel-desc" }, [
+            "방향키: 코드표 셀 이동 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+. 코드선택(산출표에서)"
+          ])
         ]),
         el("div", { class: "row-actions" }, [
-          el("button", {
-            class: "smallbtn",
-            onclick: () => {
-              state.codeMaster.push({ code:"", name:"", spec:"", unit:"", surcharge:null, convUnit:"", convFactor:null, note:"" });
-              saveState(); render();
-            }
-          }, ["행 추가"]),
+          el("button", { class: "smallbtn", onclick: () => addCodeRows(1) }, ["행 추가 (Ctrl+F3)"]),
+          el("button", { class: "smallbtn", onclick: () => addCodeRows(10) }, ["+10행"]),
         ])
       ]),
-      el("div", { class: "table-wrap" }, [
-        buildCodeMasterTable()
-      ])
+      wrap
     ]);
     return panel;
   }
@@ -385,27 +362,53 @@
     return table;
   }
 
+  // ✅ 코드탭도 grid/row/col 부여
+  const CODE_COL_INDEX = {
+    code: 0, name: 1, spec: 2, unit: 3, surcharge: 4, convUnit: 5, convFactor: 6, note: 7
+  };
+
   function tdInput(scope, rowIndex, field, value, opts = {}) {
+    const ds =
+      scope === "codeMaster"
+        ? { grid: "code", row: String(rowIndex), col: String(CODE_COL_INDEX[field] ?? 0), field }
+        : (opts.dataset || null);
+
     const input = el("input", {
       class: "cell" + (opts.readonly ? " readonly" : ""),
       value: value ?? "",
       readonly: opts.readonly ? "readonly" : null,
-      dataset: opts.dataset || null,
+      dataset: ds,
       oninput: (e) => {
         const v = e.target.value;
         if (scope === "codeMaster") {
           const r = state.codeMaster[rowIndex];
           if (!r) return;
-          if (field === "surcharge" || field === "convFactor") {
-            r[field] = v === "" ? null : Number(v);
-          } else {
-            r[field] = v;
-          }
+          if (field === "surcharge" || field === "convFactor") r[field] = v === "" ? null : Number(v);
+          else r[field] = v;
           saveState();
         }
       }
     });
+
     return el("td", {}, [input]);
+  }
+
+  // ✅ 코드탭 행추가: 현재 행 아래에 삽입(산출표와 동일)
+  function addCodeRows(n, insertAfterRow = null) {
+    const idx = insertAfterRow == null ? (state.codeMaster.length - 1) : insertAfterRow;
+    const insertPos = clamp(idx + 1, 0, state.codeMaster.length);
+
+    const empty = { code:"", name:"", spec:"", unit:"", surcharge:null, convUnit:"", convFactor:null, note:"" };
+    const newRows = Array.from({ length: n }, () => deepClone(empty));
+
+    state.codeMaster.splice(insertPos, 0, ...newRows);
+    saveState();
+    render();
+
+    requestAnimationFrame(() => {
+      const first = document.querySelector(`input[data-grid="code"][data-row="${insertPos}"][data-col="0"]`);
+      if (first) first.focus();
+    });
   }
 
   /***************
@@ -415,19 +418,15 @@
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
 
-    // 계산 갱신
     recomputeSection(tabId);
 
-    // 상단(구분/변수) 묶음
     const top = el("div", { class: "top-split" }, [
       el("div", { class: "calc-layout top-grid" }, [
-        // LEFT: section
         el("div", { class: "rail-box section-box", dataset: { region: "section" } }, [
           el("div", { class: "rail-title" }, ["구분명 리스트 (↑/↓ 이동)"]),
           buildSectionList(tabId),
           buildSectionEditor(tabId),
         ]),
-        // RIGHT: vars
         el("div", { class: "rail-box var-box", dataset: { region: "var" } }, [
           el("div", { class: "rail-title" }, ["변수표 (A, AB, A1, AB1... 최대 3자)"]),
           buildVarTable(tabId),
@@ -435,7 +434,6 @@
       ])
     ]);
 
-    // 하단 산출표
     const panel = el("div", { class: "panel" }, [
       el("div", { class: "panel-header" }, [
         el("div", {}, [
@@ -445,14 +443,8 @@
           ])
         ]),
         el("div", { class: "row-actions" }, [
-          el("button", {
-            class: "smallbtn",
-            onclick: () => addRows(tabId, 1)
-          }, ["행 추가 (Ctrl+F3)"]),
-          el("button", {
-            class: "smallbtn",
-            onclick: () => addRows(tabId, 10)
-          }, ["+10행"]),
+          el("button", { class: "smallbtn", onclick: () => addRows(tabId, 1) }, ["행 추가 (Ctrl+F3)"]),
+          el("button", { class: "smallbtn", onclick: () => addRows(tabId, 10) }, ["+10행"]),
         ])
       ]),
       el("div", { class: "table-wrap" }, [buildCalcTable(tabId)])
@@ -482,7 +474,6 @@
       list.appendChild(item);
     });
 
-    // 구분 리스트에서 ↑/↓ 이동 지원
     list.addEventListener("keydown", (e) => {
       if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
       e.preventDefault();
@@ -492,7 +483,6 @@
       saveState();
       render();
 
-      // 다음 렌더 후 포커스
       requestAnimationFrame(() => {
         const newList = document.querySelector(".section-list");
         const items = newList ? [...newList.querySelectorAll(".section-item")] : [];
@@ -514,7 +504,6 @@
       oninput: (e) => {
         sec.name = e.target.value;
         saveState();
-        // 리스트 즉시 반영은 render() 대신 최소로
         const item = document.querySelectorAll(".section-item .name")[bucket.activeSection];
         if (item) item.textContent = sec.name || `구분 ${bucket.activeSection + 1}`;
       }
@@ -533,10 +522,7 @@
       }
     });
 
-    const saveBtn = el("button", {
-      class: "smallbtn",
-      onclick: () => { saveState(); render(); }
-    }, ["저장"]);
+    const saveBtn = el("button", { class: "smallbtn", onclick: () => { saveState(); render(); } }, ["저장"]);
 
     const addBtn = el("button", {
       class: "smallbtn",
@@ -590,22 +576,17 @@
     table.appendChild(tbody);
     wrap.appendChild(table);
 
-    // 변수 변경 시 재계산
     wrap.addEventListener("input", () => {
       recomputeSection(tabId);
       saveState();
-      // 값 셀 갱신
       const valueInputs = wrap.querySelectorAll('input[data-grid="var"][data-col="2"]');
       sec.vars.forEach((vv, i) => {
         if (valueInputs[i]) valueInputs[i].value = String(vv.value ?? 0);
       });
-      // 산출표 값들 갱신
       refreshCalcComputed(tabId);
     });
 
-    // 변수표에서도 방향키 이동은 "표 내부"에서만 (영역 이탈 방지)
     attachGridNav(wrap);
-
     return wrap;
   }
 
@@ -625,11 +606,9 @@
         if (!rr) return;
 
         if (field === "key") {
-          // 영문 시작 + 최대 3자 (영문/숫자)
           let val = e.target.value.toUpperCase();
           val = val.replace(/[^A-Z0-9]/g, "");
           if (val.length > 3) val = val.slice(0, 3);
-          // 반드시 영문 시작
           if (val && !/^[A-Z]/.test(val)) val = val.replace(/^[^A-Z]+/, "");
           e.target.value = val;
           rr.key = val;
@@ -685,11 +664,9 @@
     table.appendChild(thead);
     table.appendChild(tbody);
 
-    // 산출표 “빨간영역” 전용 방향키 네비게이션 적용
     const wrap = el("div", {}, [table]);
     attachGridNav(wrap);
 
-    // 산출식 Enter 시 즉시 재계산
     wrap.addEventListener("keydown", (e) => {
       const t = e.target;
       if (!(t instanceof HTMLInputElement)) return;
@@ -723,7 +700,6 @@
 
         if (field === "code") {
           rr.code = e.target.value.toUpperCase().trim();
-          // 코드 변경 즉시 자동 동기화/재계산
           recomputeSection(tabId);
           saveState();
           refreshCalcComputed(tabId);
@@ -745,7 +721,6 @@
   function refreshCalcComputed(tabId) {
     const wrap = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"]`)?.closest(".table-wrap") || document.body;
 
-    // 값/자동필드만 업데이트
     const inputs = wrap.querySelectorAll(`input[data-grid="calc"][data-tab="${tabId}"]`);
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
@@ -763,9 +738,8 @@
   }
 
   /***************
-   * Grid navigation (방향키: 표 내부에서만)
-   * - data-grid="calc" or "var"
-   * - data-row, data-col
+   * ✅ Grid navigation (방향키: 표 내부에서만)
+   * - data-grid="calc" or "var" or "code"
    ***************/
   function attachGridNav(container) {
     container.addEventListener("keydown", (e) => {
@@ -773,12 +747,11 @@
       if (!(t instanceof HTMLInputElement)) return;
 
       const grid = t.dataset.grid;
-      if (grid !== "calc" && grid !== "var") return;
+      if (grid !== "calc" && grid !== "var" && grid !== "code") return;
 
       const key = e.key;
       if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) return;
 
-      // 표 내부 이동만 (영역 이탈 방지)
       e.preventDefault();
 
       const row = Number(t.dataset.row);
@@ -790,7 +763,6 @@
       if (key === "ArrowLeft") nc = col - 1;
       if (key === "ArrowRight") nc = col + 1;
 
-      // 같은 grid 내부에서만 찾기
       const selector = `input[data-grid="${grid}"][data-row="${nr}"][data-col="${nc}"]`;
       const next = container.querySelector(selector);
 
@@ -799,7 +771,7 @@
   }
 
   /***************
-   * Row add (Ctrl+F3 / +10)
+   * Row add (Ctrl+F3 / +10)  ✅ 코드탭도 지원
    ***************/
   function addRows(tabId, n, insertAfterRow = null) {
     const bucket = state[tabId];
@@ -814,7 +786,6 @@
     saveState();
     render();
 
-    // 포커스 복귀
     requestAnimationFrame(() => {
       const first = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${insertPos}"][data-col="0"]`);
       if (first) first.focus();
@@ -824,10 +795,6 @@
   /***************
    * Shortcuts
    ***************/
-  function isEditableTarget(elm) {
-    return elm instanceof HTMLInputElement || elm instanceof HTMLTextAreaElement;
-  }
-
   window.addEventListener("keydown", (e) => {
     // Ctrl+. : 코드 선택
     if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") {
@@ -847,38 +814,50 @@
       return;
     }
 
-    // Ctrl+F3 / Ctrl+Shift+F3 : 산출표에서만 행 추가
+    // Ctrl+F3 / Ctrl+Shift+F3 : 산출표 + ✅코드탭에서도 동일 동작
     if (e.ctrlKey && (e.key === "F3")) {
       const a = document.activeElement;
-      if (a instanceof HTMLInputElement && a.dataset.grid === "calc") {
-        e.preventDefault();
-        const tabId = a.dataset.tab;
-        const row = Number(a.dataset.row);
-        if (e.shiftKey) addRows(tabId, 10, row);
-        else addRows(tabId, 1, row);
+      if (a instanceof HTMLInputElement) {
+        const grid = a.dataset.grid;
+
+        // 산출표
+        if (grid === "calc") {
+          e.preventDefault();
+          const tabId = a.dataset.tab;
+          const row = Number(a.dataset.row);
+          if (e.shiftKey) addRows(tabId, 10, row);
+          else addRows(tabId, 1, row);
+          return;
+        }
+
+        // 코드탭
+        if (grid === "code") {
+          e.preventDefault();
+          const row = Number(a.dataset.row);
+          if (e.shiftKey) addCodeRows(10, row);
+          else addCodeRows(1, row);
+          return;
+        }
       }
       return;
     }
   });
 
-    /***************
+  /***************
    * Code Picker Popup
    ***************/
   let __pickerWin = null;
 
   function openCodePicker() {
-    // 기본: 현재 탭/0행
     let originTab = state.activeTab || "steel";
     let focusRow = 0;
 
-    // 산출표(calc) 셀에 포커스가 있으면 그 위치 기준
     const a = document.activeElement;
     if (a instanceof HTMLInputElement && a.dataset.grid === "calc") {
       originTab = a.dataset.tab || originTab;
       focusRow = Number(a.dataset.row || 0);
     }
 
-    // picker가 기대하는 스키마(conv_unit/conv_factor)로 변환
     const codesForPicker = (state.codeMaster || []).map(r => ({
       code: (r.code ?? "").toString(),
       name: (r.name ?? "").toString(),
@@ -890,7 +869,6 @@
       note: (r.note ?? "").toString(),
     }));
 
-    // ✅ picker 파일 경로 (네 프로젝트 구조에 맞게 필요시 변경)
     const url = "picker.html";
 
     __pickerWin = window.open(url, "FIN_CODE_PICKER", "width=1100,height=760");
@@ -899,7 +877,6 @@
       return;
     }
 
-    // 로드 타이밍 대비: INIT 여러 번 전송
     let tries = 0;
     const timer = setInterval(() => {
       tries++;
@@ -913,20 +890,17 @@
     }, 120);
   }
 
-  // picker → app 메시지 수신 (INSERT_SELECTED / UPDATE_CODES / CLOSE_PICKER)
   window.addEventListener("message", (event) => {
     if (event.origin !== window.location.origin) return;
     const msg = event.data;
     if (!msg || typeof msg !== "object") return;
 
-    // 1) 선택 코드 삽 hooking (picker.js insertToParent)
     if (msg.type === "INSERT_SELECTED") {
       const originTab = msg.originTab || state.activeTab;
       const focusRow = Number(msg.focusRow || 0);
       const selectedCodes = Array.isArray(msg.selectedCodes) ? msg.selectedCodes : [];
       if (!selectedCodes.length) return;
 
-      // 탭 이동 → 렌더 → 해당 셀 포커스 → 삽입
       state.activeTab = originTab;
       saveState();
       render();
@@ -943,11 +917,9 @@
       return;
     }
 
-    // 2) 코드마스터 반영(편집 탭 "코드저장/반영")
     if (msg.type === "UPDATE_CODES") {
       const incoming = Array.isArray(msg.codes) ? msg.codes : [];
 
-      // picker 스키마(conv_unit/conv_factor) → app 스키마(convUnit/convFactor)
       state.codeMaster = incoming
         .map(r => ({
           code: (r.code ?? "").toString().trim(),
@@ -966,7 +938,6 @@
       return;
     }
 
-    // 3) 닫기(옵션)
     if (msg.type === "CLOSE_PICKER") {
       try { __pickerWin?.close(); } catch {}
       __pickerWin = null;
@@ -976,18 +947,15 @@
 
   // popup -> opener hooks (기존 유지)
   window.__FIN_GET_CODEMASTER__ = () => state.codeMaster || [];
-  window.__FIN_INSERT_CODE__ = (code) => {
-    insertCodeToActiveCell(code, false);
-  };
+  window.__FIN_INSERT_CODE__ = (code) => { insertCodeToActiveCell(code, false); };
   window.__FIN_INSERT_CODES__ = (codes) => {
     insertCodeToActiveCell(codes[0] || "", false);
 
-    // 멀티 삽입은: 현재 셀부터 아래로 채우기
     const a = document.activeElement;
     if (!(a instanceof HTMLInputElement) || a.dataset.grid !== "calc") return;
     const tabId = a.dataset.tab;
     const startRow = Number(a.dataset.row);
-    const col = Number(a.dataset.col); // code col=0
+    const col = Number(a.dataset.col);
 
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
@@ -1029,7 +997,7 @@
     });
   }
 
-    /***************
+  /***************
    * Export/Import/Reset buttons
    ***************/
   function bindTopButtons() {
@@ -1081,23 +1049,14 @@
 
     let content = null;
 
-    if (state.activeTab === "code") {
-      content = renderCodeTab();
-    } else if (state.activeTab === "steel") {
-      content = renderCalcTab("steel", "철골");
-    } else if (state.activeTab === "steel_sub") {
-      content = renderCalcTab("steel_sub", "철골_부자재");
-    } else if (state.activeTab === "support") {
-      content = renderCalcTab("support", "구조이기/동바리");
-    } else if (state.activeTab === "steel_sum") {
-      content = renderSummaryTab("steel", "철골_집계", "converted");
-    } else if (state.activeTab === "support_sum") {
-      content = renderSummaryTab("support", "구조이기/동바리_집계", "value");
-    }
+    if (state.activeTab === "code") content = renderCodeTab();
+    else if (state.activeTab === "steel") content = renderCalcTab("steel", "철골");
+    else if (state.activeTab === "steel_sub") content = renderCalcTab("steel_sub", "철골_부자재");
+    else if (state.activeTab === "support") content = renderCalcTab("support", "구조이기/동바리");
+    else if (state.activeTab === "steel_sum") content = renderSummaryTab("steel", "철골_집계", "converted");
+    else if (state.activeTab === "support_sum") content = renderSummaryTab("support", "구조이기/동바리_집계", "value");
 
     $view.appendChild(content);
-
-    // 매 렌더 후 안전 바인딩
     bindTopButtons();
   }
 
@@ -1162,5 +1121,3 @@
    ***************/
   render();
 })();
-
-

@@ -4,7 +4,7 @@
    - 산출탭 방향키 이동: 산출표(빨간영역) 안에서만 동작
    - Ctrl+F3: 산출표에서만 현재 행 아래 행 추가  ✅ + 코드탭도 동일 동작
    - Ctrl+Shift+F3: 산출표 +10행               ✅ + 코드탭도 동일 동작
-   - Ctrl+Del: 셀 비우기
+   - ✅ Ctrl+Del: "줄(행) 삭제" → 줄 수 감소 (calc/var/code 전부 적용)
    - Ctrl+. : 코드 선택 창
    - ✅ 상단(topbar/tabs/top-split) 실제 높이 측정 → sticky offset 자동 보정
    - ✅ 노란 영역(패널 헤더) sticky 고정
@@ -327,7 +327,7 @@
       el("div", {}, [
         el("div", { class: "panel-title" }, ["코드"]),
         el("div", { class: "panel-desc" }, [
-          "방향키: 코드표 셀 이동 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+. 코드선택(산출표에서)"
+          "방향키: 코드표 셀 이동 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+. 코드선택(산출표에서) | Ctrl+Del 줄삭제"
         ])
       ]),
       el("div", { class: "row-actions" }, [
@@ -432,6 +432,84 @@
   }
 
   /***************
+   * ✅ Ctrl+Del 줄(행) 삭제 helpers (calc/var/code)
+   ***************/
+  function deleteCalcRow(tabId, rowIdx) {
+    const bucket = state[tabId];
+    if (!bucket) return;
+    const sec = bucket.sections[bucket.activeSection];
+    if (!sec?.rows) return;
+    if (rowIdx < 0 || rowIdx >= sec.rows.length) return;
+
+    // 최소 1행 유지
+    if (sec.rows.length <= 1) {
+      sec.rows[0] = defaultCalcRow();
+    } else {
+      sec.rows.splice(rowIdx, 1);
+    }
+
+    recomputeSection(tabId);
+    saveState();
+    render();
+
+    requestAnimationFrame(() => {
+      const newRow = Math.min(rowIdx, sec.rows.length - 1);
+      const t = document.querySelector(
+        `input[data-grid="calc"][data-tab="${tabId}"][data-row="${newRow}"][data-col="0"]`
+      );
+      if (t) t.focus();
+    });
+  }
+
+  function deleteVarRow(tabId, rowIdx) {
+    const bucket = state[tabId];
+    if (!bucket) return;
+    const sec = bucket.sections[bucket.activeSection];
+    if (!sec?.vars) return;
+    if (rowIdx < 0 || rowIdx >= sec.vars.length) return;
+
+    // 최소 1행 유지
+    if (sec.vars.length <= 1) {
+      sec.vars[0] = defaultVarRow();
+    } else {
+      sec.vars.splice(rowIdx, 1);
+    }
+
+    recomputeSection(tabId);
+    saveState();
+    render();
+
+    requestAnimationFrame(() => {
+      const newRow = Math.min(rowIdx, sec.vars.length - 1);
+      const t = document.querySelector(
+        `input[data-grid="var"][data-tab="${tabId}"][data-row="${newRow}"][data-col="0"]`
+      );
+      if (t) t.focus();
+    });
+  }
+
+  function deleteCodeRow(rowIdx) {
+    if (!Array.isArray(state.codeMaster)) return;
+    if (rowIdx < 0 || rowIdx >= state.codeMaster.length) return;
+
+    // 최소 1행 유지
+    if (state.codeMaster.length <= 1) {
+      state.codeMaster[0] = { code:"", name:"", spec:"", unit:"", surcharge:null, convUnit:"", convFactor:null, note:"" };
+    } else {
+      state.codeMaster.splice(rowIdx, 1);
+    }
+
+    saveState();
+    render();
+
+    requestAnimationFrame(() => {
+      const newRow = Math.min(rowIdx, state.codeMaster.length - 1);
+      const t = document.querySelector(`input[data-grid="code"][data-row="${newRow}"][data-col="0"]`);
+      if (t) t.focus();
+    });
+  }
+
+  /***************
    * UI: Section + Vars + Calc
    ***************/
   function renderCalcTab(tabId, title) {
@@ -455,7 +533,7 @@
       el("div", {}, [
         el("div", { class: "panel-title" }, [title]),
         el("div", { class: "panel-desc" }, [
-          "방향키: 산출표 셀 이동 | 산출식 Enter 계산 | Ctrl+. 코드선택 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+Del 셀지우기"
+          "방향키: 산출표 셀 이동 | 산출식 Enter 계산 | Ctrl+. 코드선택 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+Del 줄삭제"
         ])
       ]),
       el("div", { class: "row-actions" }, [
@@ -811,73 +889,87 @@
    * Shortcuts
    ***************/
   window.addEventListener("keydown", (e) => {
-  // Ctrl+.
-  if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") {
-    e.preventDefault();
-    e.stopPropagation();
-    openCodePicker();
-    return;
-  }
+    // Ctrl+.
+    if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") {
+      e.preventDefault();
+      e.stopPropagation();
+      openCodePicker();
+      return;
+    }
 
-  // ✅ Ctrl+Del : 다양한 브라우저/키보드 대응 (key + code + keyCode)
-  const isCtrlDel =
-    e.ctrlKey &&
-    !e.shiftKey &&
-    !e.altKey &&
-    (
-      e.key === "Delete" || e.key === "Del" || e.key === "Backspace" ||
-      e.code === "Delete" || e.code === "Backspace" ||
-      e.keyCode === 46 || e.keyCode === 8 // 46: Delete, 8: Backspace
-    );
+    // ✅ Ctrl+Del : 다양한 브라우저/키보드 대응 (key + code + keyCode)
+    const isCtrlDel =
+      e.ctrlKey &&
+      !e.shiftKey &&
+      !e.altKey &&
+      (
+        e.key === "Delete" || e.key === "Del" || e.key === "Backspace" ||
+        e.code === "Delete" || e.code === "Backspace" ||
+        e.keyCode === 46 || e.keyCode === 8 // 46: Delete, 8: Backspace
+      );
 
-  if (isCtrlDel) {
-    const a = document.activeElement;
+    // ✅ Ctrl+Del = 줄(행) 삭제 (줄 수 감소)
+    if (isCtrlDel) {
+      const a = document.activeElement;
 
-    // input/textarea 모두 허용
-    const isEditableEl = (a instanceof HTMLInputElement) || (a instanceof HTMLTextAreaElement);
-    if (!isEditableEl) return;
+      const isEditableEl =
+        (a instanceof HTMLInputElement) || (a instanceof HTMLTextAreaElement);
+      if (!isEditableEl) return;
 
-    const grid = a.dataset?.grid;
-    if (grid !== "calc" && grid !== "var" && grid !== "code") return; // 표 밖 제외
-    if (a.hasAttribute("readonly")) return; // readonly 셀 제외
+      const grid = a.dataset?.grid;
+      if (grid !== "calc" && grid !== "var" && grid !== "code") return;
 
-    e.preventDefault();
-    e.stopPropagation();
-    a.value = "";
-    a.dispatchEvent(new Event("input", { bubbles: true }));
-    return;
-  }
-
-  // Ctrl+F3 / Ctrl+Shift+F3
-  if (e.ctrlKey && (e.key === "F3")) {
-    const a = document.activeElement;
-    if (a instanceof HTMLInputElement) {
-      const grid = a.dataset.grid;
+      e.preventDefault();
+      e.stopPropagation();
 
       if (grid === "calc") {
-        e.preventDefault();
-        e.stopPropagation();
         const tabId = a.dataset.tab;
         const row = Number(a.dataset.row);
-        if (e.shiftKey) addRows(tabId, 10, row);
-        else addRows(tabId, 1, row);
+        deleteCalcRow(tabId, row);
+        return;
+      }
+
+      if (grid === "var") {
+        const tabId = a.dataset.tab;
+        const row = Number(a.dataset.row);
+        deleteVarRow(tabId, row);
         return;
       }
 
       if (grid === "code") {
-        e.preventDefault();
-        e.stopPropagation();
         const row = Number(a.dataset.row);
-        if (e.shiftKey) addCodeRows(10, row);
-        else addCodeRows(1, row);
+        deleteCodeRow(row);
         return;
       }
     }
-  }
-}, { capture: true }); // ✅ 이 옵션까지 포함해서 교체!
 
+    // Ctrl+F3 / Ctrl+Shift+F3
+    if (e.ctrlKey && (e.key === "F3")) {
+      const a = document.activeElement;
+      if (a instanceof HTMLInputElement) {
+        const grid = a.dataset.grid;
 
+        if (grid === "calc") {
+          e.preventDefault();
+          e.stopPropagation();
+          const tabId = a.dataset.tab;
+          const row = Number(a.dataset.row);
+          if (e.shiftKey) addRows(tabId, 10, row);
+          else addRows(tabId, 1, row);
+          return;
+        }
 
+        if (grid === "code") {
+          e.preventDefault();
+          e.stopPropagation();
+          const row = Number(a.dataset.row);
+          if (e.shiftKey) addCodeRows(10, row);
+          else addCodeRows(1, row);
+          return;
+        }
+      }
+    }
+  }, { capture: true }); // ✅ 이 옵션까지 포함해서 교체!
 
   /***************
    * Code Picker Popup
@@ -1096,8 +1188,7 @@
     else if (state.activeTab === "steel_sub") content = renderCalcTab("steel_sub", "철골_부자재");
     else if (state.activeTab === "support") content = renderCalcTab("support", "구조이기/동바리");
     else if (state.activeTab === "steel_sum") content = renderSummaryTabByCodeOrder("steel", "철골_집계");
-else if (state.activeTab === "support_sum") content = renderSummaryTabByCodeOrder("support", "구조이기/동바리_집계");
-
+    else if (state.activeTab === "support_sum") content = renderSummaryTabByCodeOrder("support", "구조이기/동바리_집계");
 
     $view.appendChild(content);
     bindTopButtons();
@@ -1112,131 +1203,126 @@ else if (state.activeTab === "support_sum") content = renderSummaryTabByCodeOrde
   }
 
   function renderSummaryTabByCodeOrder(srcTabId, title) {
-  const bucket = state[srcTabId];
+    const bucket = state[srcTabId];
 
-  // codeMaster 순서를 위한 인덱스 맵
-  const orderMap = new Map();
-  (state.codeMaster || []).forEach((cm, idx) => {
-    const c = String(cm.code || "").trim().toUpperCase();
-    if (c) orderMap.set(c, idx);
-  });
+    // codeMaster 순서를 위한 인덱스 맵
+    const orderMap = new Map();
+    (state.codeMaster || []).forEach((cm, idx) => {
+      const c = String(cm.code || "").trim().toUpperCase();
+      if (c) orderMap.set(c, idx);
+    });
 
-  // 코드별 누적: code -> { code,name,spec,unit, pre, post, pctSet }
-  const map = new Map();
+    // 코드별 누적: code -> { code,name,spec,unit, pre, post, pctSet }
+    const map = new Map();
 
-  const prev = bucket.activeSection;
+    const prev = bucket.activeSection;
 
-  for (let sIdx = 0; sIdx < bucket.sections.length; sIdx++) {
-    bucket.activeSection = sIdx;
-    recomputeSection(srcTabId);
+    for (let sIdx = 0; sIdx < bucket.sections.length; sIdx++) {
+      bucket.activeSection = sIdx;
+      recomputeSection(srcTabId);
 
-    const sec = bucket.sections[sIdx];
-    for (const r of sec.rows) {
-      const code = String(r.code || "").trim().toUpperCase();
-      if (!code) continue;
+      const sec = bucket.sections[sIdx];
+      for (const r of sec.rows) {
+        const code = String(r.code || "").trim().toUpperCase();
+        if (!code) continue;
 
-      const name = r.name || "";
-      const spec = r.spec || "";
-      const unit = r.unit || "";
+        const name = r.name || "";
+        const spec = r.spec || "";
+        const unit = r.unit || "";
 
-      const pre = Number(r.value) || 0; // 할증전수량(= 물량)
-      const mul = Number(r.surchargeMul) || 1;
-      const post = pre * mul; // 할증후수량(= 물량 * (1+할증))
+        const pre = Number(r.value) || 0; // 할증전수량(= 물량)
+        const mul = Number(r.surchargeMul) || 1;
+        const post = pre * mul; // 할증후수량(= 물량 * (1+할증))
 
-      const pct =
-        (r.surchargePct == null || r.surchargePct === "" || !Number.isFinite(Number(r.surchargePct)))
-          ? null
-          : Number(r.surchargePct);
+        const pct =
+          (r.surchargePct == null || r.surchargePct === "" || !Number.isFinite(Number(r.surchargePct)))
+            ? null
+            : Number(r.surchargePct);
 
-      if (!map.has(code)) {
-        map.set(code, {
-          code, name, spec, unit,
-          pre: 0,
-          post: 0,
-          pctSet: new Set()
-        });
+        if (!map.has(code)) {
+          map.set(code, {
+            code, name, spec, unit,
+            pre: 0,
+            post: 0,
+            pctSet: new Set()
+          });
+        }
+
+        const agg = map.get(code);
+        agg.pre += pre;
+        agg.post += post;
+
+        // 할증 표시용(동일/혼합)
+        if (pct == null) agg.pctSet.add("__NULL__");
+        else agg.pctSet.add(String(pct));
       }
-
-      const agg = map.get(code);
-      agg.pre += pre;
-      agg.post += post;
-
-      // 할증 표시용(동일/혼합)
-      if (pct == null) agg.pctSet.add("__NULL__");
-      else agg.pctSet.add(String(pct));
     }
-  }
 
-  bucket.activeSection = prev;
-  saveState();
+    bucket.activeSection = prev;
+    saveState();
 
-  // ✅ 정렬 규칙:
-  // 1) 코드탭(codeMaster)에 존재하면 그 순서(orderMap 인덱스)
-  // 2) 코드탭에 없으면 맨 뒤로, 그 내부는 코드 문자열 오름차순
-  const items = [...map.values()].sort((a, b) => {
-    const ai = orderMap.has(a.code) ? orderMap.get(a.code) : Number.POSITIVE_INFINITY;
-    const bi = orderMap.has(b.code) ? orderMap.get(b.code) : Number.POSITIVE_INFINITY;
-    if (ai !== bi) return ai - bi;
-    return a.code.localeCompare(b.code);
-  });
+    // ✅ 정렬 규칙:
+    // 1) 코드탭(codeMaster)에 존재하면 그 순서(orderMap 인덱스)
+    // 2) 코드탭에 없으면 맨 뒤로, 그 내부는 코드 문자열 오름차순
+    const items = [...map.values()].sort((a, b) => {
+      const ai = orderMap.has(a.code) ? orderMap.get(a.code) : Number.POSITIVE_INFINITY;
+      const bi = orderMap.has(b.code) ? orderMap.get(b.code) : Number.POSITIVE_INFINITY;
+      if (ai !== bi) return ai - bi;
+      return a.code.localeCompare(b.code);
+    });
 
-  const totalPre = items.reduce((acc, x) => acc + (Number(x.pre) || 0), 0);
-  const totalPost = items.reduce((acc, x) => acc + (Number(x.post) || 0), 0);
-
-  const panelHeader = el("div", { class: "panel-header sticky-head", dataset: { sticky: "panel" } }, [
-    el("div", {}, [
-      el("div", { class: "panel-title" }, [title]),
-      el("div", { class: "panel-desc" }, [
-        "코드별 집계: 할증전수량(물량 합) / 할증후수량(물량×(1+할증)) · 정렬: 코드탭 순서"
-      ])
-    ])
-  ]);
-
-  return el("div", { class: "panel" }, [
-    panelHeader,
-    el("div", { class: "table-wrap" }, [
-      el("table", {}, [
-        el("thead", {}, [
-          el("tr", {}, [
-            el("th", {}, ["코드"]),
-            el("th", {}, ["품명"]),
-            el("th", {}, ["규격"]),
-            el("th", {}, ["단위"]),
-            el("th", {}, ["할증전수량"]),
-            el("th", {}, ["할증(%)"]),
-            el("th", {}, ["할증후수량"]),
-          ])
-        ]),
-        el("tbody", {}, [
-          ...items.map(x => {
-            const pctText = (() => {
-              const s = x.pctSet;
-              if (s.size === 0) return "";
-              if (s.size === 1) {
-                const only = [...s][0];
-                if (only === "__NULL__") return "";
-                return only;
-              }
-              return "혼합";
-            })();
-
-            return el("tr", {}, [
-              el("td", {}, [x.code]),
-              el("td", {}, [x.name]),
-              el("td", {}, [x.spec]),
-              el("td", {}, [x.unit]),
-              el("td", {}, [String(round4(x.pre))]),
-              el("td", {}, [pctText]),
-              el("td", {}, [String(round4(x.post))]),
-            ]);
-          }),
-          
+    const panelHeader = el("div", { class: "panel-header sticky-head", dataset: { sticky: "panel" } }, [
+      el("div", {}, [
+        el("div", { class: "panel-title" }, [title]),
+        el("div", { class: "panel-desc" }, [
+          "코드별 집계: 할증전수량(물량 합) / 할증후수량(물량×(1+할증)) · 정렬: 코드탭 순서"
         ])
       ])
-    ])
-  ]);
-}
+    ]);
 
+    return el("div", { class: "panel" }, [
+      panelHeader,
+      el("div", { class: "table-wrap" }, [
+        el("table", {}, [
+          el("thead", {}, [
+            el("tr", {}, [
+              el("th", {}, ["코드"]),
+              el("th", {}, ["품명"]),
+              el("th", {}, ["규격"]),
+              el("th", {}, ["단위"]),
+              el("th", {}, ["할증전수량"]),
+              el("th", {}, ["할증(%)"]),
+              el("th", {}, ["할증후수량"]),
+            ])
+          ]),
+          el("tbody", {}, [
+            ...items.map(x => {
+              const pctText = (() => {
+                const s = x.pctSet;
+                if (s.size === 0) return "";
+                if (s.size === 1) {
+                  const only = [...s][0];
+                  if (only === "__NULL__") return "";
+                  return only;
+                }
+                return "혼합";
+              })();
+
+              return el("tr", {}, [
+                el("td", {}, [x.code]),
+                el("td", {}, [x.name]),
+                el("td", {}, [x.spec]),
+                el("td", {}, [x.unit]),
+                el("td", {}, [String(round4(x.pre))]),
+                el("td", {}, [pctText]),
+                el("td", {}, [String(round4(x.post))]),
+              ]);
+            }),
+          ])
+        ])
+      ])
+    ]);
+  }
 
   function round4(n) {
     const v = Number(n) || 0;

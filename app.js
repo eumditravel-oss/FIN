@@ -1,11 +1,8 @@
 /* app.js (FINAL) - FIN 산출자료 (Web)
-   - 코드탭 복원(코드/품명/규격/단위/할증/환산단위/환산계수/비고)
-   - 엑셀 기반 코드마스터 기본값 내장
-   - 산출탭 방향키 이동: 산출표(빨간영역) 안에서만 동작
-   - Ctrl+F3: 산출표에서만 현재 행 아래 행 추가  ✅ + 코드탭도 동일 동작
-   - Ctrl+Shift+F3: 산출표 +10행               ✅ + 코드탭도 동일 동작
-   - Ctrl+Del: 셀 비우기
-   - Ctrl+. : 코드 선택 창
+   ✅ 노란영역(Topbar + Tabs + Panel-header) 스크롤 고정
+   ✅ 코드탭 방향키 이동 (data-grid="code" + row/col)
+   ✅ Ctrl+F3 / Ctrl+Shift+F3 : 산출표 + 코드탭 동일 동작
+   ✅ 패널 헤더 sticky를 “topbar/tabs 높이 자동 계산”으로 정확히 맞춤
 */
 
 (() => {
@@ -273,6 +270,47 @@
   }
 
   /***************
+   * ✅ Sticky helpers (노란영역 고정)
+   ***************/
+  function applyStickyHeights() {
+    const topbar = document.querySelector(".topbar");
+    const tabs = document.querySelector(".tabs");
+    const root = document.documentElement;
+
+    const topbarH = topbar ? Math.round(topbar.getBoundingClientRect().height) : 72;
+    const tabsH = tabs ? Math.round(tabs.getBoundingClientRect().height) : 52;
+
+    root.style.setProperty("--topbarH", `${topbarH}px`);
+    root.style.setProperty("--tabsH", `${tabsH}px`);
+
+    // panel-header를 탭 아래로 고정(노란 영역)
+    const top = topbarH + tabsH;
+
+    const headers = document.querySelectorAll("#view .panel-header");
+    headers.forEach((ph) => {
+      ph.style.position = "sticky";
+      ph.style.top = `${top}px`;
+      ph.style.zIndex = "170";
+      ph.style.background = "rgba(255,250,240,.92)";
+      ph.style.backdropFilter = "blur(8px)";
+      ph.style.borderBottom = "1px solid rgba(0,0,0,.08)";
+      ph.style.paddingBottom = ph.style.paddingBottom || "10px";
+    });
+  }
+
+  function bindStickyResize() {
+    let raf = 0;
+    const on = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(applyStickyHeights);
+    };
+    window.addEventListener("resize", on);
+    window.addEventListener("load", on);
+    window.addEventListener("scroll", on, { passive: true });
+    on();
+  }
+
+  /***************
    * UI: Tabs
    ***************/
   function renderTabs() {
@@ -383,7 +421,8 @@
         if (scope === "codeMaster") {
           const r = state.codeMaster[rowIndex];
           if (!r) return;
-          if (field === "surcharge" || field === "convFactor") r[field] = v === "" ? null : Number(v);
+          if (field === "code") r.code = v.toUpperCase().trim();
+          else if (field === "surcharge" || field === "convFactor") r[field] = v === "" ? null : Number(v);
           else r[field] = v;
           saveState();
         }
@@ -416,7 +455,6 @@
    ***************/
   function renderCalcTab(tabId, title) {
     const bucket = state[tabId];
-    const sec = bucket.sections[bucket.activeSection];
 
     recomputeSection(tabId);
 
@@ -1058,6 +1096,9 @@
 
     $view.appendChild(content);
     bindTopButtons();
+
+    // ✅ 렌더 이후 sticky offset 재계산(노란영역 딱 맞게)
+    applyStickyHeights();
   }
 
   function renderSummaryTab(srcTabId, title, sumField) {
@@ -1120,4 +1161,5 @@
    * Init
    ***************/
   render();
+  bindStickyResize();
 })();

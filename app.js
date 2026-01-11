@@ -1203,15 +1203,7 @@ else if (state.activeTab === "support_sum") content = renderSummaryTabByCodeOrde
               el("td", {}, [String(round4(x.post))]),
             ]);
           }),
-          el("tr", {}, [
-            el("td", {}, ["TOTAL"]),
-            el("td", {}, [""]),
-            el("td", {}, [""]),
-            el("td", {}, [""]),
-            el("td", {}, [String(round4(totalPre))]),
-            el("td", {}, [""]),
-            el("td", {}, [String(round4(totalPost))]),
-          ])
+          
         ])
       ])
     ])

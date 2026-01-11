@@ -5,6 +5,7 @@
    - Ctrl+F3: 산출표에서만 현재 행 아래 행 추가  ✅ + 코드탭도 동일 동작
    - Ctrl+Shift+F3: 산출표 +10행               ✅ + 코드탭도 동일 동작
    - ✅ Ctrl+Del: "줄(행) 삭제" → 줄 수 감소 (calc/var/code 전부 적용)
+   - ✅ Ctrl+Del 시 삭제 확인(작은 confirm 창)
    - Ctrl+. : 코드 선택 창
    - ✅ 상단(topbar/tabs/top-split) 실제 높이 측정 → sticky offset 자동 보정
    - ✅ 노란 영역(패널 헤더) sticky 고정
@@ -327,7 +328,7 @@
       el("div", {}, [
         el("div", { class: "panel-title" }, ["코드"]),
         el("div", { class: "panel-desc" }, [
-          "방향키: 코드표 셀 이동 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+. 코드선택(산출표에서) | Ctrl+Del 줄삭제"
+          "방향키: 코드표 셀 이동 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+. 코드선택(산출표에서) | Ctrl+Del 줄삭제(확인)"
         ])
       ]),
       el("div", { class: "row-actions" }, [
@@ -441,12 +442,8 @@
     if (!sec?.rows) return;
     if (rowIdx < 0 || rowIdx >= sec.rows.length) return;
 
-    // 최소 1행 유지
-    if (sec.rows.length <= 1) {
-      sec.rows[0] = defaultCalcRow();
-    } else {
-      sec.rows.splice(rowIdx, 1);
-    }
+    if (sec.rows.length <= 1) sec.rows[0] = defaultCalcRow();
+    else sec.rows.splice(rowIdx, 1);
 
     recomputeSection(tabId);
     saveState();
@@ -468,12 +465,8 @@
     if (!sec?.vars) return;
     if (rowIdx < 0 || rowIdx >= sec.vars.length) return;
 
-    // 최소 1행 유지
-    if (sec.vars.length <= 1) {
-      sec.vars[0] = defaultVarRow();
-    } else {
-      sec.vars.splice(rowIdx, 1);
-    }
+    if (sec.vars.length <= 1) sec.vars[0] = defaultVarRow();
+    else sec.vars.splice(rowIdx, 1);
 
     recomputeSection(tabId);
     saveState();
@@ -492,7 +485,6 @@
     if (!Array.isArray(state.codeMaster)) return;
     if (rowIdx < 0 || rowIdx >= state.codeMaster.length) return;
 
-    // 최소 1행 유지
     if (state.codeMaster.length <= 1) {
       state.codeMaster[0] = { code:"", name:"", spec:"", unit:"", surcharge:null, convUnit:"", convFactor:null, note:"" };
     } else {
@@ -507,6 +499,15 @@
       const t = document.querySelector(`input[data-grid="code"][data-row="${newRow}"][data-col="0"]`);
       if (t) t.focus();
     });
+  }
+
+  function confirmDeleteRow(grid, tabId, rowIdx) {
+    const rowNo = Number(rowIdx) + 1;
+
+    if (grid === "calc") return confirm(`현재 산출표 ${rowNo}행을 삭제할까요?\n(취소하면 삭제되지 않습니다.)`);
+    if (grid === "var") return confirm(`현재 변수표 ${rowNo}행을 삭제할까요?\n(취소하면 삭제되지 않습니다.)`);
+    if (grid === "code") return confirm(`현재 코드표 ${rowNo}행을 삭제할까요?\n(취소하면 삭제되지 않습니다.)`);
+    return confirm("현재 행을 삭제할까요?");
   }
 
   /***************
@@ -533,7 +534,7 @@
       el("div", {}, [
         el("div", { class: "panel-title" }, [title]),
         el("div", { class: "panel-desc" }, [
-          "방향키: 산출표 셀 이동 | 산출식 Enter 계산 | Ctrl+. 코드선택 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+Del 줄삭제"
+          "방향키: 산출표 셀 이동 | 산출식 Enter 계산 | Ctrl+. 코드선택 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+Del 줄삭제(확인)"
         ])
       ]),
       el("div", { class: "row-actions" }, [
@@ -908,7 +909,7 @@
         e.keyCode === 46 || e.keyCode === 8 // 46: Delete, 8: Backspace
       );
 
-    // ✅ Ctrl+Del = 줄(행) 삭제 (줄 수 감소)
+    // ✅ Ctrl+Del = 줄(행) 삭제 (확인창)
     if (isCtrlDel) {
       const a = document.activeElement;
 
@@ -919,25 +920,24 @@
       const grid = a.dataset?.grid;
       if (grid !== "calc" && grid !== "var" && grid !== "code") return;
 
+      const tabId = a.dataset?.tab;
+      const row = Number(a.dataset?.row || 0);
+
+      // ✅ 작은 안내/확인 창
+      if (!confirmDeleteRow(grid, tabId, row)) return;
+
       e.preventDefault();
       e.stopPropagation();
 
       if (grid === "calc") {
-        const tabId = a.dataset.tab;
-        const row = Number(a.dataset.row);
         deleteCalcRow(tabId, row);
         return;
       }
-
       if (grid === "var") {
-        const tabId = a.dataset.tab;
-        const row = Number(a.dataset.row);
         deleteVarRow(tabId, row);
         return;
       }
-
       if (grid === "code") {
-        const row = Number(a.dataset.row);
         deleteCodeRow(row);
         return;
       }
@@ -969,7 +969,7 @@
         }
       }
     }
-  }, { capture: true }); // ✅ 이 옵션까지 포함해서 교체!
+  }, { capture: true });
 
   /***************
    * Code Picker Popup
@@ -1171,7 +1171,6 @@
    * Render
    ***************/
   function applyPanelStickyTop() {
-    // 산출탭(상단 top-split 존재)은 withTopSplit, 나머지는 base
     const root = document.documentElement;
     const isCalcTab = (state.activeTab === "steel" || state.activeTab === "steel_sub" || state.activeTab === "support");
     root.style.setProperty("--panelStickyTop", isCalcTab ? "var(--stickyWithTopSplitTop)" : "var(--stickyBaseTop)");
@@ -1193,11 +1192,9 @@
     $view.appendChild(content);
     bindTopButtons();
 
-    // ✅ 렌더 후 실제 높이 측정 → sticky offset 보정
     requestAnimationFrame(() => {
       updateStickyVars();
       applyPanelStickyTop();
-      // 한 번 더(폰/브라우저에서 레이아웃 확정 후)
       requestAnimationFrame(updateStickyVars);
     });
   }
@@ -1205,16 +1202,13 @@
   function renderSummaryTabByCodeOrder(srcTabId, title) {
     const bucket = state[srcTabId];
 
-    // codeMaster 순서를 위한 인덱스 맵
     const orderMap = new Map();
     (state.codeMaster || []).forEach((cm, idx) => {
       const c = String(cm.code || "").trim().toUpperCase();
       if (c) orderMap.set(c, idx);
     });
 
-    // 코드별 누적: code -> { code,name,spec,unit, pre, post, pctSet }
     const map = new Map();
-
     const prev = bucket.activeSection;
 
     for (let sIdx = 0; sIdx < bucket.sections.length; sIdx++) {
@@ -1230,9 +1224,9 @@
         const spec = r.spec || "";
         const unit = r.unit || "";
 
-        const pre = Number(r.value) || 0; // 할증전수량(= 물량)
+        const pre = Number(r.value) || 0;
         const mul = Number(r.surchargeMul) || 1;
-        const post = pre * mul; // 할증후수량(= 물량 * (1+할증))
+        const post = pre * mul;
 
         const pct =
           (r.surchargePct == null || r.surchargePct === "" || !Number.isFinite(Number(r.surchargePct)))
@@ -1240,19 +1234,13 @@
             : Number(r.surchargePct);
 
         if (!map.has(code)) {
-          map.set(code, {
-            code, name, spec, unit,
-            pre: 0,
-            post: 0,
-            pctSet: new Set()
-          });
+          map.set(code, { code, name, spec, unit, pre: 0, post: 0, pctSet: new Set() });
         }
 
         const agg = map.get(code);
         agg.pre += pre;
         agg.post += post;
 
-        // 할증 표시용(동일/혼합)
         if (pct == null) agg.pctSet.add("__NULL__");
         else agg.pctSet.add(String(pct));
       }
@@ -1261,9 +1249,6 @@
     bucket.activeSection = prev;
     saveState();
 
-    // ✅ 정렬 규칙:
-    // 1) 코드탭(codeMaster)에 존재하면 그 순서(orderMap 인덱스)
-    // 2) 코드탭에 없으면 맨 뒤로, 그 내부는 코드 문자열 오름차순
     const items = [...map.values()].sort((a, b) => {
       const ai = orderMap.has(a.code) ? orderMap.get(a.code) : Number.POSITIVE_INFINITY;
       const bi = orderMap.has(b.code) ? orderMap.get(b.code) : Number.POSITIVE_INFINITY;

@@ -810,15 +810,23 @@
   /***************
    * Shortcuts
    ***************/
-  window.addEventListener("keydown", (e) => {
+  /***************
+ * Shortcuts
+ ***************/
+window.addEventListener("keydown", (e) => {
   if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") {
     e.preventDefault();
     openCodePicker();
     return;
   }
 
-  // ✅ Ctrl+Del : 편집 가능한 셀에서만 비우기 (산출/변수/코드 표 공통)
-  if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Delete") {
+  // ✅ Ctrl+Del : OS/키보드별 key 값 차이 대응 (Delete / Del / Backspace)
+  if (
+    e.ctrlKey &&
+    !e.shiftKey &&
+    !e.altKey &&
+    (e.key === "Delete" || e.key === "Del" || e.key === "Backspace")
+  ) {
     const a = document.activeElement;
     if (!(a instanceof HTMLInputElement)) return;
 
@@ -856,6 +864,7 @@
     }
   }
 });
+
 
 
   /***************

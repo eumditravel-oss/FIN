@@ -811,46 +811,52 @@
    * Shortcuts
    ***************/
   window.addEventListener("keydown", (e) => {
-    if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") {
-      e.preventDefault();
-      openCodePicker();
-      return;
-    }
+  if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") {
+    e.preventDefault();
+    openCodePicker();
+    return;
+  }
 
-    if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === "Delete" || e.key === "Del")) {
-      const a = document.activeElement;
-      if (a instanceof HTMLInputElement) {
+  // ✅ Ctrl+Del : 편집 가능한 셀에서만 비우기 (산출/변수/코드 표 공통)
+  if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Delete") {
+    const a = document.activeElement;
+    if (!(a instanceof HTMLInputElement)) return;
+
+    const grid = a.dataset.grid;
+    if (grid !== "calc" && grid !== "var" && grid !== "code") return; // 표 밖 제외
+    if (a.hasAttribute("readonly")) return; // readonly 셀 제외
+
+    e.preventDefault();
+    a.value = "";
+    a.dispatchEvent(new Event("input", { bubbles: true }));
+    return;
+  }
+
+  if (e.ctrlKey && (e.key === "F3")) {
+    const a = document.activeElement;
+    if (a instanceof HTMLInputElement) {
+      const grid = a.dataset.grid;
+
+      if (grid === "calc") {
         e.preventDefault();
-        a.value = "";
-        a.dispatchEvent(new Event("input", { bubbles: true }));
+        const tabId = a.dataset.tab;
+        const row = Number(a.dataset.row);
+        if (e.shiftKey) addRows(tabId, 10, row);
+        else addRows(tabId, 1, row);
+        return;
       }
-      return;
-    }
 
-    if (e.ctrlKey && (e.key === "F3")) {
-      const a = document.activeElement;
-      if (a instanceof HTMLInputElement) {
-        const grid = a.dataset.grid;
-
-        if (grid === "calc") {
-          e.preventDefault();
-          const tabId = a.dataset.tab;
-          const row = Number(a.dataset.row);
-          if (e.shiftKey) addRows(tabId, 10, row);
-          else addRows(tabId, 1, row);
-          return;
-        }
-
-        if (grid === "code") {
-          e.preventDefault();
-          const row = Number(a.dataset.row);
-          if (e.shiftKey) addCodeRows(10, row);
-          else addCodeRows(1, row);
-          return;
-        }
+      if (grid === "code") {
+        e.preventDefault();
+        const row = Number(a.dataset.row);
+        if (e.shiftKey) addCodeRows(10, row);
+        else addCodeRows(1, row);
+        return;
       }
     }
-  });
+  }
+});
+
 
   /***************
    * Code Picker Popup

@@ -1068,8 +1068,9 @@
     else if (state.activeTab === "steel") content = renderCalcTab("steel", "철골");
     else if (state.activeTab === "steel_sub") content = renderCalcTab("steel_sub", "철골_부자재");
     else if (state.activeTab === "support") content = renderCalcTab("support", "구조이기/동바리");
-    else if (state.activeTab === "steel_sum") content = renderSummaryTab("steel", "철골_집계", "converted");
-    else if (state.activeTab === "support_sum") content = renderSummaryTab("support", "구조이기/동바리_집계", "value");
+    else if (state.activeTab === "steel_sum") content = renderSummaryTabByCodeOrder("steel", "철골_집계");
+else if (state.activeTab === "support_sum") content = renderSummaryTabByCodeOrder("support", "구조이기/동바리_집계");
+
 
     $view.appendChild(content);
     bindTopButtons();
@@ -1083,56 +1084,140 @@
     });
   }
 
-  function renderSummaryTab(srcTabId, title, sumField) {
-    const bucket = state[srcTabId];
-    const items = [];
-    let total = 0;
+  function renderSummaryTabByCodeOrder(srcTabId, title) {
+  const bucket = state[srcTabId];
 
-    const prev = bucket.activeSection;
-    for (let sIdx = 0; sIdx < bucket.sections.length; sIdx++) {
-      bucket.activeSection = sIdx;
-      recomputeSection(srcTabId);
-      const sec = bucket.sections[sIdx];
-      const sum = sec.rows.reduce((acc, r) => acc + (Number(r[sumField]) || 0), 0);
-      items.push({ name: sec.name || `구분 ${sIdx + 1}`, sum });
-      total += sum;
+  // codeMaster 순서를 위한 인덱스 맵
+  const orderMap = new Map();
+  (state.codeMaster || []).forEach((cm, idx) => {
+    const c = String(cm.code || "").trim().toUpperCase();
+    if (c) orderMap.set(c, idx);
+  });
+
+  // 코드별 누적: code -> { code,name,spec,unit, pre, post, pctSet }
+  const map = new Map();
+
+  const prev = bucket.activeSection;
+
+  for (let sIdx = 0; sIdx < bucket.sections.length; sIdx++) {
+    bucket.activeSection = sIdx;
+    recomputeSection(srcTabId);
+
+    const sec = bucket.sections[sIdx];
+    for (const r of sec.rows) {
+      const code = String(r.code || "").trim().toUpperCase();
+      if (!code) continue;
+
+      const name = r.name || "";
+      const spec = r.spec || "";
+      const unit = r.unit || "";
+
+      const pre = Number(r.value) || 0; // 할증전수량(= 물량)
+      const mul = Number(r.surchargeMul) || 1;
+      const post = pre * mul; // 할증후수량(= 물량 * (1+할증))
+
+      const pct =
+        (r.surchargePct == null || r.surchargePct === "" || !Number.isFinite(Number(r.surchargePct)))
+          ? null
+          : Number(r.surchargePct);
+
+      if (!map.has(code)) {
+        map.set(code, {
+          code, name, spec, unit,
+          pre: 0,
+          post: 0,
+          pctSet: new Set()
+        });
+      }
+
+      const agg = map.get(code);
+      agg.pre += pre;
+      agg.post += post;
+
+      // 할증 표시용(동일/혼합)
+      if (pct == null) agg.pctSet.add("__NULL__");
+      else agg.pctSet.add(String(pct));
     }
-    bucket.activeSection = prev;
-    saveState();
+  }
 
-    const panelHeader = el("div", { class: "panel-header sticky-head", dataset: { sticky: "panel" } }, [
-      el("div", {}, [
-        el("div", { class: "panel-title" }, [title]),
-        el("div", { class: "panel-desc" }, [
-          title.includes("동바리") ? "물량(Value) 합계" : "환산후수량 합계"
-        ])
+  bucket.activeSection = prev;
+  saveState();
+
+  // ✅ 정렬 규칙:
+  // 1) 코드탭(codeMaster)에 존재하면 그 순서(orderMap 인덱스)
+  // 2) 코드탭에 없으면 맨 뒤로, 그 내부는 코드 문자열 오름차순
+  const items = [...map.values()].sort((a, b) => {
+    const ai = orderMap.has(a.code) ? orderMap.get(a.code) : Number.POSITIVE_INFINITY;
+    const bi = orderMap.has(b.code) ? orderMap.get(b.code) : Number.POSITIVE_INFINITY;
+    if (ai !== bi) return ai - bi;
+    return a.code.localeCompare(b.code);
+  });
+
+  const totalPre = items.reduce((acc, x) => acc + (Number(x.pre) || 0), 0);
+  const totalPost = items.reduce((acc, x) => acc + (Number(x.post) || 0), 0);
+
+  const panelHeader = el("div", { class: "panel-header sticky-head", dataset: { sticky: "panel" } }, [
+    el("div", {}, [
+      el("div", { class: "panel-title" }, [title]),
+      el("div", { class: "panel-desc" }, [
+        "코드별 집계: 할증전수량(물량 합) / 할증후수량(물량×(1+할증)) · 정렬: 코드탭 순서"
       ])
-    ]);
+    ])
+  ]);
 
-    return el("div", { class: "panel" }, [
-      panelHeader,
-      el("div", { class: "table-wrap" }, [
-        el("table", {}, [
-          el("thead", {}, [
-            el("tr", {}, [
-              el("th", {}, ["구분"]),
-              el("th", {}, ["합계"])
-            ])
-          ]),
-          el("tbody", {}, [
-            ...items.map(x => el("tr", {}, [
+  return el("div", { class: "panel" }, [
+    panelHeader,
+    el("div", { class: "table-wrap" }, [
+      el("table", {}, [
+        el("thead", {}, [
+          el("tr", {}, [
+            el("th", {}, ["코드"]),
+            el("th", {}, ["품명"]),
+            el("th", {}, ["규격"]),
+            el("th", {}, ["단위"]),
+            el("th", {}, ["할증전수량"]),
+            el("th", {}, ["할증(%)"]),
+            el("th", {}, ["할증후수량"]),
+          ])
+        ]),
+        el("tbody", {}, [
+          ...items.map(x => {
+            const pctText = (() => {
+              const s = x.pctSet;
+              if (s.size === 0) return "";
+              if (s.size === 1) {
+                const only = [...s][0];
+                if (only === "__NULL__") return "";
+                return only;
+              }
+              return "혼합";
+            })();
+
+            return el("tr", {}, [
+              el("td", {}, [x.code]),
               el("td", {}, [x.name]),
-              el("td", {}, [String(round4(x.sum))])
-            ])),
-            el("tr", {}, [
-              el("td", {}, ["TOTAL"]),
-              el("td", {}, [String(round4(total))])
-            ])
+              el("td", {}, [x.spec]),
+              el("td", {}, [x.unit]),
+              el("td", {}, [String(round4(x.pre))]),
+              el("td", {}, [pctText]),
+              el("td", {}, [String(round4(x.post))]),
+            ]);
+          }),
+          el("tr", {}, [
+            el("td", {}, ["TOTAL"]),
+            el("td", {}, [""]),
+            el("td", {}, [""]),
+            el("td", {}, [""]),
+            el("td", {}, [String(round4(totalPre))]),
+            el("td", {}, [""]),
+            el("td", {}, [String(round4(totalPost))]),
           ])
         ])
       ])
-    ]);
-  }
+    ])
+  ]);
+}
+
 
   function round4(n) {
     const v = Number(n) || 0;

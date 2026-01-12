@@ -1,7 +1,10 @@
 /* =========================
-   FIN 산출자료(Web) picker.js (확장본)
+   FIN 산출자료(Web) picker.js (확장본) - 수정본(요청반영)
    - ✅ Ctrl+. 열면 전체 코드 즉시 표시
    - ✅ 코드 선택/다중선택/삽입 유지
+   - ✅ Shift+↑/↓ : "블록(연속 범위)" 선택 (빨간 박스 방식)
+   - ✅ Ctrl+B : 기존처럼 커서행 토글 선택(그대로)
+   - ✅ Ctrl+Enter : 선택(또는 커서 1개) 삽입 + 창 닫기
    - ✅ 코드 마스터 편집(추가/삭제/엑셀업로드/JSON내보내기)
    - ✅ "코드저장/반영" 버튼으로 부모창(app) state.codes 업데이트
    ========================= */
@@ -18,8 +21,10 @@ let codesDraft = [];
 // PICK
 let results = [];
 let cursorIndex = -1;
-const selected = new Set();
-let shiftSelecting = false;
+const selected = new Set(); // code string set
+
+// ✅ Shift 블록 선택용 앵커(시작점)
+let rangeAnchor = null;
 
 // EDIT dirty tracking
 let dirtyCount = 0;
@@ -47,6 +52,9 @@ const $editInfo = document.getElementById("editInfo");
 const $btnAddRow = document.getElementById("btnAddRow");
 const $fileXlsx = document.getElementById("fileXlsx");
 const $btnExportCodes = document.getElementById("btnExportCodes");
+
+// view state
+let activeView = "pick"; // pick | edit
 
 function esc(s){
   return (s ?? "").toString()
@@ -102,14 +110,28 @@ function renderPick(){
       <td>${esc(it.conv_factor)}</td>
     `;
 
-    tr.addEventListener("click", ()=>{
-      cursorIndex = i;
+    // ✅ 클릭: 커서 이동 (Shift+클릭이면 블록 선택)
+    tr.addEventListener("click", (e)=>{
+      if(!results.length) return;
+
+      // Shift+클릭이면 rangeAnchor 기준으로 블록 지정
+      if(e.shiftKey){
+        if(rangeAnchor === null) rangeAnchor = (cursorIndex >= 0 ? cursorIndex : i);
+        cursorIndex = i;
+        applyRangeSelection(rangeAnchor, cursorIndex);
+      }else{
+        cursorIndex = i;
+        rangeAnchor = null;
+      }
+
       renderPick();
       ensureVisible();
     });
 
+    // dblclick: 기존처럼 커서행 토글 (Ctrl+B 역할)
     tr.addEventListener("dblclick", ()=>{
       cursorIndex = i;
+      rangeAnchor = null;
       toggleSelectCursor();
       ensureVisible();
     });
@@ -133,10 +155,14 @@ function runSearch(){
     if(cursorIndex < 0) cursorIndex = 0;
   }
 
+  // ✅ 검색이 바뀌면 블록 앵커는 초기화 (선택은 유지/초기화는 취향인데 요청에 맞춰 초기화)
+  rangeAnchor = null;
+
   renderPick();
   ensureVisible();
 }
 
+/* ===== Cursor ===== */
 function moveCursorNoRender(delta){
   if(!results.length) return;
   cursorIndex = Math.min(results.length - 1, Math.max(0, cursorIndex + delta));
@@ -147,6 +173,7 @@ function moveCursor(delta){
   ensureVisible();
 }
 
+/* ===== Selection ===== */
 function toggleSelectCursor(){
   if(cursorIndex < 0) return;
   const it = results[cursorIndex];
@@ -158,8 +185,32 @@ function toggleSelectCursor(){
   renderPick();
 }
 
-function insertToParent(){
-  let selectedCodes = Array.from(selected);
+// ✅ Shift 블록 선택(연속범위): 선택을 "범위 전체로 재구성"
+function applyRangeSelection(a, b){
+  if(!results.length) return;
+
+  const start = Math.min(a, b);
+  const end   = Math.max(a, b);
+
+  selected.clear();
+  for(let i = start; i <= end; i++){
+    const it = results[i];
+    if(it?.code) selected.add(it.code);
+  }
+}
+
+/* ===== Insert ===== */
+// ✅ 선택된 코드들을 현재 표시 순서(results 순서)대로 정렬해서 보내기
+function getSelectedCodesOrdered(){
+  const ordered = [];
+  for(const it of results){
+    if(selected.has(it.code)) ordered.push(it.code);
+  }
+  return ordered;
+}
+
+function insertToParent({ closeAfter=false } = {}){
+  let selectedCodes = getSelectedCodesOrdered();
 
   if(selectedCodes.length === 0 && cursorIndex >= 0 && results[cursorIndex]){
     selectedCodes = [results[cursorIndex].code];
@@ -176,6 +227,8 @@ function insertToParent(){
     focusRow,
     selectedCodes
   }, window.location.origin);
+
+  if(closeAfter) closeMe();
 }
 
 function closeMe(){
@@ -186,8 +239,6 @@ function closeMe(){
 }
 
 /* ===== Tab switch ===== */
-let activeView = "pick"; // pick | edit
-
 function setActiveView(v){
   activeView = v;
 
@@ -198,7 +249,6 @@ function setActiveView(v){
   if($viewPick) $viewPick.style.display = (v==="pick" ? "" : "none");
   if($viewEdit) $viewEdit.style.display = (v==="edit" ? "" : "none");
 
-  // pick view focus
   if(v==="pick"){
     setTimeout(()=> $q?.focus(), 0);
   }
@@ -278,8 +328,7 @@ function wireEditEvents(){
     }
 
     bumpDirty();
-    // pick 쪽 결과도 즉시 반영되도록 (검색표시가 codesDraft 기반)
-    runSearch();
+    runSearch(); // pick 쪽 결과도 즉시 반영
   });
 
   // delete delegation
@@ -365,10 +414,7 @@ function exportCodesJson(){
 
 /* ✅ 부모창(app.js)로 코드 마스터 반영 */
 function applyCodesToOpener(){
-  // 기본 정리(문자 trim)
   const cleaned = codesDraft.map(normalizeRow);
-
-  // code 공란 제거
   const finalCodes = cleaned.filter(x => x.code);
 
   if(finalCodes.length === 0){
@@ -389,7 +435,6 @@ function applyCodesToOpener(){
     return;
   }
 
-  // opener에 반영 요청
   try{
     window.opener?.postMessage({
       type: "UPDATE_CODES",
@@ -430,12 +475,13 @@ window.addEventListener("message", (event) => {
     // pick init
     if($q) $q.value = "";
     selected.clear();
-    shiftSelecting = false;
+    rangeAnchor = null;
     cursorIndex = (codesDraft.length ? 0 : -1);
 
     // render both
     runSearch();
     renderEdit();
+    updateBadges();
   }
 });
 
@@ -459,53 +505,50 @@ document.addEventListener("keydown", (e)=>{
       }
     }
 
-    // Shift + ArrowDown/Up : 누적선택 + 이동행도 선택
+    // ✅ Shift + ArrowDown/Up : 블록(연속 범위) 지정
     if(e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "ArrowDown" || e.key === "ArrowUp")){
       e.preventDefault();
+      if(!results.length) return;
 
-      if(!shiftSelecting){
-        shiftSelecting = true;
-        if(cursorIndex >= 0 && results[cursorIndex]){
-          selected.add(results[cursorIndex].code);
-        }
+      // 앵커 고정(첫 Shift 이동 시점의 커서가 시작점)
+      if(rangeAnchor === null){
+        rangeAnchor = (cursorIndex >= 0 ? cursorIndex : 0);
       }
 
       moveCursorNoRender(e.key === "ArrowDown" ? 1 : -1);
-
-      if(cursorIndex >= 0 && results[cursorIndex]){
-        selected.add(results[cursorIndex].code);
-      }
+      applyRangeSelection(rangeAnchor, cursorIndex);
 
       renderPick();
       ensureVisible();
       return;
     }
 
-    // ArrowDown/Up: 커서 이동
+    // ArrowDown/Up: 커서 이동 (Shift 없을 때)
     if(e.key === "ArrowDown"){
       e.preventDefault();
-      shiftSelecting = false;
+      rangeAnchor = null;
       moveCursor(1);
       return;
     }
     if(e.key === "ArrowUp"){
       e.preventDefault();
-      shiftSelecting = false;
+      rangeAnchor = null;
       moveCursor(-1);
       return;
     }
 
-    // Ctrl+B: 다중선택 토글
+    // Ctrl+B: 다중선택 토글 (기존 유지)
     if(e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "b" || e.key === "B")){
       e.preventDefault();
+      rangeAnchor = null;
       toggleSelectCursor();
       return;
     }
 
-    // Ctrl+Enter: 삽입
+    // ✅ Ctrl+Enter: 삽입 + 닫기
     if(e.ctrlKey && !e.altKey && !e.metaKey && e.key === "Enter"){
       e.preventDefault();
-      insertToParent();
+      insertToParent({ closeAfter:true });
       return;
     }
   }
@@ -527,13 +570,14 @@ document.addEventListener("keydown", (e)=>{
   }
 });
 
-/* Shift 떼면 선택 시작 상태 초기화 */
+/* Shift 떼면 앵커 유지? (요청은 블록선택이므로, Shift 해제 시 앵커 해제) */
 document.addEventListener("keyup", (e)=>{
-  if(e.key === "Shift") shiftSelecting = false;
+  if(e.key === "Shift") rangeAnchor = null;
 });
 
 /* ===== UI events ===== */
-$btnInsert?.addEventListener("click", insertToParent);
+// ✅ 버튼 "삽입"도 Ctrl+Enter와 동일하게: 삽입 + 닫기
+$btnInsert?.addEventListener("click", ()=> insertToParent({ closeAfter:true }));
 $btnClose?.addEventListener("click", closeMe);
 $btnApplyCodes?.addEventListener("click", applyCodesToOpener);
 
@@ -568,6 +612,9 @@ wireEditEvents();
   if($q) $q.value = "";
   results = [];
   cursorIndex = -1;
+  selected.clear();
+  rangeAnchor = null;
+
   renderPick();
   renderEdit();
   setActiveView("pick");

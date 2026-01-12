@@ -27,8 +27,14 @@
 *{ box-sizing:border-box; }
 html,body{ height:100%; }
 
+/* ✅ 페이지 전체 스크롤 제거 + 앱 레이아웃 고정 */
 body{
   margin:0;
+  height:100vh;
+  overflow:hidden;              /* ✅ 전체 페이지 스크롤 제거 */
+  display:flex;                 /* ✅ header/tabs/main/footer 고정 레이아웃 */
+  flex-direction:column;
+
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", Arial, "Apple SD Gothic Neo", "Malgun Gothic";
   color:var(--ink);
   background:
@@ -50,6 +56,7 @@ body{
   background: rgba(246,241,230,.90);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
+  flex:0 0 auto;
 }
 
 .brand .title{ font-weight: 900; letter-spacing: -0.2px; font-size: 18px; }
@@ -108,6 +115,7 @@ body{
   background: rgba(246,241,230,.74);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(0,0,0,.06);
+  flex:0 0 auto;
 }
 
 .tab{
@@ -126,14 +134,40 @@ body{
 }
 
 /* ===== Content ===== */
-.content{ padding: 12px 16px 22px; }
+/* ✅ main 영역 자체도 스크롤 금지, 내부 컨테이너만 스크롤 */
+.content{
+  padding: 12px 16px 12px;
+  flex:1 1 auto;
+  min-height:0;        /* ✅ 내부 flex children 스크롤 가능하게 */
+  overflow:hidden;     /* ✅ 페이지 스크롤 대신 내부 스크롤 */
+}
 
+/* ✅ view도 높이 100%로 고정 */
+#view{
+  height:100%;
+  min-height:0;
+}
+
+/* ✅ calc/code 화면 전체를 "고정 영역"처럼 쓰기 위한 래퍼 */
+.view-fill{
+  height:100%;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+/* ===== Panel ===== */
 .panel{
   background: rgba(255,250,240,.86);
   border:1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 12px;
+
+  display:flex;            /* ✅ 패널 내부에서 헤더 고정 + 내용 스크롤 */
+  flex-direction:column;
+  min-height:0;
 }
 
 /* ✅ 패널 헤더 sticky (노란 영역 고정) */
@@ -153,7 +187,6 @@ body{
   backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(0,0,0,.08);
 
-  /* 패널 padding(12px) 때문에 sticky가 "안쪽"에서 시작 → 헤더를 패널 가장자리로 확장 */
   margin: -12px -12px 10px;
   padding: 12px;
   border-top-left-radius: var(--radius);
@@ -168,12 +201,21 @@ body{
   line-height: 1.5;
 }
 
+.row-actions{
+  display:flex;
+  gap:6px;
+  justify-content:flex-start;
+  align-items:center;
+}
+
 /* ===== Tables ===== */
 .table-wrap{
   border:1px solid var(--line);
   border-radius: 16px;
-  overflow:auto;
+  overflow:auto;           /* ✅ 이 컨테이너 안에서만 스크롤 */
   background: rgba(255,255,255,.55);
+  flex:1 1 auto;           /* ✅ 패널 내부 남은 높이를 차지 */
+  min-height:0;            /* ✅ overflow가 동작하게 */
 }
 
 table{
@@ -200,13 +242,6 @@ tbody td{
   border-bottom: 1px solid rgba(0,0,0,.06);
   padding: 4px 6px;
   vertical-align: middle;
-}
-
-.row-actions{
-  display:flex;
-  gap:6px;
-  justify-content:flex-start;
-  align-items:center;
 }
 
 /* ===== Inputs ===== */
@@ -236,17 +271,16 @@ tbody td{
   padding: 10px 16px 16px;
   color: var(--muted);
   font-size: 12px;
+  flex:0 0 auto;
 }
 
 /* ===========================
-   ✅ 상단(구분/변수) sticky 영역
+   ✅ 상단(구분/변수) 영역 (페이지 스크롤이 없어도 상단 고정처럼 보이도록)
    =========================== */
 .top-split{
-  position: sticky;
-  top: calc(var(--topbarH) + var(--tabsH));
-  z-index: 160;
-  margin: 0 0 10px;
-  padding-top: 0;
+  flex:0 0 auto;
+  margin: 0;
+  padding: 0;
 }
 
 /* top split grid */
@@ -264,6 +298,7 @@ tbody td{
   border-radius:16px;
   box-shadow: 0 10px 26px rgba(0,0,0,.06);
   padding:10px;
+
   height: var(--topSplitH);
   overflow: hidden;
   display:flex;
@@ -284,7 +319,7 @@ tbody td{
 /* 구분 리스트 */
 .section-list{
   flex: 1 1 auto;
-  overflow:auto;
+  overflow:auto;          /* ✅ 구분 리스트도 박스 안에서만 스크롤 */
   padding-right:4px;
   display:flex;
   flex-direction:column;
@@ -345,8 +380,9 @@ tbody td{
   flex: 1 1 auto;
   border:1px solid rgba(0,0,0,.10);
   border-radius:14px;
-  overflow:auto;
+  overflow:auto;          /* ✅ 변수표도 박스 안에서만 스크롤 */
   background: rgba(255,255,255,.55);
+  min-height:0;
 }
 .var-table{
   width:100%;

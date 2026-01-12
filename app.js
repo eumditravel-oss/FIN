@@ -4,8 +4,7 @@
    - 산출탭 방향키 이동: 산출표(빨간영역) 안에서만 동작
    - Ctrl+F3: 산출표에서만 현재 행 아래 행 추가  ✅ + 코드탭도 동일 동작
    - Ctrl+Shift+F3: 산출표 +10행               ✅ + 코드탭도 동일 동작
-   - ✅ Ctrl+Del: "줄(행) 삭제" → 줄 수 감소 (calc/var/code 전부 적용)
-   - ✅ Ctrl+Del 시 삭제 확인(작은 confirm 창)
+   - ✅ Ctrl+Del: (확인창) → 줄(행) 삭제(줄 수 감소)  ✅ calc+code 전체 적용 / var는 셀 비우기
    - Ctrl+. : 코드 선택 창
    - ✅ 상단(topbar/tabs/top-split) 실제 높이 측정 → sticky offset 자동 보정
    - ✅ 노란 영역(패널 헤더) sticky 고정
@@ -39,16 +38,13 @@
     root.style.setProperty("--tabsH", `${Math.ceil(tabsH)}px`);
     root.style.setProperty("--topSplitActualH", `${Math.ceil(topSplitH)}px`);
 
-    // 기본(코드탭/집계탭): topbar+tabs 아래에 패널헤더 고정
     const base = Math.ceil(topbarH + tabsH);
     root.style.setProperty("--stickyBaseTop", `${base}px`);
 
-    // 산출탭: topbar+tabs+topSplit 아래에 패널헤더 고정
     const withTopSplit = Math.ceil(topbarH + tabsH + topSplitH + 10); // 10px 여유
     root.style.setProperty("--stickyWithTopSplitTop", `${withTopSplit}px`);
   }
 
-  // resize/폰 회전/버튼 줄바꿈 대응
   window.addEventListener("resize", () => {
     requestAnimationFrame(updateStickyVars);
   });
@@ -328,7 +324,7 @@
       el("div", {}, [
         el("div", { class: "panel-title" }, ["코드"]),
         el("div", { class: "panel-desc" }, [
-          "방향키: 코드표 셀 이동 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+. 코드선택(산출표에서) | Ctrl+Del 줄삭제(확인)"
+          "방향키: 코드표 셀 이동 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+. 코드선택(산출표에서) | Ctrl+Del 행삭제(확인)"
         ])
       ]),
       el("div", { class: "row-actions" }, [
@@ -433,84 +429,6 @@
   }
 
   /***************
-   * ✅ Ctrl+Del 줄(행) 삭제 helpers (calc/var/code)
-   ***************/
-  function deleteCalcRow(tabId, rowIdx) {
-    const bucket = state[tabId];
-    if (!bucket) return;
-    const sec = bucket.sections[bucket.activeSection];
-    if (!sec?.rows) return;
-    if (rowIdx < 0 || rowIdx >= sec.rows.length) return;
-
-    if (sec.rows.length <= 1) sec.rows[0] = defaultCalcRow();
-    else sec.rows.splice(rowIdx, 1);
-
-    recomputeSection(tabId);
-    saveState();
-    render();
-
-    requestAnimationFrame(() => {
-      const newRow = Math.min(rowIdx, sec.rows.length - 1);
-      const t = document.querySelector(
-        `input[data-grid="calc"][data-tab="${tabId}"][data-row="${newRow}"][data-col="0"]`
-      );
-      if (t) t.focus();
-    });
-  }
-
-  function deleteVarRow(tabId, rowIdx) {
-    const bucket = state[tabId];
-    if (!bucket) return;
-    const sec = bucket.sections[bucket.activeSection];
-    if (!sec?.vars) return;
-    if (rowIdx < 0 || rowIdx >= sec.vars.length) return;
-
-    if (sec.vars.length <= 1) sec.vars[0] = defaultVarRow();
-    else sec.vars.splice(rowIdx, 1);
-
-    recomputeSection(tabId);
-    saveState();
-    render();
-
-    requestAnimationFrame(() => {
-      const newRow = Math.min(rowIdx, sec.vars.length - 1);
-      const t = document.querySelector(
-        `input[data-grid="var"][data-tab="${tabId}"][data-row="${newRow}"][data-col="0"]`
-      );
-      if (t) t.focus();
-    });
-  }
-
-  function deleteCodeRow(rowIdx) {
-    if (!Array.isArray(state.codeMaster)) return;
-    if (rowIdx < 0 || rowIdx >= state.codeMaster.length) return;
-
-    if (state.codeMaster.length <= 1) {
-      state.codeMaster[0] = { code:"", name:"", spec:"", unit:"", surcharge:null, convUnit:"", convFactor:null, note:"" };
-    } else {
-      state.codeMaster.splice(rowIdx, 1);
-    }
-
-    saveState();
-    render();
-
-    requestAnimationFrame(() => {
-      const newRow = Math.min(rowIdx, state.codeMaster.length - 1);
-      const t = document.querySelector(`input[data-grid="code"][data-row="${newRow}"][data-col="0"]`);
-      if (t) t.focus();
-    });
-  }
-
-  function confirmDeleteRow(grid, tabId, rowIdx) {
-    const rowNo = Number(rowIdx) + 1;
-
-    if (grid === "calc") return confirm(`현재 산출표 ${rowNo}행을 삭제할까요?\n(취소하면 삭제되지 않습니다.)`);
-    if (grid === "var") return confirm(`현재 변수표 ${rowNo}행을 삭제할까요?\n(취소하면 삭제되지 않습니다.)`);
-    if (grid === "code") return confirm(`현재 코드표 ${rowNo}행을 삭제할까요?\n(취소하면 삭제되지 않습니다.)`);
-    return confirm("현재 행을 삭제할까요?");
-  }
-
-  /***************
    * UI: Section + Vars + Calc
    ***************/
   function renderCalcTab(tabId, title) {
@@ -534,7 +452,7 @@
       el("div", {}, [
         el("div", { class: "panel-title" }, [title]),
         el("div", { class: "panel-desc" }, [
-          "방향키: 산출표 셀 이동 | 산출식 Enter 계산 | Ctrl+. 코드선택 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+Del 줄삭제(확인)"
+          "방향키: 산출표 셀 이동 | 산출식 Enter 계산 | Ctrl+. 코드선택 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+Del 행삭제(확인)"
         ])
       ]),
       el("div", { class: "row-actions" }, [
@@ -887,6 +805,57 @@
   }
 
   /***************
+   * ✅ Row delete helpers (Ctrl+Del)
+   ***************/
+  function deleteCalcRowAtActiveCell(inputEl) {
+    const tabId = inputEl.dataset.tab;
+    const row = Number(inputEl.dataset.row);
+    const col = Number(inputEl.dataset.col);
+
+    const bucket = state[tabId];
+    const sec = bucket.sections[bucket.activeSection];
+
+    if (!sec?.rows?.length) return;
+    if (sec.rows.length <= 1) {
+      // 최소 1행 유지: 삭제 대신 비우기
+      sec.rows[0] = defaultCalcRow();
+    } else {
+      sec.rows.splice(row, 1);
+    }
+
+    recomputeSection(tabId);
+    saveState();
+    render();
+
+    requestAnimationFrame(() => {
+      const nr = clamp(row, 0, (sec.rows.length - 1));
+      const target = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${nr}"][data-col="${col}"]`);
+      if (target) target.focus();
+    });
+  }
+
+  function deleteCodeMasterRowAtActiveCell(inputEl) {
+    const row = Number(inputEl.dataset.row);
+    const col = Number(inputEl.dataset.col);
+
+    if (!Array.isArray(state.codeMaster)) return;
+    if (state.codeMaster.length <= 1) {
+      state.codeMaster[0] = { code:"", name:"", spec:"", unit:"", surcharge:null, convUnit:"", convFactor:null, note:"" };
+    } else {
+      state.codeMaster.splice(row, 1);
+    }
+
+    saveState();
+    render();
+
+    requestAnimationFrame(() => {
+      const nr = clamp(row, 0, state.codeMaster.length - 1);
+      const target = document.querySelector(`input[data-grid="code"][data-row="${nr}"][data-col="${col}"]`);
+      if (target) target.focus();
+    });
+  }
+
+  /***************
    * Shortcuts
    ***************/
   window.addEventListener("keydown", (e) => {
@@ -906,41 +875,43 @@
       (
         e.key === "Delete" || e.key === "Del" || e.key === "Backspace" ||
         e.code === "Delete" || e.code === "Backspace" ||
-        e.keyCode === 46 || e.keyCode === 8 // 46: Delete, 8: Backspace
+        e.keyCode === 46 || e.keyCode === 8
       );
 
-    // ✅ Ctrl+Del = 줄(행) 삭제 (확인창)
     if (isCtrlDel) {
       const a = document.activeElement;
-
-      const isEditableEl =
-        (a instanceof HTMLInputElement) || (a instanceof HTMLTextAreaElement);
+      const isEditableEl = (a instanceof HTMLInputElement) || (a instanceof HTMLTextAreaElement);
       if (!isEditableEl) return;
 
       const grid = a.dataset?.grid;
       if (grid !== "calc" && grid !== "var" && grid !== "code") return;
+      if (a.hasAttribute("readonly")) return;
 
-      const tabId = a.dataset?.tab;
-      const row = Number(a.dataset?.row || 0);
-
-      // ✅ 작은 안내/확인 창
-      if (!confirmDeleteRow(grid, tabId, row)) return;
+      // ✅ 확인 팝업
+      const ok = confirm("정말로 삭제할까요?\n- 산출표/코드표: 현재 '행'이 삭제됩니다.\n- 변수표: 현재 '셀'이 비워집니다.");
+      if (!ok) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
 
       e.preventDefault();
       e.stopPropagation();
 
+      // ✅ 줄 수 감소(행 삭제): calc + code
       if (grid === "calc") {
-        deleteCalcRow(tabId, row);
-        return;
-      }
-      if (grid === "var") {
-        deleteVarRow(tabId, row);
+        deleteCalcRowAtActiveCell(a);
         return;
       }
       if (grid === "code") {
-        deleteCodeRow(row);
+        deleteCodeMasterRowAtActiveCell(a);
         return;
       }
+
+      // var는 고정 12행 구조라서: 셀 비우기 유지
+      a.value = "";
+      a.dispatchEvent(new Event("input", { bubbles: true }));
+      return;
     }
 
     // Ctrl+F3 / Ctrl+Shift+F3
@@ -1074,29 +1045,37 @@
 
   window.__FIN_GET_CODEMASTER__ = () => state.codeMaster || [];
   window.__FIN_INSERT_CODE__ = (code) => { insertCodeToActiveCell(code); };
-  window.__FIN_INSERT_CODES__ = (codes) => {
-    insertCodeToActiveCell(codes[0] || "");
 
+  // ✅ 멀티 선택 삽입: 현재 행부터 "밀어내며 삽입"
+  window.__FIN_INSERT_CODES__ = (codes) => {
     const a = document.activeElement;
     if (!(a instanceof HTMLInputElement) || a.dataset.grid !== "calc") return;
+
     const tabId = a.dataset.tab;
-    const startRow = Number(a.dataset.row);
+    const startRowRaw = Number(a.dataset.row);
     const col = Number(a.dataset.col);
 
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
 
-    for (let i = 0; i < codes.length; i++) {
-      const rIdx = startRow + i;
-      if (rIdx >= sec.rows.length) sec.rows.push(defaultCalcRow());
-      sec.rows[rIdx].code = String(codes[i] || "").toUpperCase();
-    }
+    const startRow = clamp(startRowRaw, 0, sec.rows.length); // length도 허용(맨 끝 삽입)
+    const insertRows = codes.map(c => {
+      const r = defaultCalcRow();
+      r.code = String(c || "").toUpperCase().trim();
+      return r;
+    });
+
+    // ✅ 기존 행을 아래로 밀어내며 삽입
+    sec.rows.splice(startRow, 0, ...insertRows);
+
     recomputeSection(tabId);
     saveState();
     render();
 
     requestAnimationFrame(() => {
-      const target = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${startRow}"][data-col="${col}"]`);
+      const target = document.querySelector(
+        `input[data-grid="calc"][data-tab="${tabId}"][data-row="${startRow}"][data-col="${col}"]`
+      );
       if (target) target.focus();
     });
   };
@@ -1112,6 +1091,7 @@
     const sec = bucket.sections[bucket.activeSection];
     if (!sec.rows[row]) return;
 
+    // 단일 선택은 "현재 행 코드만 교체" 유지
     sec.rows[row].code = String(code || "").toUpperCase().trim();
     recomputeSection(tabId);
     saveState();
@@ -1234,7 +1214,12 @@
             : Number(r.surchargePct);
 
         if (!map.has(code)) {
-          map.set(code, { code, name, spec, unit, pre: 0, post: 0, pctSet: new Set() });
+          map.set(code, {
+            code, name, spec, unit,
+            pre: 0,
+            post: 0,
+            pctSet: new Set()
+          });
         }
 
         const agg = map.get(code);

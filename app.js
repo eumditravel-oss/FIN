@@ -1,12 +1,8 @@
-/* app.js (FINAL FIX v12.1) - FIN 산출자료 (Web)
-   - ✅ 스크롤러 2중( table-wrap + calc-scroll ) 구조 제거 → calc-scroll 하나만 스크롤 담당
-   - ✅ 산출/코드 표 열 너비 비율 colgroup으로 강제 (코드 0.5x / 품명·규격·산출식 2.5x / 노랑 0.25x)
-   - ✅ 산출탭 위치(공백/밀림) 복구: calc-scroll 높이를 JS로 계산하여 강제
-   - ✅ 산출표 내부 휠 스크롤: 변수표처럼 calc-scroll 안에서 wheel 동작
-   - ✅ 코드탭도 동일하게 내부 스크롤 적용
-   - ✅ (v12.1) Ctrl+F3 행추가 시 상단(top-split) “밀려 올라가는” 점프 방지:
-       1) focus({preventScroll:true}) 사용 + 수동 ensureScrollIntoView()
-       2) 포커스 직전 updateScrollHeights() 먼저 적용
+/* app.js (FINAL FIX v12.2) - FIN 산출자료 (Web)
+   - ✅ (v12.2) 변수표도 산출표처럼 방향키 이동 시 스크롤 연계 (var-tablewrap을 calc-scroll로 취급)
+   - ✅ (v12.2) 방향키로 위/아래 이동 시에도 1행이 자동으로 보이도록 ensureScrollIntoView() 개선(Sticky thead 높이 반영)
+   - ✅ (v12.2) F2 편집모드: Enter로 종료, 편집 중에는 Home/End/좌우키 등 텍스트 편집 허용
+   - ✅ (v12.2) 코드탭 헤더의 (영문) 제거
 */
 
 (() => {
@@ -25,10 +21,8 @@
   function safeFocus(target) {
     if (!target) return;
     try {
-      // 최신 브라우저: 자동 스크롤 점프 방지
       target.focus({ preventScroll: true });
     } catch {
-      // 구형 브라우저 fallback
       try { target.focus(); } catch {}
     }
   }
@@ -58,7 +52,7 @@
     const base = Math.ceil(topbarH + tabsH);
     root.style.setProperty("--stickyBaseTop", `${base}px`);
 
-    const withTopSplit = Math.ceil(topbarH + tabsH + topSplitH + 10); // 10px 여유
+    const withTopSplit = Math.ceil(topbarH + tabsH + topSplitH + 10);
     root.style.setProperty("--stickyWithTopSplitTop", `${withTopSplit}px`);
   }
 
@@ -66,12 +60,12 @@
     requestAnimationFrame(() => {
       updateStickyVars();
       applyPanelStickyTop();
-      updateScrollHeights(); // ✅ 내부 스크롤 높이 재계산
+      updateScrollHeights();
     });
   });
 
   /***************
-   * ✅ 산출/코드 내부 스크롤 높이 자동 보정 (공백/밀림 해결)
+   * ✅ 내부 스크롤 높이 자동 보정
    ***************/
   function updateScrollHeights() {
     const scrolls = document.querySelectorAll(".calc-scroll");
@@ -96,7 +90,7 @@
   }
 
   /***************
-   * Code Master (엑셀 동일 구조)
+   * Code Master
    ***************/
   const DEFAULT_CODE_MASTER = [
     {"code":"A0SM355150","name":"RH형강 / SM355","spec":"150*150*7*10","unit":"M","surcharge":7,"convUnit":"TON","convFactor":0.0315,"note":""},
@@ -342,7 +336,7 @@
   }
 
   /***************
-   * ✅ Column width helpers (colgroup 강제)
+   * Column width helpers
    ***************/
   function buildColGroupFromWeights(weights) {
     const sum = weights.reduce((a, b) => a + b, 0);
@@ -354,9 +348,7 @@
     return cg;
   }
 
-  // 산출표(12열) 가중치
   const CALC_COL_WEIGHTS = [0.35, 0.5, 2.5, 2.5, 0.25, 2.5, 0.25, 0.25, 0.25, 0.25, 0.25, 0.5];
-  // 코드표(9열) 가중치
   const CODE_COL_WEIGHTS = [0.6, 2.2, 2.2, 0.6, 0.6, 0.7, 0.7, 1.2, 0.6];
 
   /***************
@@ -378,7 +370,7 @@
   }
 
   /***************
-   * ✅ Code tab
+   * Code tab
    ***************/
   function renderCodeTab() {
     const panelHeader = el("div", { class: "panel-header sticky-head", dataset: { sticky: "panel" } }, [
@@ -399,10 +391,7 @@
     attachGridNav(scroll);
     attachWheelLock(scroll);
 
-    return el("div", { class: "panel" }, [
-      panelHeader,
-      scroll
-    ]);
+    return el("div", { class: "panel" }, [panelHeader, scroll]);
   }
 
   function buildCodeMasterTable() {
@@ -413,19 +402,21 @@
 
     table.appendChild(buildColGroupFromWeights(CODE_COL_WEIGHTS));
 
+    // ✅ (4) 헤더 영문 괄호 제거
     const thead = el("thead", {}, [
       el("tr", {}, [
-        el("th", {}, ["코드(Code)"]),
-        el("th", {}, ["품명(Product name)"]),
-        el("th", {}, ["규격(Specifications)"]),
-        el("th", {}, ["단위(unit)"]),
-        el("th", {}, ["할증(surcharge)"]),
-        el("th", {}, ["환산단위(Conversion unit)"]),
-        el("th", {}, ["환산계수(Conversion factor)"]),
-        el("th", {}, ["비고(Note)"]),
+        el("th", {}, ["코드"]),
+        el("th", {}, ["품명"]),
+        el("th", {}, ["규격"]),
+        el("th", {}, ["단위"]),
+        el("th", {}, ["할증"]),
+        el("th", {}, ["환산단위"]),
+        el("th", {}, ["환산계수"]),
+        el("th", {}, ["비고"]),
         el("th", {}, [""])
       ])
     ]);
+
     const tbody = el("tbody", {}, []);
 
     state.codeMaster.forEach((row, idx) => {
@@ -456,9 +447,7 @@
     return table;
   }
 
-  const CODE_COL_INDEX = {
-    code: 0, name: 1, spec: 2, unit: 3, surcharge: 4, convUnit: 5, convFactor: 6, note: 7
-  };
+  const CODE_COL_INDEX = { code: 0, name: 1, spec: 2, unit: 3, surcharge: 4, convUnit: 5, convFactor: 6, note: 7 };
 
   function tdInput(scope, rowIndex, field, value, opts = {}) {
     const ds =
@@ -483,6 +472,9 @@
       }
     });
 
+    // ✅ 편집모드 상태는 blur 시 해제
+    input.addEventListener("blur", () => { delete input.dataset.editing; });
+
     return el("td", {}, [input]);
   }
 
@@ -498,7 +490,7 @@
     render();
 
     raf2(() => {
-      updateScrollHeights(); // ✅ 먼저 높이 확정
+      updateScrollHeights();
       const first = document.querySelector(`input[data-grid="code"][data-row="${insertPos}"][data-col="0"]`);
       if (first) safeFocus(first);
       ensureScrollIntoView();
@@ -506,7 +498,7 @@
   }
 
   /***************
-   * UI: Calc tab
+   * Calc tab
    ***************/
   function renderCalcTab(tabId, title) {
     recomputeSection(tabId);
@@ -543,11 +535,7 @@
     attachGridNav(scroll);
     attachWheelLock(scroll);
 
-    const panel = el("div", { class: "panel" }, [
-      panelHeader,
-      scroll
-    ]);
-
+    const panel = el("div", { class: "panel" }, [panelHeader, scroll]);
     return el("div", {}, [top, panel]);
   }
 
@@ -646,7 +634,11 @@
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
 
-    const wrap = el("div", { class: "var-tablewrap" }, []);
+    // ✅ (1) 변수표도 calc-scroll로 취급해서 방향키 이동 시 스크롤 연계
+    const wrap = el("div", { class: "var-tablewrap calc-scroll", dataset: { scroll: "var" } }, []);
+    forceScrollStyle(wrap);
+    attachWheelLock(wrap);
+
     const table = el("table", { class: "var-table" }, []);
     const thead = el("thead", {}, [
       el("tr", {}, [
@@ -713,6 +705,9 @@
         }
       }
     });
+
+    input.addEventListener("blur", () => { delete input.dataset.editing; });
+
     return el("td", {}, [input]);
   }
 
@@ -770,6 +765,14 @@
       const t = e.target;
       if (!(t instanceof HTMLInputElement)) return;
       if (t.dataset.grid !== "calc") return;
+
+      // ✅ 편집모드 Enter로 종료 우선
+      if (t.dataset.editing === "1" && e.key === "Enter") {
+        e.preventDefault();
+        delete t.dataset.editing;
+        return;
+      }
+
       if (e.key === "Enter") {
         e.preventDefault();
         recomputeSection(tabId);
@@ -814,6 +817,8 @@
       }
     });
 
+    input.addEventListener("blur", () => { delete input.dataset.editing; });
+
     return el("td", {}, [input]);
   }
 
@@ -835,15 +840,37 @@
   }
 
   /***************
-   * ✅ Grid navigation (방향키: 표 내부에서만)
+   * ✅ Grid navigation + F2 edit mode
    ***************/
   function attachGridNav(container) {
     container.addEventListener("keydown", (e) => {
       const t = e.target;
-      if (!(t instanceof HTMLInputElement) && !(t instanceof HTMLTextAreaElement)) return;
+      const isInput = (t instanceof HTMLInputElement) || (t instanceof HTMLTextAreaElement);
+      if (!isInput) return;
 
       const grid = t.dataset.grid;
       if (grid !== "calc" && grid !== "var" && grid !== "code") return;
+
+      // ✅ (3) F2 편집모드: readonly는 제외
+      if (e.key === "F2") {
+        if (t.hasAttribute("readonly")) return;
+        e.preventDefault();
+        t.dataset.editing = "1";
+        try {
+          const len = (t.value ?? "").length;
+          t.setSelectionRange(len, len);
+        } catch {}
+        return;
+      }
+
+      // ✅ 편집모드에서는 방향키/홈/엔드 등 텍스트 편집을 막지 않음
+      if (t.dataset.editing === "1") {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          delete t.dataset.editing;
+        }
+        return;
+      }
 
       const key = e.key;
       if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) return;
@@ -862,15 +889,15 @@
       const selector = `[data-grid="${grid}"][data-row="${nr}"][data-col="${nc}"]`;
       const next = container.querySelector(selector);
 
-      if (next && (next instanceof HTMLInputElement || next instanceof HTMLTextAreaElement)) {
+      if (next && ((next instanceof HTMLInputElement) || (next instanceof HTMLTextAreaElement))) {
         safeFocus(next);
         ensureScrollIntoView();
       }
-    });
+    }, true);
   }
 
   /***************
-   * ✅ 내부 스크롤 강제 + wheel을 내부에서 먹게 만들기
+   * scroll helpers
    ***************/
   function forceScrollStyle(scrollEl) {
     if (!scrollEl) return;
@@ -891,22 +918,35 @@
     }, { passive: false });
   }
 
+  // ✅ (2) sticky thead 높이 고려해서 위/아래 이동 시에도 1행 보이게
   function ensureScrollIntoView() {
     const a = document.activeElement;
     if (!(a instanceof HTMLElement)) return;
+
     const scroll = a.closest(".calc-scroll");
     if (!scroll) return;
 
     const r = a.getBoundingClientRect();
     const s = scroll.getBoundingClientRect();
 
-    if (r.top < s.top + 6) scroll.scrollTop -= (s.top + 6 - r.top);
-    else if (r.bottom > s.bottom - 6) scroll.scrollTop += (r.bottom - (s.bottom - 6));
+    const thead = scroll.querySelector("thead");
+    const headH = thead ? Math.ceil(thead.getBoundingClientRect().height) : 0;
+
+    const topPad = headH + 6;
+    const botPad = 6;
+
+    if (r.top < s.top + topPad) {
+      scroll.scrollTop -= (s.top + topPad - r.top);
+    } else if (r.bottom > s.bottom - botPad) {
+      scroll.scrollTop += (r.bottom - (s.bottom - botPad));
+    }
   }
 
   /***************
-   * Row add (Ctrl+F3 / +10)
+   * Row add/delete/shortcuts/picker/export/import/reset
+   *  (아래는 기존 로직 그대로)
    ***************/
+
   function addRows(tabId, n, insertAfterRow = null) {
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
@@ -921,16 +961,13 @@
     render();
 
     raf2(() => {
-      updateScrollHeights(); // ✅ 먼저 높이 확정
+      updateScrollHeights();
       const first = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${insertPos}"][data-col="0"]`);
       if (first) safeFocus(first);
       ensureScrollIntoView();
     });
   }
 
-  /***************
-   * ✅ Row delete helpers (Ctrl+Del)
-   ***************/
   function deleteCalcRowAtActiveCell(inputEl) {
     const tabId = inputEl.dataset.tab;
     const row = Number(inputEl.dataset.row);
@@ -982,9 +1019,6 @@
     });
   }
 
-  /***************
-   * Shortcuts
-   ***************/
   window.addEventListener("keydown", (e) => {
     if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") {
       e.preventDefault();
@@ -1022,14 +1056,8 @@
       e.preventDefault();
       e.stopPropagation();
 
-      if (grid === "calc") {
-        deleteCalcRowAtActiveCell(a);
-        return;
-      }
-      if (grid === "code") {
-        deleteCodeMasterRowAtActiveCell(a);
-        return;
-      }
+      if (grid === "calc") { deleteCalcRowAtActiveCell(a); return; }
+      if (grid === "code") { deleteCodeMasterRowAtActiveCell(a); return; }
 
       a.value = "";
       a.dispatchEvent(new Event("input", { bubbles: true }));
@@ -1064,7 +1092,7 @@
   }, { capture: true });
 
   /***************
-   * Code Picker Popup
+   * Code Picker Popup (기존 그대로)
    ***************/
   let __pickerWin = null;
 
@@ -1226,9 +1254,6 @@
     });
   }
 
-  /***************
-   * Export/Import/Reset
-   ***************/
   function bindTopButtons() {
     const btnOpen = document.getElementById("btnOpenPicker");
     const btnExport = document.getElementById("btnExport");
@@ -1270,9 +1295,6 @@
     };
   }
 
-  /***************
-   * Render
-   ***************/
   function applyPanelStickyTop() {
     const root = document.documentElement;
     const isCalcTab = (state.activeTab === "steel" || state.activeTab === "steel_sub" || state.activeTab === "support");
@@ -1295,7 +1317,6 @@
     $view.appendChild(content);
     bindTopButtons();
 
-    // ✅ 레이아웃/스크롤 높이를 먼저 확정해서 이후 포커스 이동에도 점프가 안 나게
     raf2(() => {
       updateStickyVars();
       applyPanelStickyTop();

@@ -158,6 +158,7 @@ body{
 }
 
 /* ===== Panel ===== */
+/* ✅ 스크롤을 panel로 올려서: 타이틀/버튼도 같이 위로 올라가게 */
 .panel{
   background: rgba(255,250,240,.86);
   border:1px solid var(--line);
@@ -165,12 +166,15 @@ body{
   box-shadow: var(--shadow);
   padding: 12px;
 
-  display:flex;            /* ✅ 패널 내부에서 헤더 고정 + 내용 스크롤 */
+  display:flex;
   flex-direction:column;
   min-height:0;
+
+  overflow:auto;                /* ✅ 스크롤 컨테이너는 panel */
+  overscroll-behavior: contain;
 }
 
-/* ✅ 패널 헤더 sticky (노란 영역 고정) */
+/* ✅ 패널 헤더 (이제 sticky 금지: 함께 스크롤되어 올라가야 함) */
 .panel-header{
   display:flex;
   align-items:flex-start;
@@ -179,18 +183,20 @@ body{
   margin-bottom: 10px;
 }
 
+/* ✅ 기존 sticky-head를 "비-sticky"로 강제 */
 .panel-header.sticky-head{
-  position: sticky;
-  top: var(--panelStickyTop);
-  z-index: 170;
-  background: rgba(255,250,240,.94);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(0,0,0,.08);
+  position: static;
+  top: auto;
+  z-index: auto;
 
-  margin: -12px -12px 10px;
-  padding: 12px;
-  border-top-left-radius: var(--radius);
-  border-top-right-radius: var(--radius);
+  background: transparent;
+  backdrop-filter: none;
+  border-bottom: none;
+
+  margin: 0 0 10px;
+  padding: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 .panel-title{ font-weight: 900; font-size: 16px; }
@@ -209,13 +215,22 @@ body{
 }
 
 /* ===== Tables ===== */
+/* ✅ 표 자체는 스크롤하지 않음(패널이 스크롤 담당) */
 .table-wrap{
   border:1px solid var(--line);
   border-radius: 16px;
-  overflow:auto;           /* ✅ 이 컨테이너 안에서만 스크롤 */
+
+  overflow: visible;            /* ✅ 여기서 스크롤 제거 */
   background: rgba(255,255,255,.55);
-  flex:1 1 auto;           /* ✅ 패널 내부 남은 높이를 차지 */
-  min-height:0;            /* ✅ overflow가 동작하게 */
+
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+/* ✅ 산출 탭 내부 휠 영역(.calc-scroll)을 만드는 경우: 내부 스크롤 제거(패널로 일원화) */
+.calc-scroll{
+  overflow: visible !important;
+  max-height: none !important;
 }
 
 table{
@@ -228,7 +243,7 @@ table{
 
 thead th{
   position: sticky;
-  top: 0;
+  top: 0;                        /* ✅ panel 스크롤 기준 */
   z-index: 5;
   background: rgba(255,250,240,.95);
   border-bottom: 1px solid var(--line);

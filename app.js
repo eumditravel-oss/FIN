@@ -1,7 +1,9 @@
-/* app.js (FINAL FIX v12.2+) - FIN 산출자료 (Web)
-   - ✅ (추가) 변수표에서도 Ctrl+F3 행추가 / Shift+Ctrl+F3 +10행 지원
-     - 변수표 셀이 선택(포커스)된 상태에서 Ctrl+F3 → 변수표 줄 추가
-     - 산출표 셀이 선택된 상태에서 Ctrl+F3 → 산출표 줄 추가(기존)
+/* app.js (FINAL FIX v12.3) - FIN 산출자료 (Web)
+   - ✅ (v12.3) 변수표 영역에서도 Ctrl+F3/Shift+Ctrl+F3 행추가 지원 (변수표 셀 선택 시)
+   - ✅ (v12.3) 집계 탭: 구분 개소(count) 반영하여 코드별 수량 합산
+   - ✅ (v12.3) 집계 탭: 환산단위/환산계수 있으면 환산후수량 기준으로 단위/할증전/후 집계
+   - ✅ (v12.3) 산출표 헤더 "물량(Value)" -> "물량"
+   - ✅ (v12.3) 산출표 컬럼폭: 단위/물량(및 코드) 가로폭 증가 (CALC_COL_WEIGHTS 조정)
 */
 
 (() => {
@@ -347,7 +349,25 @@
     return cg;
   }
 
-  const CALC_COL_WEIGHTS = [0.35, 0.5, 2.5, 2.5, 0.25, 2.5, 0.25, 0.25, 0.25, 0.25, 0.25, 0.5];
+  // ✅ 컬럼폭 조정(요청 반영):
+  // - 코드(입력칸) 1.5배 느낌으로 확대
+  // - 단위(자동) 가로폭 2배
+  // - 물량(=Value) 가로폭 2배
+  // 기존: [0.35,0.5,2.5,2.5,0.25,2.5,0.25,0.25,0.25,0.25,0.25,0.5]
+  const CALC_COL_WEIGHTS = [
+    0.35,  // No
+    0.75,  // 코드 (↑)
+    2.5,   // 품명(자동)
+    2.5,   // 규격(자동)
+    0.50,  // 단위(자동) (↑ 2배)
+    2.5,   // 산출식
+    0.50,  // 물량 (↑ 2배)
+    0.25,  // 할증(%)
+    0.25,  // 환산단위
+    0.25,  // 환산계수
+    0.25,  // 환산후수량
+    0.5    // 비고
+  ];
   const CODE_COL_WEIGHTS = [0.6, 2.2, 2.2, 0.6, 0.6, 0.7, 0.7, 1.2, 0.6];
 
   /***************
@@ -631,6 +651,7 @@
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
 
+    // ✅ 변수표도 calc-scroll로 취급해서 방향키 이동 시 스크롤 연계 + Ctrl+F3 대상
     const wrap = el("div", { class: "var-tablewrap calc-scroll", dataset: { scroll: "var" } }, []);
     forceScrollStyle(wrap);
     attachWheelLock(wrap);
@@ -726,7 +747,7 @@
         el("th", {}, ["규격(자동)"]),
         el("th", {}, ["단위(자동)"]),
         el("th", {}, ["산출식"]),
-        el("th", {}, ["물량(Value)"]),
+        el("th", {}, ["물량"]),          // ✅ "물량(Value)" -> "물량"
         el("th", {}, ["할증(%)"]),
         el("th", {}, ["환산단위"]),
         el("th", {}, ["환산계수"]),
@@ -958,8 +979,8 @@
     });
   }
 
-  // ✅ (추가) 변수표 행 추가
-  function addVarRows(tabId, n, insertAfterRow = null, focusCol = 0) {
+  // ✅ (v12.3) 변수표 행 추가
+  function addVarRows(tabId, n, insertAfterRow = null) {
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
 
@@ -975,10 +996,8 @@
 
     raf2(() => {
       updateScrollHeights();
-      const target = document.querySelector(
-        `input[data-grid="var"][data-tab="${tabId}"][data-row="${insertPos}"][data-col="${focusCol}"]`
-      );
-      if (target) safeFocus(target);
+      const first = document.querySelector(`input[data-grid="var"][data-tab="${tabId}"][data-row="${insertPos}"][data-col="0"]`);
+      if (first) safeFocus(first);
       ensureScrollIntoView();
     });
   }
@@ -1079,7 +1098,7 @@
       return;
     }
 
-    // ✅ Ctrl+F3 / Shift+Ctrl+F3 : 포커스된 grid에 따라 행 추가
+    // ✅ Ctrl+F3 (Shift 포함): 현재 활성 셀 grid 기준으로 행 추가
     if (e.ctrlKey && (e.key === "F3")) {
       const a = document.activeElement;
       const isEditableEl = (a instanceof HTMLInputElement) || (a instanceof HTMLTextAreaElement);
@@ -1087,6 +1106,7 @@
 
       const grid = a.dataset.grid;
 
+      // 산출표
       if (grid === "calc") {
         e.preventDefault();
         e.stopPropagation();
@@ -1097,18 +1117,18 @@
         return;
       }
 
-      // ✅ (추가) 변수표에서도 Ctrl+F3 동작
+      // ✅ 변수표
       if (grid === "var") {
         e.preventDefault();
         e.stopPropagation();
         const tabId = a.dataset.tab;
         const row = Number(a.dataset.row);
-        const col = Number(a.dataset.col);
-        if (e.shiftKey) addVarRows(tabId, 10, row, col);
-        else addVarRows(tabId, 1, row, col);
+        if (e.shiftKey) addVarRows(tabId, 10, row);
+        else addVarRows(tabId, 1, row);
         return;
       }
 
+      // 코드표
       if (grid === "code") {
         e.preventDefault();
         e.stopPropagation();
@@ -1353,6 +1373,7 @@
     });
   }
 
+  // ✅ 집계 탭: 개소(count) 반영 + 환산 규칙 반영
   function renderSummaryTabByCodeOrder(srcTabId, title) {
     const bucket = state[srcTabId];
 
@@ -1370,17 +1391,34 @@
       recomputeSection(srcTabId);
 
       const sec = bucket.sections[sIdx];
+
+      // ✅ 개소: 빈칸=1, 숫자면 그대로(0이면 0)
+      let countMul = 1;
+      const rawCount = (sec.count ?? "").toString().trim();
+      if (rawCount === "") countMul = 1;
+      else {
+        const n = Number(rawCount);
+        countMul = Number.isFinite(n) ? n : 1;
+      }
+
       for (const r of sec.rows) {
         const code = String(r.code || "").trim().toUpperCase();
         if (!code) continue;
 
         const name = r.name || "";
         const spec = r.spec || "";
-        const unit = r.unit || "";
 
-        const pre = Number(r.value) || 0;
-        const mul = Number(r.surchargeMul) || 1;
-        const post = pre * mul;
+        const baseQty = (Number(r.value) || 0) * countMul;        // 할증전(개소반영)
+        const mul = (Number(r.surchargeMul) || 1);
+        const afterQty = (Number(r.value) || 0) * mul * countMul; // 할증후(개소반영)
+
+        const convUnit = String(r.convUnit || "").trim();
+        const convFactorNum = Number(r.convFactor);
+        const hasConv = convUnit !== "" && Number.isFinite(convFactorNum) && convFactorNum !== 0;
+
+        const unitShown = hasConv ? convUnit : (r.unit || "");
+        const preShown  = hasConv ? (baseQty  * convFactorNum) : baseQty;
+        const postShown = hasConv ? (afterQty * convFactorNum) : afterQty;
 
         const pct =
           (r.surchargePct == null || r.surchargePct === "" || !Number.isFinite(Number(r.surchargePct)))
@@ -1388,12 +1426,22 @@
             : Number(r.surchargePct);
 
         if (!map.has(code)) {
-          map.set(code, { code, name, spec, unit, pre: 0, post: 0, pctSet: new Set() });
+          map.set(code, {
+            code,
+            name,
+            spec,
+            unit: unitShown,
+            pre: 0,
+            post: 0,
+            pctSet: new Set(),
+            unitSet: new Set(),
+          });
         }
 
         const agg = map.get(code);
-        agg.pre += pre;
-        agg.post += post;
+        agg.pre += preShown;
+        agg.post += postShown;
+        agg.unitSet.add(unitShown || "");
 
         if (pct == null) agg.pctSet.add("__NULL__");
         else agg.pctSet.add(String(pct));
@@ -1414,7 +1462,7 @@
       el("div", {}, [
         el("div", { class: "panel-title" }, [title]),
         el("div", { class: "panel-desc" }, [
-          "코드별 집계: 할증전수량(물량 합) / 할증후수량(물량×(1+할증)) · 정렬: 코드탭 순서"
+          "코드별 집계: (구분 개소 반영) · 환산단위/계수 있으면 환산후수량 기준으로 할증전/할증후 합산"
         ])
       ])
     ]);
@@ -1436,6 +1484,8 @@
           ]),
           el("tbody", {}, [
             ...items.map(x => {
+              const unitText = (x.unitSet && x.unitSet.size > 1) ? "혼합" : (x.unit || "");
+
               const pctText = (() => {
                 const s = x.pctSet;
                 if (s.size === 0) return "";
@@ -1451,7 +1501,7 @@
                 el("td", {}, [x.code]),
                 el("td", {}, [x.name]),
                 el("td", {}, [x.spec]),
-                el("td", {}, [x.unit]),
+                el("td", {}, [unitText]),
                 el("td", {}, [String(round4(x.pre))]),
                 el("td", {}, [pctText]),
                 el("td", {}, [String(round4(x.post))]),

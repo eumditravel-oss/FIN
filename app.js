@@ -1,10 +1,7 @@
-/* app.js (FINAL FIX v12.3) - FIN 산출자료 (Web)
-   - ✅ (v12.2) 변수표도 산출표처럼 방향키 이동 시 스크롤 연계 (var-tablewrap을 calc-scroll로 취급)
-   - ✅ (v12.2) 방향키로 위/아래 이동 시에도 1행이 자동으로 보이도록 ensureScrollIntoView() 개선(Sticky thead 높이 반영)
-   - ✅ (v12.2) F2 편집모드: Enter로 종료, 편집 중에는 Home/End/좌우키 등 텍스트 편집 허용
-   - ✅ (v12.2) 코드탭 헤더의 (영문) 제거
-   - ✅ (v12.3) 산출표 우측(물량~환산후수량) 영역만 가로폭 2배
-   - ✅ (v12.3) "물량(Value)" → "물량" (괄호 내용 제거)
+/* app.js (FINAL FIX v12.2+) - FIN 산출자료 (Web)
+   - ✅ (추가) 변수표에서도 Ctrl+F3 행추가 / Shift+Ctrl+F3 +10행 지원
+     - 변수표 셀이 선택(포커스)된 상태에서 Ctrl+F3 → 변수표 줄 추가
+     - 산출표 셀이 선택된 상태에서 Ctrl+F3 → 산출표 줄 추가(기존)
 */
 
 (() => {
@@ -350,11 +347,7 @@
     return cg;
   }
 
-  // ✅ 산출표: 노란영역(물량~환산후수량)만 2배
-  // 인덱스: 0 No, 1 코드, 2 품명, 3 규격, 4 단위, 5 산출식, 6 물량, 7 할증, 8 환산단위, 9 환산계수, 10 환산후수량, 11 비고
-  // 기존(참고): [0.35,0.75,2.5,2.5,0.25,2.5,0.5,0.25,0.25,0.25,0.25,0.5]
-  // 변경: (6~10)만 ×2
-  const CALC_COL_WEIGHTS = [0.35, 0.75, 2.5, 2.5, 0.5, 2.5, 1.0, 0.5, 0.5, 0.5, 0.5, 0.25];
+  const CALC_COL_WEIGHTS = [0.35, 0.5, 2.5, 2.5, 0.25, 2.5, 0.25, 0.25, 0.25, 0.25, 0.25, 0.5];
   const CODE_COL_WEIGHTS = [0.6, 2.2, 2.2, 0.6, 0.6, 0.7, 0.7, 1.2, 0.6];
 
   /***************
@@ -408,7 +401,6 @@
 
     table.appendChild(buildColGroupFromWeights(CODE_COL_WEIGHTS));
 
-    // ✅ (4) 헤더 영문 괄호 제거
     const thead = el("thead", {}, [
       el("tr", {}, [
         el("th", {}, ["코드"]),
@@ -478,7 +470,6 @@
       }
     });
 
-    // ✅ 편집모드 상태는 blur 시 해제
     input.addEventListener("blur", () => { delete input.dataset.editing; });
 
     return el("td", {}, [input]);
@@ -640,7 +631,6 @@
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
 
-    // ✅ (1) 변수표도 calc-scroll로 취급해서 방향키 이동 시 스크롤 연계
     const wrap = el("div", { class: "var-tablewrap calc-scroll", dataset: { scroll: "var" } }, []);
     forceScrollStyle(wrap);
     attachWheelLock(wrap);
@@ -736,7 +726,7 @@
         el("th", {}, ["규격(자동)"]),
         el("th", {}, ["단위(자동)"]),
         el("th", {}, ["산출식"]),
-        el("th", {}, ["물량"]),            // ✅ (v12.3) 괄호내용 제거
+        el("th", {}, ["물량(Value)"]),
         el("th", {}, ["할증(%)"]),
         el("th", {}, ["환산단위"]),
         el("th", {}, ["환산계수"]),
@@ -772,7 +762,6 @@
       if (!(t instanceof HTMLInputElement)) return;
       if (t.dataset.grid !== "calc") return;
 
-      // ✅ 편집모드 Enter로 종료 우선
       if (t.dataset.editing === "1" && e.key === "Enter") {
         e.preventDefault();
         delete t.dataset.editing;
@@ -857,7 +846,6 @@
       const grid = t.dataset.grid;
       if (grid !== "calc" && grid !== "var" && grid !== "code") return;
 
-      // ✅ (3) F2 편집모드: readonly는 제외
       if (e.key === "F2") {
         if (t.hasAttribute("readonly")) return;
         e.preventDefault();
@@ -869,7 +857,6 @@
         return;
       }
 
-      // ✅ 편집모드에서는 방향키/홈/엔드 등 텍스트 편집을 막지 않음
       if (t.dataset.editing === "1") {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -924,7 +911,6 @@
     }, { passive: false });
   }
 
-  // ✅ (2) sticky thead 높이 고려해서 위/아래 이동 시에도 1행 보이게
   function ensureScrollIntoView() {
     const a = document.activeElement;
     if (!(a instanceof HTMLElement)) return;
@@ -950,9 +936,7 @@
 
   /***************
    * Row add/delete/shortcuts/picker/export/import/reset
-   *  (아래는 기존 로직 그대로)
    ***************/
-
   function addRows(tabId, n, insertAfterRow = null) {
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
@@ -970,6 +954,31 @@
       updateScrollHeights();
       const first = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${insertPos}"][data-col="0"]`);
       if (first) safeFocus(first);
+      ensureScrollIntoView();
+    });
+  }
+
+  // ✅ (추가) 변수표 행 추가
+  function addVarRows(tabId, n, insertAfterRow = null, focusCol = 0) {
+    const bucket = state[tabId];
+    const sec = bucket.sections[bucket.activeSection];
+
+    const idx = (insertAfterRow == null) ? (sec.vars.length - 1) : insertAfterRow;
+    const insertPos = clamp(idx + 1, 0, sec.vars.length);
+
+    const newRows = Array.from({ length: n }, () => defaultVarRow());
+    sec.vars.splice(insertPos, 0, ...newRows);
+
+    recomputeSection(tabId);
+    saveState();
+    render();
+
+    raf2(() => {
+      updateScrollHeights();
+      const target = document.querySelector(
+        `input[data-grid="var"][data-tab="${tabId}"][data-row="${insertPos}"][data-col="${focusCol}"]`
+      );
+      if (target) safeFocus(target);
       ensureScrollIntoView();
     });
   }
@@ -1070,29 +1079,43 @@
       return;
     }
 
+    // ✅ Ctrl+F3 / Shift+Ctrl+F3 : 포커스된 grid에 따라 행 추가
     if (e.ctrlKey && (e.key === "F3")) {
       const a = document.activeElement;
-      if (a instanceof HTMLInputElement) {
-        const grid = a.dataset.grid;
+      const isEditableEl = (a instanceof HTMLInputElement) || (a instanceof HTMLTextAreaElement);
+      if (!isEditableEl) return;
 
-        if (grid === "calc") {
-          e.preventDefault();
-          e.stopPropagation();
-          const tabId = a.dataset.tab;
-          const row = Number(a.dataset.row);
-          if (e.shiftKey) addRows(tabId, 10, row);
-          else addRows(tabId, 1, row);
-          return;
-        }
+      const grid = a.dataset.grid;
 
-        if (grid === "code") {
-          e.preventDefault();
-          e.stopPropagation();
-          const row = Number(a.dataset.row);
-          if (e.shiftKey) addCodeRows(10, row);
-          else addCodeRows(1, row);
-          return;
-        }
+      if (grid === "calc") {
+        e.preventDefault();
+        e.stopPropagation();
+        const tabId = a.dataset.tab;
+        const row = Number(a.dataset.row);
+        if (e.shiftKey) addRows(tabId, 10, row);
+        else addRows(tabId, 1, row);
+        return;
+      }
+
+      // ✅ (추가) 변수표에서도 Ctrl+F3 동작
+      if (grid === "var") {
+        e.preventDefault();
+        e.stopPropagation();
+        const tabId = a.dataset.tab;
+        const row = Number(a.dataset.row);
+        const col = Number(a.dataset.col);
+        if (e.shiftKey) addVarRows(tabId, 10, row, col);
+        else addVarRows(tabId, 1, row, col);
+        return;
+      }
+
+      if (grid === "code") {
+        e.preventDefault();
+        e.stopPropagation();
+        const row = Number(a.dataset.row);
+        if (e.shiftKey) addCodeRows(10, row);
+        else addCodeRows(1, row);
+        return;
       }
     }
   }, { capture: true });

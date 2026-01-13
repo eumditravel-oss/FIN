@@ -8,6 +8,8 @@
    - Ctrl+. : 코드 선택 창
    - ✅ 상단(topbar/tabs/top-split) 실제 높이 측정 → sticky offset 자동 보정
    - ✅ 노란 영역(패널 헤더) sticky 고정
+   - ✅ 산출표 내부에서 휠 스크롤 되도록 "calc-scroll" 구조 + wheel/scroll focus 보정
+     (styles.css는 calc-scroll에 overflow:auto 지정 전제)
 */
 
 (() => {
@@ -317,14 +319,11 @@
    * ✅ Code tab (방향키/행추가 지원)
    ***************/
   function renderCodeTab() {
-    const wrap = el("div", { class: "table-wrap" }, [buildCodeMasterTable()]);
-    attachGridNav(wrap);
-
     const panelHeader = el("div", { class: "panel-header sticky-head", dataset: { sticky: "panel" } }, [
       el("div", {}, [
         el("div", { class: "panel-title" }, ["코드"]),
         el("div", { class: "panel-desc" }, [
-          "방향키: 코드표 셀 이동 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+. 코드선택(산출표에서) | Ctrl+Del 행삭제(확인)"
+          "방향키: 코드표 셀 이동 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+Del 행삭제(확인)"
         ])
       ]),
       el("div", { class: "row-actions" }, [
@@ -332,6 +331,12 @@
         el("button", { class: "smallbtn", onclick: () => addCodeRows(10) }, ["+10행"]),
       ])
     ]);
+
+    // ✅ code 탭도 "내부 스크롤" 사용
+    const scroll = el("div", { class: "calc-scroll", dataset: { scroll: "code" } }, [buildCodeMasterTable()]);
+    const wrap = el("div", { class: "table-wrap" }, [scroll]);
+    attachGridNav(scroll);
+    attachWheelFocus(scroll);
 
     return el("div", { class: "panel" }, [panelHeader, wrap]);
   }
@@ -425,6 +430,7 @@
     requestAnimationFrame(() => {
       const first = document.querySelector(`input[data-grid="code"][data-row="${insertPos}"][data-col="0"]`);
       if (first) first.focus();
+      ensureCalcScrollToFocused();
     });
   }
 
@@ -461,9 +467,15 @@
       ])
     ]);
 
+    // ✅ 산출표도 내부 스크롤(calc-scroll) 적용
+    const scroll = el("div", { class: "calc-scroll", dataset: { scroll: "calc" } }, [buildCalcTable(tabId)]);
+    const wrap = el("div", { class: "table-wrap calc-wrap" }, [scroll]);
+    attachGridNav(scroll);
+    attachWheelFocus(scroll);
+
     const panel = el("div", { class: "panel" }, [
       panelHeader,
-      el("div", { class: "table-wrap" }, [buildCalcTable(tabId)])
+      wrap
     ]);
 
     return el("div", {}, [top, panel]);
@@ -678,10 +690,9 @@
     table.appendChild(thead);
     table.appendChild(tbody);
 
-    const wrap = el("div", {}, [table]);
-    attachGridNav(wrap);
+    const inner = el("div", {}, [table]);
 
-    wrap.addEventListener("keydown", (e) => {
+    inner.addEventListener("keydown", (e) => {
       const t = e.target;
       if (!(t instanceof HTMLInputElement)) return;
       if (t.dataset.grid !== "calc") return;
@@ -693,7 +704,7 @@
       }
     });
 
-    return wrap;
+    return inner;
   }
 
   function tdNavInputCalc(tabId, row, col, field, value, opts = {}) {
@@ -733,19 +744,19 @@
   }
 
   function refreshCalcComputed(tabId) {
-    const wrap = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"]`)?.closest(".table-wrap") || document.body;
-    const inputs = wrap.querySelectorAll(`input[data-grid="calc"][data-tab="${tabId}"]`);
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
 
+    // 화면에 렌더된 calc input 전부 갱신
+    const inputs = document.querySelectorAll(`input[data-grid="calc"][data-tab="${tabId}"]`);
     inputs.forEach((inp) => {
       const r = Number(inp.dataset.row);
       const f = inp.dataset.field;
-      const row = sec.rows[r];
-      if (!row) return;
+      const rowObj = sec.rows[r];
+      if (!rowObj) return;
 
       if (["name", "spec", "unit", "value", "convUnit", "convFactor", "converted", "note"].includes(f)) {
-        inp.value = (row[f] ?? "") + "";
+        inp.value = (rowObj[f] ?? "") + "";
       }
     });
   }
@@ -756,7 +767,7 @@
   function attachGridNav(container) {
     container.addEventListener("keydown", (e) => {
       const t = e.target;
-      if (!(t instanceof HTMLInputElement)) return;
+      if (!(t instanceof HTMLInputElement) && !(t instanceof HTMLTextAreaElement)) return;
 
       const grid = t.dataset.grid;
       if (grid !== "calc" && grid !== "var" && grid !== "code") return;
@@ -775,11 +786,53 @@
       if (key === "ArrowLeft") nc = col - 1;
       if (key === "ArrowRight") nc = col + 1;
 
-      const selector = `input[data-grid="${grid}"][data-row="${nr}"][data-col="${nc}"]`;
+      const selector = `[data-grid="${grid}"][data-row="${nr}"][data-col="${nc}"]`;
       const next = container.querySelector(selector);
 
-      if (next) next.focus();
+      if (next && (next instanceof HTMLInputElement || next instanceof HTMLTextAreaElement)) {
+        next.focus();
+        ensureCalcScrollToFocused();
+      }
     });
+  }
+
+  /***************
+   * ✅ Wheel focus: 산출표 내부에서 wheel 스크롤 가능하게
+   ***************/
+  function attachWheelFocus(scrollEl) {
+    if (!scrollEl) return;
+
+    // 마우스가 스크롤 영역에 들어오면, 포커스를 줘서 wheel이 이 영역에 걸리게
+    scrollEl.addEventListener("mouseenter", () => {
+      try {
+        scrollEl.focus?.();
+      } catch {}
+    });
+
+    // 내부에서 wheel이 발생하면, 해당 scrollEl이 스크롤을 먹도록 강제
+    scrollEl.addEventListener("wheel", (e) => {
+      // 내부에 스크롤 여지가 없으면 상위로 전달
+      const canScroll = scrollEl.scrollHeight > scrollEl.clientHeight;
+      if (!canScroll) return;
+
+      // 기본: 해당 영역이 스크롤되도록 함 (브라우저가 자동으로 처리)
+      // 다만, 특정 상황에서 body가 먹는 경우가 있어 preventDefault + 수동스크롤을 사용
+      e.preventDefault();
+      scrollEl.scrollTop += e.deltaY;
+    }, { passive: false });
+  }
+
+  function ensureCalcScrollToFocused() {
+    const a = document.activeElement;
+    if (!(a instanceof HTMLElement)) return;
+    const scroll = a.closest(".calc-scroll");
+    if (!scroll) return;
+
+    const r = a.getBoundingClientRect();
+    const s = scroll.getBoundingClientRect();
+
+    if (r.top < s.top + 6) scroll.scrollTop -= (s.top + 6 - r.top);
+    else if (r.bottom > s.bottom - 6) scroll.scrollTop += (r.bottom - (s.bottom - 6));
   }
 
   /***************
@@ -801,6 +854,7 @@
     requestAnimationFrame(() => {
       const first = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${insertPos}"][data-col="0"]`);
       if (first) first.focus();
+      ensureCalcScrollToFocused();
     });
   }
 
@@ -831,6 +885,7 @@
       const nr = clamp(row, 0, (sec.rows.length - 1));
       const target = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${nr}"][data-col="${col}"]`);
       if (target) target.focus();
+      ensureCalcScrollToFocused();
     });
   }
 
@@ -852,6 +907,7 @@
       const nr = clamp(row, 0, state.codeMaster.length - 1);
       const target = document.querySelector(`input[data-grid="code"][data-row="${nr}"][data-col="${col}"]`);
       if (target) target.focus();
+      ensureCalcScrollToFocused();
     });
   }
 
@@ -1077,6 +1133,7 @@
         `input[data-grid="calc"][data-tab="${tabId}"][data-row="${startRow}"][data-col="${col}"]`
       );
       if (target) target.focus();
+      ensureCalcScrollToFocused();
     });
   };
 
@@ -1100,6 +1157,7 @@
     requestAnimationFrame(() => {
       const next = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${row}"][data-col="4"]`);
       if (next) next.focus();
+      ensureCalcScrollToFocused();
     });
   }
 

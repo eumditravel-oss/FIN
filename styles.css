@@ -274,10 +274,20 @@ tbody td{
   -webkit-user-select: text !important;
   cursor: text;
 }
+
 .cell:focus{
   border-color: rgba(26,61,124,.35);
   box-shadow: 0 0 0 3px rgba(26,61,124,.12);
 }
+
+/* ✅ (3) F2 편집모드 표시: 이동모드와 구분되게 확실히 */
+.cell[data-editing="1"]{
+  border-color: rgba(26,61,124,.55) !important;
+  box-shadow: 0 0 0 4px rgba(26,61,124,.18) !important;
+  background: rgba(255,255,255,.92) !important;
+}
+
+/* readonly */
 .cell.readonly{
   background: rgba(255,255,255,.45);
   color: rgba(0,0,0,.65);
@@ -402,9 +412,11 @@ tbody td{
   background: rgba(255,255,255,.55);
   min-height:0;
 
+  /* ✅ (1)(2) 내부 스크롤 컨테이너로 확실히 고정 */
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
+
 .var-table{
   width:100%;
   min-width:100%;
@@ -412,6 +424,8 @@ tbody td{
   border-spacing:0;
   font-size:12px;
 }
+
+/* ✅ 변수표 thead도 스크롤 기준 상단 고정 */
 .var-table thead th{
   position: sticky;
   top:0;

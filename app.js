@@ -1,9 +1,12 @@
-/* app.js (FINAL FIX v12) - FIN 산출자료 (Web)
+/* app.js (FINAL FIX v12.1) - FIN 산출자료 (Web)
    - ✅ 스크롤러 2중( table-wrap + calc-scroll ) 구조 제거 → calc-scroll 하나만 스크롤 담당
    - ✅ 산출/코드 표 열 너비 비율 colgroup으로 강제 (코드 0.5x / 품명·규격·산출식 2.5x / 노랑 0.25x)
    - ✅ 산출탭 위치(공백/밀림) 복구: calc-scroll 높이를 JS로 계산하여 강제
    - ✅ 산출표 내부 휠 스크롤: 변수표처럼 calc-scroll 안에서 wheel 동작
    - ✅ 코드탭도 동일하게 내부 스크롤 적용
+   - ✅ (v12.1) Ctrl+F3 행추가 시 상단(top-split) “밀려 올라가는” 점프 방지:
+       1) focus({preventScroll:true}) 사용 + 수동 ensureScrollIntoView()
+       2) 포커스 직전 updateScrollHeights() 먼저 적용
 */
 
 (() => {
@@ -15,6 +18,24 @@
   const LS_KEY = "FIN_WEB_STATE_V11";
   const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+
+  /***************
+   * ✅ focus jump 방지 헬퍼
+   ***************/
+  function safeFocus(target) {
+    if (!target) return;
+    try {
+      // 최신 브라우저: 자동 스크롤 점프 방지
+      target.focus({ preventScroll: true });
+    } catch {
+      // 구형 브라우저 fallback
+      try { target.focus(); } catch {}
+    }
+  }
+
+  function raf2(fn) {
+    requestAnimationFrame(() => requestAnimationFrame(fn));
+  }
 
   /***************
    * Sticky height auto-measure
@@ -334,11 +355,8 @@
   }
 
   // 산출표(12열) 가중치
-  // No(0.35), 코드(0.5), 품명(2.5), 규격(2.5), 단위(0.25), 산출식(2.5),
-  // 물량(0.25), 할증(0.25), 환산단위(0.25), 환산계수(0.25), 환산후수량(0.25), 비고(0.5)
   const CALC_COL_WEIGHTS = [0.35, 0.5, 2.5, 2.5, 0.25, 2.5, 0.25, 0.25, 0.25, 0.25, 0.25, 0.5];
-
-  // 코드표(9열) 가중치: 코드(0.6), 품명(2.2), 규격(2.2), 단위(0.6), 할증(0.6), 환산단위(0.7), 환산계수(0.7), 비고(1.2), 삭제버튼(0.6)
+  // 코드표(9열) 가중치
   const CODE_COL_WEIGHTS = [0.6, 2.2, 2.2, 0.6, 0.6, 0.7, 0.7, 1.2, 0.6];
 
   /***************
@@ -376,7 +394,6 @@
       ])
     ]);
 
-    // ✅ 스크롤러는 calc-scroll 하나만 사용(=table-wrap 역할도 겸함)
     const scroll = el("div", { class: "table-wrap calc-scroll", dataset: { scroll: "code" } }, [buildCodeMasterTable()]);
     forceScrollStyle(scroll);
     attachGridNav(scroll);
@@ -390,7 +407,7 @@
 
   function buildCodeMasterTable() {
     const table = el("table", { class: "code-table" }, []);
-    table.style.tableLayout = "fixed";   // ✅ colgroup 폭 강제
+    table.style.tableLayout = "fixed";
     table.style.width = "100%";
     table.style.minWidth = "100%";
 
@@ -480,9 +497,10 @@
     saveState();
     render();
 
-    requestAnimationFrame(() => {
+    raf2(() => {
+      updateScrollHeights(); // ✅ 먼저 높이 확정
       const first = document.querySelector(`input[data-grid="code"][data-row="${insertPos}"][data-col="0"]`);
-      if (first) first.focus();
+      if (first) safeFocus(first);
       ensureScrollIntoView();
     });
   }
@@ -520,7 +538,6 @@
       ])
     ]);
 
-    // ✅ 스크롤러는 calc-scroll 하나만 사용(=table-wrap 역할도 겸함)
     const scroll = el("div", { class: "table-wrap calc-scroll", dataset: { scroll: "calc" } }, [buildCalcTable(tabId)]);
     forceScrollStyle(scroll);
     attachGridNav(scroll);
@@ -564,10 +581,10 @@
       saveState();
       render();
 
-      requestAnimationFrame(() => {
+      raf2(() => {
         const newList = document.querySelector(".section-list");
         const items = newList ? [...newList.querySelectorAll(".section-item")] : [];
-        if (items[bucket.activeSection]) items[bucket.activeSection].focus();
+        if (items[bucket.activeSection]) safeFocus(items[bucket.activeSection]);
       });
     });
 
@@ -704,7 +721,7 @@
     const sec = bucket.sections[bucket.activeSection];
 
     const table = el("table", { class: "calc-table" }, []);
-    table.style.tableLayout = "fixed";   // ✅ colgroup 폭 강제
+    table.style.tableLayout = "fixed";
     table.style.width = "100%";
     table.style.minWidth = "100%";
 
@@ -846,7 +863,7 @@
       const next = container.querySelector(selector);
 
       if (next && (next instanceof HTMLInputElement || next instanceof HTMLTextAreaElement)) {
-        next.focus();
+        safeFocus(next);
         ensureScrollIntoView();
       }
     });
@@ -903,9 +920,10 @@
     saveState();
     render();
 
-    requestAnimationFrame(() => {
+    raf2(() => {
+      updateScrollHeights(); // ✅ 먼저 높이 확정
       const first = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${insertPos}"][data-col="0"]`);
-      if (first) first.focus();
+      if (first) safeFocus(first);
       ensureScrollIntoView();
     });
   }
@@ -932,10 +950,11 @@
     saveState();
     render();
 
-    requestAnimationFrame(() => {
+    raf2(() => {
+      updateScrollHeights();
       const nr = clamp(row, 0, (sec.rows.length - 1));
       const target = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${nr}"][data-col="${col}"]`);
-      if (target) target.focus();
+      if (target) safeFocus(target);
       ensureScrollIntoView();
     });
   }
@@ -954,10 +973,11 @@
     saveState();
     render();
 
-    requestAnimationFrame(() => {
+    raf2(() => {
+      updateScrollHeights();
       const nr = clamp(row, 0, state.codeMaster.length - 1);
       const target = document.querySelector(`input[data-grid="code"][data-row="${nr}"][data-col="${col}"]`);
-      if (target) target.focus();
+      if (target) safeFocus(target);
       ensureScrollIntoView();
     });
   }
@@ -1105,11 +1125,12 @@
       saveState();
       render();
 
-      requestAnimationFrame(() => {
+      raf2(() => {
+        updateScrollHeights();
         const target = document.querySelector(
           `input[data-grid="calc"][data-tab="${originTab}"][data-row="${focusRow}"][data-col="0"]`
         );
-        if (target) target.focus();
+        if (target) safeFocus(target);
 
         if (selectedCodes.length > 1) window.__FIN_INSERT_CODES__?.(selectedCodes);
         else window.__FIN_INSERT_CODE__?.(selectedCodes[0]);
@@ -1171,11 +1192,12 @@
     saveState();
     render();
 
-    requestAnimationFrame(() => {
+    raf2(() => {
+      updateScrollHeights();
       const target = document.querySelector(
         `input[data-grid="calc"][data-tab="${tabId}"][data-row="${startRow}"][data-col="${col}"]`
       );
-      if (target) target.focus();
+      if (target) safeFocus(target);
       ensureScrollIntoView();
     });
   };
@@ -1196,9 +1218,10 @@
     saveState();
     render();
 
-    requestAnimationFrame(() => {
+    raf2(() => {
+      updateScrollHeights();
       const next = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${row}"][data-col="4"]`);
-      if (next) next.focus();
+      if (next) safeFocus(next);
       ensureScrollIntoView();
     });
   }
@@ -1272,17 +1295,11 @@
     $view.appendChild(content);
     bindTopButtons();
 
-    requestAnimationFrame(() => {
+    // ✅ 레이아웃/스크롤 높이를 먼저 확정해서 이후 포커스 이동에도 점프가 안 나게
+    raf2(() => {
       updateStickyVars();
       applyPanelStickyTop();
-
       updateScrollHeights();
-
-      requestAnimationFrame(() => {
-        updateStickyVars();
-        applyPanelStickyTop();
-        updateScrollHeights();
-      });
     });
   }
 

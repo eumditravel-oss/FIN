@@ -1,15 +1,7 @@
-/* app.js (FINAL) - FIN 산출자료 (Web)
-   - 코드탭 복원(코드/품명/규격/단위/할증/환산단위/환산계수/비고)
-   - 엑셀 기반 코드마스터 기본값 내장
-   - 산출탭 방향키 이동: 산출표(빨간영역) 안에서만 동작
-   - Ctrl+F3: 산출표에서만 현재 행 아래 행 추가  ✅ + 코드탭도 동일 동작
-   - Ctrl+Shift+F3: 산출표 +10행               ✅ + 코드탭도 동일 동작
-   - ✅ Ctrl+Del: (확인창) → 줄(행) 삭제(줄 수 감소)  ✅ calc+code 전체 적용 / var는 셀 비우기
-   - Ctrl+. : 코드 선택 창
-   - ✅ 상단(topbar/tabs/top-split) 실제 높이 측정 → sticky offset 자동 보정
-   - ✅ 노란 영역(패널 헤더) sticky 고정
-   - ✅ 산출표 내부에서 휠 스크롤 되도록 "calc-scroll" 구조 + wheel/scroll focus 보정
-     (styles.css는 calc-scroll에 overflow:auto 지정 전제)
+/* app.js (FINAL FIX) - FIN 산출자료 (Web)
+   - 산출탭 위치(공백/밀림) 복구: calc-scroll 높이를 JS로 계산하여 강제
+   - 산출표 내부 휠 스크롤: 변수표처럼 calc-scroll 안에서 wheel 동작
+   - 코드탭도 동일하게 내부 스크롤 적용
 */
 
 (() => {
@@ -48,8 +40,43 @@
   }
 
   window.addEventListener("resize", () => {
-    requestAnimationFrame(updateStickyVars);
+    requestAnimationFrame(() => {
+      updateStickyVars();
+      applyPanelStickyTop();
+      updateScrollHeights(); // ✅ 내부 스크롤 높이 재계산
+    });
   });
+
+  /***************
+   * ✅ 산출/코드 내부 스크롤 높이 자동 보정 (공백/밀림 해결)
+   ***************/
+  function updateScrollHeights() {
+    // 현재 화면에 있는 모든 calc-scroll에 대해 viewport 기준 maxHeight를 계산
+    const scrolls = document.querySelectorAll(".calc-scroll");
+    if (!scrolls.length) return;
+
+    scrolls.forEach((sc) => {
+      if (!(sc instanceof HTMLElement)) return;
+
+      // ✅ 내부 스크롤 강제 (CSS 없더라도 동작)
+      sc.style.overflow = "auto";
+      sc.style.webkitOverflowScrolling = "touch";
+      sc.tabIndex = -1;
+
+      const rect = sc.getBoundingClientRect();
+      const viewportH = window.innerHeight || document.documentElement.clientHeight || 800;
+
+      // 하단 여백 (footer/여유)
+      const bottomPad = 18;
+
+      // sc의 top 위치부터 화면 끝까지를 maxHeight로 사용
+      // 너무 작으면 최소값 보정
+      let maxH = Math.floor(viewportH - rect.top - bottomPad);
+      maxH = clamp(maxH, 180, 20000);
+
+      sc.style.maxHeight = `${maxH}px`;
+    });
+  }
 
   /***************
    * Code Master (엑셀 동일 구조)
@@ -316,7 +343,7 @@
   }
 
   /***************
-   * ✅ Code tab (방향키/행추가 지원)
+   * ✅ Code tab
    ***************/
   function renderCodeTab() {
     const panelHeader = el("div", { class: "panel-header sticky-head", dataset: { sticky: "panel" } }, [
@@ -332,13 +359,15 @@
       ])
     ]);
 
-    // ✅ code 탭도 "내부 스크롤" 사용
     const scroll = el("div", { class: "calc-scroll", dataset: { scroll: "code" } }, [buildCodeMasterTable()]);
-    const wrap = el("div", { class: "table-wrap" }, [scroll]);
+    forceScrollStyle(scroll);
     attachGridNav(scroll);
-    attachWheelFocus(scroll);
+    attachWheelLock(scroll);
 
-    return el("div", { class: "panel" }, [panelHeader, wrap]);
+    return el("div", { class: "panel" }, [
+      panelHeader,
+      el("div", { class: "table-wrap" }, [scroll])
+    ]);
   }
 
   function buildCodeMasterTable() {
@@ -430,12 +459,12 @@
     requestAnimationFrame(() => {
       const first = document.querySelector(`input[data-grid="code"][data-row="${insertPos}"][data-col="0"]`);
       if (first) first.focus();
-      ensureCalcScrollToFocused();
+      ensureScrollIntoView();
     });
   }
 
   /***************
-   * UI: Section + Vars + Calc
+   * UI: Calc tab
    ***************/
   function renderCalcTab(tabId, title) {
     recomputeSection(tabId);
@@ -467,15 +496,15 @@
       ])
     ]);
 
-    // ✅ 산출표도 내부 스크롤(calc-scroll) 적용
+    // ✅ 산출표 스크롤 컨테이너 (변수표처럼 내부 스크롤)
     const scroll = el("div", { class: "calc-scroll", dataset: { scroll: "calc" } }, [buildCalcTable(tabId)]);
-    const wrap = el("div", { class: "table-wrap calc-wrap" }, [scroll]);
+    forceScrollStyle(scroll);
     attachGridNav(scroll);
-    attachWheelFocus(scroll);
+    attachWheelLock(scroll);
 
     const panel = el("div", { class: "panel" }, [
       panelHeader,
-      wrap
+      el("div", { class: "table-wrap" }, [scroll])
     ]);
 
     return el("div", {}, [top, panel]);
@@ -690,9 +719,8 @@
     table.appendChild(thead);
     table.appendChild(tbody);
 
-    const inner = el("div", {}, [table]);
-
-    inner.addEventListener("keydown", (e) => {
+    // 산출식 Enter 재계산
+    table.addEventListener("keydown", (e) => {
       const t = e.target;
       if (!(t instanceof HTMLInputElement)) return;
       if (t.dataset.grid !== "calc") return;
@@ -702,9 +730,9 @@
         saveState();
         refreshCalcComputed(tabId);
       }
-    });
+    }, true);
 
-    return inner;
+    return table;
   }
 
   function tdNavInputCalc(tabId, row, col, field, value, opts = {}) {
@@ -747,7 +775,6 @@
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
 
-    // 화면에 렌더된 calc input 전부 갱신
     const inputs = document.querySelectorAll(`input[data-grid="calc"][data-tab="${tabId}"]`);
     inputs.forEach((inp) => {
       const r = Number(inp.dataset.row);
@@ -791,38 +818,36 @@
 
       if (next && (next instanceof HTMLInputElement || next instanceof HTMLTextAreaElement)) {
         next.focus();
-        ensureCalcScrollToFocused();
+        ensureScrollIntoView();
       }
     });
   }
 
   /***************
-   * ✅ Wheel focus: 산출표 내부에서 wheel 스크롤 가능하게
+   * ✅ 내부 스크롤 강제 + wheel을 내부에서 먹게 만들기
    ***************/
-  function attachWheelFocus(scrollEl) {
+  function forceScrollStyle(scrollEl) {
+    if (!scrollEl) return;
+    scrollEl.style.overflow = "auto";
+    scrollEl.style.webkitOverflowScrolling = "touch";
+    scrollEl.tabIndex = -1;
+  }
+
+  function attachWheelLock(scrollEl) {
     if (!scrollEl) return;
 
-    // 마우스가 스크롤 영역에 들어오면, 포커스를 줘서 wheel이 이 영역에 걸리게
-    scrollEl.addEventListener("mouseenter", () => {
-      try {
-        scrollEl.focus?.();
-      } catch {}
-    });
-
-    // 내부에서 wheel이 발생하면, 해당 scrollEl이 스크롤을 먹도록 강제
+    // 내부에서 wheel이 발생하면 scrollEl이 먹도록
     scrollEl.addEventListener("wheel", (e) => {
-      // 내부에 스크롤 여지가 없으면 상위로 전달
-      const canScroll = scrollEl.scrollHeight > scrollEl.clientHeight;
+      const canScroll = scrollEl.scrollHeight > scrollEl.clientHeight + 2;
       if (!canScroll) return;
 
-      // 기본: 해당 영역이 스크롤되도록 함 (브라우저가 자동으로 처리)
-      // 다만, 특정 상황에서 body가 먹는 경우가 있어 preventDefault + 수동스크롤을 사용
+      // 내부 스크롤로 고정
       e.preventDefault();
       scrollEl.scrollTop += e.deltaY;
     }, { passive: false });
   }
 
-  function ensureCalcScrollToFocused() {
+  function ensureScrollIntoView() {
     const a = document.activeElement;
     if (!(a instanceof HTMLElement)) return;
     const scroll = a.closest(".calc-scroll");
@@ -854,7 +879,7 @@
     requestAnimationFrame(() => {
       const first = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${insertPos}"][data-col="0"]`);
       if (first) first.focus();
-      ensureCalcScrollToFocused();
+      ensureScrollIntoView();
     });
   }
 
@@ -871,7 +896,6 @@
 
     if (!sec?.rows?.length) return;
     if (sec.rows.length <= 1) {
-      // 최소 1행 유지: 삭제 대신 비우기
       sec.rows[0] = defaultCalcRow();
     } else {
       sec.rows.splice(row, 1);
@@ -885,7 +909,7 @@
       const nr = clamp(row, 0, (sec.rows.length - 1));
       const target = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${nr}"][data-col="${col}"]`);
       if (target) target.focus();
-      ensureCalcScrollToFocused();
+      ensureScrollIntoView();
     });
   }
 
@@ -907,7 +931,7 @@
       const nr = clamp(row, 0, state.codeMaster.length - 1);
       const target = document.querySelector(`input[data-grid="code"][data-row="${nr}"][data-col="${col}"]`);
       if (target) target.focus();
-      ensureCalcScrollToFocused();
+      ensureScrollIntoView();
     });
   }
 
@@ -923,7 +947,7 @@
       return;
     }
 
-    // ✅ Ctrl+Del : 다양한 브라우저/키보드 대응 (key + code + keyCode)
+    // Ctrl+Del
     const isCtrlDel =
       e.ctrlKey &&
       !e.shiftKey &&
@@ -943,7 +967,6 @@
       if (grid !== "calc" && grid !== "var" && grid !== "code") return;
       if (a.hasAttribute("readonly")) return;
 
-      // ✅ 확인 팝업
       const ok = confirm("정말로 삭제할까요?\n- 산출표/코드표: 현재 '행'이 삭제됩니다.\n- 변수표: 현재 '셀'이 비워집니다.");
       if (!ok) {
         e.preventDefault();
@@ -954,7 +977,6 @@
       e.preventDefault();
       e.stopPropagation();
 
-      // ✅ 줄 수 감소(행 삭제): calc + code
       if (grid === "calc") {
         deleteCalcRowAtActiveCell(a);
         return;
@@ -964,7 +986,6 @@
         return;
       }
 
-      // var는 고정 12행 구조라서: 셀 비우기 유지
       a.value = "";
       a.dispatchEvent(new Event("input", { bubbles: true }));
       return;
@@ -1102,7 +1123,6 @@
   window.__FIN_GET_CODEMASTER__ = () => state.codeMaster || [];
   window.__FIN_INSERT_CODE__ = (code) => { insertCodeToActiveCell(code); };
 
-  // ✅ 멀티 선택 삽입: 현재 행부터 "밀어내며 삽입"
   window.__FIN_INSERT_CODES__ = (codes) => {
     const a = document.activeElement;
     if (!(a instanceof HTMLInputElement) || a.dataset.grid !== "calc") return;
@@ -1114,14 +1134,13 @@
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
 
-    const startRow = clamp(startRowRaw, 0, sec.rows.length); // length도 허용(맨 끝 삽입)
+    const startRow = clamp(startRowRaw, 0, sec.rows.length);
     const insertRows = codes.map(c => {
       const r = defaultCalcRow();
       r.code = String(c || "").toUpperCase().trim();
       return r;
     });
 
-    // ✅ 기존 행을 아래로 밀어내며 삽입
     sec.rows.splice(startRow, 0, ...insertRows);
 
     recomputeSection(tabId);
@@ -1133,7 +1152,7 @@
         `input[data-grid="calc"][data-tab="${tabId}"][data-row="${startRow}"][data-col="${col}"]`
       );
       if (target) target.focus();
-      ensureCalcScrollToFocused();
+      ensureScrollIntoView();
     });
   };
 
@@ -1148,7 +1167,6 @@
     const sec = bucket.sections[bucket.activeSection];
     if (!sec.rows[row]) return;
 
-    // 단일 선택은 "현재 행 코드만 교체" 유지
     sec.rows[row].code = String(code || "").toUpperCase().trim();
     recomputeSection(tabId);
     saveState();
@@ -1157,7 +1175,7 @@
     requestAnimationFrame(() => {
       const next = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${row}"][data-col="4"]`);
       if (next) next.focus();
-      ensureCalcScrollToFocused();
+      ensureScrollIntoView();
     });
   }
 
@@ -1233,7 +1251,16 @@
     requestAnimationFrame(() => {
       updateStickyVars();
       applyPanelStickyTop();
-      requestAnimationFrame(updateStickyVars);
+
+      // ✅ 렌더 직후 내부 스크롤 높이 확정
+      updateScrollHeights();
+
+      // 한 번 더(폰트/레이아웃 안정화 후)
+      requestAnimationFrame(() => {
+        updateStickyVars();
+        applyPanelStickyTop();
+        updateScrollHeights();
+      });
     });
   }
 
@@ -1272,12 +1299,7 @@
             : Number(r.surchargePct);
 
         if (!map.has(code)) {
-          map.set(code, {
-            code, name, spec, unit,
-            pre: 0,
-            post: 0,
-            pctSet: new Set()
-          });
+          map.set(code, { code, name, spec, unit, pre: 0, post: 0, pctSet: new Set() });
         }
 
         const agg = map.get(code);

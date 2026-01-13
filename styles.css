@@ -152,7 +152,6 @@ body{
 }
 
 /* ===== Panel ===== */
-/* ✅ 패널은 스크롤 주체가 아님 (그리드가 스크롤 주체) */
 .panel{
   background: rgba(255,250,240,.86);
   border:1px solid var(--line);
@@ -167,7 +166,7 @@ body{
   overflow:hidden;   /* ✅ 패널 스크롤 금지 */
 }
 
-/* ✅ 패널 헤더는 sticky 금지(위로 올라가야 함) */
+/* ✅ 패널 헤더 */
 .panel-header{
   display:flex;
   align-items:flex-start;
@@ -202,27 +201,34 @@ body{
   align-items:center;
 }
 
-/* ===== Tables ===== */
-/* ✅ 산출/코드/집계 “그리드 내부 스크롤” 복원 */
+/* ===========================
+   ✅ Tables / Scroll container
+   =========================== */
+/* ✅ app.js(v12): table-wrap + calc-scroll을 "하나"로 사용 */
 .table-wrap{
   border:1px solid var(--line);
   border-radius: 16px;
-  overflow:auto;           /* ✅ 내부 스크롤 */
+  overflow:auto;           /* ✅ 내부 스크롤(세로/가로) */
   background: rgba(255,255,255,.55);
-  flex:1 1 auto;           /* ✅ 패널 남은 높이 채움 */
+  flex:1 1 auto;
   min-height:0;
 
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
 
+/* ✅ 중요: width:max-content 제거 → colgroup% + table-layout:fixed 정상 동작 */
 table{
-  width: max-content;
+  width: 100%;
   min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 12px;
 }
+
+/* ✅ 산출/코드 표는 화면이 좁으면 가로스크롤이 자연스럽게 생기도록 최소폭 부여 */
+.calc-table{ min-width: 1180px; }
+.code-table{ min-width: 1180px; }
 
 thead th{
   position: sticky;
@@ -236,6 +242,9 @@ thead th{
   white-space: nowrap;
 }
 
+/* ✅ fixed layout일 때 넘침/깨짐 방지 */
+th, td{ min-width:0; }
+
 tbody td{
   border-bottom: 1px solid rgba(0,0,0,.06);
   padding: 4px 6px;
@@ -243,14 +252,23 @@ tbody td{
 }
 
 /* ===== Inputs ===== */
+/* ✅ fixed table에서 input이 칸 밖으로 튀는 문제 방지 */
 .cell{
   width: 100%;
+  min-width: 0;
+  display: block;
+
   border: 1px solid rgba(0,0,0,.14);
   background: rgba(255,255,255,.72);
   border-radius: 10px;
   padding: 6px 8px;
   font-size: 12px;
   outline: none;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
   pointer-events: auto !important;
   user-select: text !important;
   -webkit-user-select: text !important;
@@ -369,6 +387,10 @@ tbody td{
   padding:7px 10px;
   outline:none;
   font-size:12px;
+
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 
 /* 변수표 */
@@ -385,6 +407,7 @@ tbody td{
 }
 .var-table{
   width:100%;
+  min-width:100%;
   border-collapse:separate;
   border-spacing:0;
   font-size:12px;

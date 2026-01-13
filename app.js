@@ -1,7 +1,9 @@
-/* app.js (FINAL FIX) - FIN 산출자료 (Web)
-   - 산출탭 위치(공백/밀림) 복구: calc-scroll 높이를 JS로 계산하여 강제
-   - 산출표 내부 휠 스크롤: 변수표처럼 calc-scroll 안에서 wheel 동작
-   - 코드탭도 동일하게 내부 스크롤 적용
+/* app.js (FINAL FIX v12) - FIN 산출자료 (Web)
+   - ✅ 스크롤러 2중( table-wrap + calc-scroll ) 구조 제거 → calc-scroll 하나만 스크롤 담당
+   - ✅ 산출/코드 표 열 너비 비율 colgroup으로 강제 (코드 0.5x / 품명·규격·산출식 2.5x / 노랑 0.25x)
+   - ✅ 산출탭 위치(공백/밀림) 복구: calc-scroll 높이를 JS로 계산하여 강제
+   - ✅ 산출표 내부 휠 스크롤: 변수표처럼 calc-scroll 안에서 wheel 동작
+   - ✅ 코드탭도 동일하게 내부 스크롤 적용
 */
 
 (() => {
@@ -51,14 +53,12 @@
    * ✅ 산출/코드 내부 스크롤 높이 자동 보정 (공백/밀림 해결)
    ***************/
   function updateScrollHeights() {
-    // 현재 화면에 있는 모든 calc-scroll에 대해 viewport 기준 maxHeight를 계산
     const scrolls = document.querySelectorAll(".calc-scroll");
     if (!scrolls.length) return;
 
     scrolls.forEach((sc) => {
       if (!(sc instanceof HTMLElement)) return;
 
-      // ✅ 내부 스크롤 강제 (CSS 없더라도 동작)
       sc.style.overflow = "auto";
       sc.style.webkitOverflowScrolling = "touch";
       sc.tabIndex = -1;
@@ -66,11 +66,7 @@
       const rect = sc.getBoundingClientRect();
       const viewportH = window.innerHeight || document.documentElement.clientHeight || 800;
 
-      // 하단 여백 (footer/여유)
       const bottomPad = 18;
-
-      // sc의 top 위치부터 화면 끝까지를 maxHeight로 사용
-      // 너무 작으면 최소값 보정
       let maxH = Math.floor(viewportH - rect.top - bottomPad);
       maxH = clamp(maxH, 180, 20000);
 
@@ -325,6 +321,27 @@
   }
 
   /***************
+   * ✅ Column width helpers (colgroup 강제)
+   ***************/
+  function buildColGroupFromWeights(weights) {
+    const sum = weights.reduce((a, b) => a + b, 0);
+    const cg = el("colgroup", {}, []);
+    weights.forEach((w) => {
+      const pct = (w / sum) * 100;
+      cg.appendChild(el("col", { style: `width:${pct.toFixed(3)}%` }, []));
+    });
+    return cg;
+  }
+
+  // 산출표(12열) 가중치
+  // No(0.35), 코드(0.5), 품명(2.5), 규격(2.5), 단위(0.25), 산출식(2.5),
+  // 물량(0.25), 할증(0.25), 환산단위(0.25), 환산계수(0.25), 환산후수량(0.25), 비고(0.5)
+  const CALC_COL_WEIGHTS = [0.35, 0.5, 2.5, 2.5, 0.25, 2.5, 0.25, 0.25, 0.25, 0.25, 0.25, 0.5];
+
+  // 코드표(9열) 가중치: 코드(0.6), 품명(2.2), 규격(2.2), 단위(0.6), 할증(0.6), 환산단위(0.7), 환산계수(0.7), 비고(1.2), 삭제버튼(0.6)
+  const CODE_COL_WEIGHTS = [0.6, 2.2, 2.2, 0.6, 0.6, 0.7, 0.7, 1.2, 0.6];
+
+  /***************
    * UI: Tabs
    ***************/
   function renderTabs() {
@@ -359,19 +376,26 @@
       ])
     ]);
 
-    const scroll = el("div", { class: "calc-scroll", dataset: { scroll: "code" } }, [buildCodeMasterTable()]);
+    // ✅ 스크롤러는 calc-scroll 하나만 사용(=table-wrap 역할도 겸함)
+    const scroll = el("div", { class: "table-wrap calc-scroll", dataset: { scroll: "code" } }, [buildCodeMasterTable()]);
     forceScrollStyle(scroll);
     attachGridNav(scroll);
     attachWheelLock(scroll);
 
     return el("div", { class: "panel" }, [
       panelHeader,
-      el("div", { class: "table-wrap" }, [scroll])
+      scroll
     ]);
   }
 
   function buildCodeMasterTable() {
-    const table = el("table", {}, []);
+    const table = el("table", { class: "code-table" }, []);
+    table.style.tableLayout = "fixed";   // ✅ colgroup 폭 강제
+    table.style.width = "100%";
+    table.style.minWidth = "100%";
+
+    table.appendChild(buildColGroupFromWeights(CODE_COL_WEIGHTS));
+
     const thead = el("thead", {}, [
       el("tr", {}, [
         el("th", {}, ["코드(Code)"]),
@@ -496,15 +520,15 @@
       ])
     ]);
 
-    // ✅ 산출표 스크롤 컨테이너 (변수표처럼 내부 스크롤)
-    const scroll = el("div", { class: "calc-scroll", dataset: { scroll: "calc" } }, [buildCalcTable(tabId)]);
+    // ✅ 스크롤러는 calc-scroll 하나만 사용(=table-wrap 역할도 겸함)
+    const scroll = el("div", { class: "table-wrap calc-scroll", dataset: { scroll: "calc" } }, [buildCalcTable(tabId)]);
     forceScrollStyle(scroll);
     attachGridNav(scroll);
     attachWheelLock(scroll);
 
     const panel = el("div", { class: "panel" }, [
       panelHeader,
-      el("div", { class: "table-wrap" }, [scroll])
+      scroll
     ]);
 
     return el("div", {}, [top, panel]);
@@ -679,7 +703,13 @@
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
 
-    const table = el("table", {}, []);
+    const table = el("table", { class: "calc-table" }, []);
+    table.style.tableLayout = "fixed";   // ✅ colgroup 폭 강제
+    table.style.width = "100%";
+    table.style.minWidth = "100%";
+
+    table.appendChild(buildColGroupFromWeights(CALC_COL_WEIGHTS));
+
     const thead = el("thead", {}, [
       el("tr", {}, [
         el("th", {}, ["No"]),
@@ -719,7 +749,6 @@
     table.appendChild(thead);
     table.appendChild(tbody);
 
-    // 산출식 Enter 재계산
     table.addEventListener("keydown", (e) => {
       const t = e.target;
       if (!(t instanceof HTMLInputElement)) return;
@@ -836,12 +865,10 @@
   function attachWheelLock(scrollEl) {
     if (!scrollEl) return;
 
-    // 내부에서 wheel이 발생하면 scrollEl이 먹도록
     scrollEl.addEventListener("wheel", (e) => {
       const canScroll = scrollEl.scrollHeight > scrollEl.clientHeight + 2;
       if (!canScroll) return;
 
-      // 내부 스크롤로 고정
       e.preventDefault();
       scrollEl.scrollTop += e.deltaY;
     }, { passive: false });
@@ -939,7 +966,6 @@
    * Shortcuts
    ***************/
   window.addEventListener("keydown", (e) => {
-    // Ctrl+.
     if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") {
       e.preventDefault();
       e.stopPropagation();
@@ -947,7 +973,6 @@
       return;
     }
 
-    // Ctrl+Del
     const isCtrlDel =
       e.ctrlKey &&
       !e.shiftKey &&
@@ -991,7 +1016,6 @@
       return;
     }
 
-    // Ctrl+F3 / Ctrl+Shift+F3
     if (e.ctrlKey && (e.key === "F3")) {
       const a = document.activeElement;
       if (a instanceof HTMLInputElement) {
@@ -1252,10 +1276,8 @@
       updateStickyVars();
       applyPanelStickyTop();
 
-      // ✅ 렌더 직후 내부 스크롤 높이 확정
       updateScrollHeights();
 
-      // 한 번 더(폰트/레이아웃 안정화 후)
       requestAnimationFrame(() => {
         updateStickyVars();
         applyPanelStickyTop();

@@ -1,4 +1,7 @@
-/* app.js (FINAL FIX v12.4) - FIN 산출자료 (Web)
+/* app.js (FINAL FIX v13.0) - FIN 산출자료 (Web)
+   - ✅ (v13.0) 내보내기/가져오기: JSON → Excel(.xlsx) 기반으로 변경
+   - ✅ (v13.0) 내보내기 클릭 시 탭 선택 팝업(모달) 제공 (코드/철골/철골_부자재/구조이기-동바리)
+   - ✅ (v13.0) 가져오기(Excel): Codes 시트 기반으로 codeMaster 갱신 (임시 양식)
    - ✅ (v12.4) 산출표(계산표)에서 "비고" 컬럼만 숨김(렌더링 제거)
    - ✅ (v12.3) 변수표 영역에서도 Ctrl+F3/Shift+Ctrl+F3 행추가 지원 (변수표 셀 선택 시)
    - ✅ (v12.3) 집계 탭: 구분 개소(count) 반영하여 코드별 수량 합산
@@ -351,8 +354,6 @@
   }
 
   // ✅ (v12.4) 산출표 "비고" 컬럼 제거 → weights도 1개 줄임
-  // 기존(12개): [No,코드,품명,규격,단위,산출식,물량,할증,환산단위,환산계수,환산후수량,비고]
-  // 변경(11개): [No,코드,품명,규격,단위,산출식,물량,할증,환산단위,환산계수,환산후수량]
   const CALC_COL_WEIGHTS = [
     0.35,  // No
     0.75,  // 코드
@@ -477,6 +478,7 @@
       value: value ?? "",
       readonly: opts.readonly ? "readonly" : null,
       dataset: ds,
+      onna: null,
       oninput: (e) => {
         const v = e.target.value;
         if (scope === "codeMaster") {
@@ -751,7 +753,6 @@
         el("th", {}, ["환산단위"]),
         el("th", {}, ["환산계수"]),
         el("th", {}, ["환산후수량"]),
-        // ❌ 비고 제거
       ])
     ]);
 
@@ -769,7 +770,6 @@
         tdNavInputCalc(tabId, i, 7, "convUnit", r.convUnit || "", { readonly: true }),
         tdNavInputCalc(tabId, i, 8, "convFactor", r.convFactor ?? "", { readonly: true }),
         tdNavInputCalc(tabId, i, 9, "converted", String(r.converted ?? 0), { readonly: true }),
-        // ❌ note(비고) td 제거
       ]);
       tbody.appendChild(tr);
     });
@@ -848,7 +848,6 @@
       const rowObj = sec.rows[r];
       if (!rowObj) return;
 
-      // ✅ note는 산출표에서 렌더링 안 하므로 갱신 대상에서도 제거
       if (["name", "spec", "unit", "value", "convUnit", "convFactor", "converted"].includes(f)) {
         inp.value = (rowObj[f] ?? "") + "";
       }
@@ -1298,6 +1297,315 @@
     });
   }
 
+  /***************
+   * ✅ Excel Modal Styles (app.js에서 자동 주입)
+   ***************/
+  function ensureExcelModalStyles() {
+    if (document.getElementById("excel-modal-style")) return;
+
+    const css = `
+      .excel-modal-backdrop{
+        position:fixed; inset:0;
+        background: rgba(0,0,0,.25);
+        display:flex; align-items:center; justify-content:center;
+        z-index: 99999;
+        padding:16px;
+      }
+      .excel-modal{
+        width:min(520px, 96vw);
+        background: rgba(255,250,240,.96);
+        border: 1px solid rgba(0,0,0,.10);
+        border-radius: 18px;
+        box-shadow: 0 24px 60px rgba(0,0,0,.18);
+        overflow:hidden;
+      }
+      .excel-modal-head{
+        padding:14px 16px;
+        border-bottom:1px solid rgba(0,0,0,.08);
+        display:flex; align-items:center; justify-content:space-between; gap:12px;
+      }
+      .excel-modal-title{ font-weight:900; }
+      .excel-modal-body{ padding:14px 16px; }
+      .excel-modal-foot{
+        padding:14px 16px;
+        border-top:1px solid rgba(0,0,0,.08);
+        display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap;
+      }
+      .excel-modal-list{ display:flex; flex-direction:column; gap:10px; }
+      .excel-modal-item{
+        display:flex; align-items:center; justify-content:space-between; gap:12px;
+        padding:10px 12px;
+        background: rgba(255,255,255,.55);
+        border: 1px solid rgba(0,0,0,.10);
+        border-radius: 14px;
+      }
+      .excel-modal-item label{ font-weight:900; color:#1d1d1f; }
+      .excel-modal-item small{ color: rgba(90,90,97,1); font-weight:700; }
+      .excel-modal-item input[type="checkbox"]{ width:18px; height:18px; }
+    `;
+    const style = document.createElement("style");
+    style.id = "excel-modal-style";
+    style.textContent = css;
+    document.head.appendChild(style);
+  }
+
+  /***************
+   * ✅ Excel Export Modal + Export/Import 구현
+   *   - 임시 양식으로 테스트 가능
+   *   - 나중에 사용자 엑셀 양식 오면 매핑만 변경
+   ***************/
+  function openExcelExportModal() {
+    ensureExcelModalStyles();
+
+    // 기존 모달 제거
+    document.querySelectorAll(".excel-modal-backdrop").forEach(n => n.remove());
+
+    const selections = {
+      code: true,
+      steel: true,
+      steel_sub: false,
+      support: false,
+    };
+
+    const makeItem = (key, title, desc) => {
+      const chk = document.createElement("input");
+      chk.type = "checkbox";
+      chk.checked = !!selections[key];
+      chk.addEventListener("change", () => selections[key] = chk.checked);
+
+      return el("div", { class: "excel-modal-item" }, [
+        el("div", {}, [
+          el("label", {}, [title]),
+          el("div", {}, [el("small", {}, [desc])]),
+        ]),
+        chk
+      ]);
+    };
+
+    const backdrop = el("div", { class: "excel-modal-backdrop" }, []);
+    const modal = el("div", { class: "excel-modal" }, []);
+
+    const head = el("div", { class: "excel-modal-head" }, [
+      el("div", { class: "excel-modal-title" }, ["엑셀 내보내기"]),
+      el("button", { class: "smallbtn", onclick: () => backdrop.remove() }, ["닫기"])
+    ]);
+
+    const body = el("div", { class: "excel-modal-body" }, [
+      el("div", { class: "excel-modal-list" }, [
+        makeItem("code", "코드", "Codes 시트로 codeMaster를 내보냅니다."),
+        makeItem("steel", "철골", "Steel 시트로 산출/변수를 내보냅니다."),
+        makeItem("steel_sub", "철골_부자재", "Steel_Sub 시트로 산출/변수를 내보냅니다."),
+        makeItem("support", "구조이기/동바리", "Support 시트로 산출/변수를 내보냅니다."),
+      ])
+    ]);
+
+    const foot = el("div", { class: "excel-modal-foot" }, [
+      el("button", {
+        class: "btn ghost",
+        onclick: () => {
+          selections.code = selections.steel = selections.steel_sub = selections.support = true;
+          backdrop.remove();
+          openExcelExportModal();
+        }
+      }, ["전체선택"]),
+      el("button", {
+        class: "btn",
+        onclick: () => {
+          const any = Object.values(selections).some(Boolean);
+          if (!any) return alert("내보낼 항목을 하나 이상 선택해 주세요.");
+          try {
+            exportSelectedToExcel(selections);
+            backdrop.remove();
+          } catch (err) {
+            console.error(err);
+            alert("엑셀 내보내기 실패: XLSX 라이브러리 로드 여부 / 브라우저 다운로드 권한을 확인해 주세요.");
+          }
+        }
+      }, ["내보내기(Excel)"])
+    ]);
+
+    modal.appendChild(head);
+    modal.appendChild(body);
+    modal.appendChild(foot);
+
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) backdrop.remove();
+    });
+
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+  }
+
+  function exportSelectedToExcel(sel) {
+    if (typeof XLSX === "undefined" || !XLSX?.utils) {
+      throw new Error("XLSX not loaded");
+    }
+
+    // 최신 계산 반영 (현재 탭만이라도)
+    if (state.activeTab === "steel" || state.activeTab === "steel_sub" || state.activeTab === "support") {
+      recomputeSection(state.activeTab);
+    }
+
+    const wb = XLSX.utils.book_new();
+
+    if (sel.code) {
+      const rows = (state.codeMaster || []).map(r => ({
+        code: r.code ?? "",
+        name: r.name ?? "",
+        spec: r.spec ?? "",
+        unit: r.unit ?? "",
+        surcharge: r.surcharge ?? "",
+        convUnit: r.convUnit ?? "",
+        convFactor: r.convFactor ?? "",
+        note: r.note ?? "",
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows, { skipHeader: false });
+      XLSX.utils.book_append_sheet(wb, ws, "Codes");
+    }
+
+    if (sel.steel) appendCalcTabSheet(wb, "steel", "Steel");
+    if (sel.steel_sub) appendCalcTabSheet(wb, "steel_sub", "Steel_Sub");
+    if (sel.support) appendCalcTabSheet(wb, "support", "Support");
+
+    const fileName = `FIN_export_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  }
+
+  function appendCalcTabSheet(wb, tabId, sheetName) {
+    const bucket = state[tabId];
+    if (!bucket || !Array.isArray(bucket.sections)) return;
+
+    const prev = bucket.activeSection;
+    const out = [];
+
+    for (let sIdx = 0; sIdx < bucket.sections.length; sIdx++) {
+      bucket.activeSection = sIdx;
+      recomputeSection(tabId);
+
+      const sec = bucket.sections[sIdx];
+      const sectionName = sec.name ?? `구분 ${sIdx + 1}`;
+      const count = sec.count ?? "";
+
+      // 변수 덤프
+      for (const v of (sec.vars || [])) {
+        if (!v.key && !v.expr && !v.note) continue;
+        out.push({
+          type: "VAR",
+          sectionName,
+          count,
+          key: v.key ?? "",
+          expr: v.expr ?? "",
+          value: v.value ?? 0,
+          note: v.note ?? "",
+        });
+      }
+
+      // 산출행 덤프
+      (sec.rows || []).forEach((r, i) => {
+        const hasAny =
+          (r.code || r.formula || r.value || r.converted || r.name || r.spec || r.unit || r.surchargePct != null);
+        if (!hasAny) return;
+
+        out.push({
+          type: "ROW",
+          sectionName,
+          count,
+          no: i + 1,
+          code: r.code ?? "",
+          name: r.name ?? "",
+          spec: r.spec ?? "",
+          unit: r.unit ?? "",
+          formula: r.formula ?? "",
+          value: r.value ?? 0,
+          surchargePct: r.surchargePct ?? "",
+          convUnit: r.convUnit ?? "",
+          convFactor: r.convFactor ?? "",
+          converted: r.converted ?? 0,
+          note: r.note ?? "",
+        });
+      });
+    }
+
+    bucket.activeSection = prev;
+
+    const ws = XLSX.utils.json_to_sheet(out, { skipHeader: false });
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  }
+
+  async function importExcelToCodes(file) {
+    if (typeof XLSX === "undefined" || !XLSX?.read) {
+      throw new Error("XLSX not loaded");
+    }
+
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "array" });
+
+    // 시트명 유연 처리
+    const sheetNames = wb.SheetNames || [];
+    const pickSheet = (candidates) => {
+      for (const cand of candidates) {
+        const hit = sheetNames.find(n => String(n).trim().toLowerCase() === String(cand).trim().toLowerCase());
+        if (hit) return hit;
+      }
+      return null;
+    };
+
+    const sn =
+      pickSheet(["Codes", "Code", "코드", "CODE"]) ||
+      (sheetNames[0] || null);
+
+    if (!sn) throw new Error("No sheet");
+    const ws = wb.Sheets[sn];
+    if (!ws) throw new Error("Sheet missing");
+
+    // 헤더 기반
+    const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
+
+    // 헤더 alias (임시)
+    const get = (row, keys) => {
+      for (const k of keys) {
+        if (row[k] !== undefined) return row[k];
+      }
+      return "";
+    };
+
+    const next = [];
+    for (const row of json) {
+      const code = String(get(row, ["code", "Code", "CODE", "코드"])).trim();
+      if (!code) continue;
+
+      const name = String(get(row, ["name", "품명", "Product name", "품명\n(Product name)"]));
+      const spec = String(get(row, ["spec", "규격", "Specifications", "규격\n(Specifications)"]));
+      const unit = String(get(row, ["unit", "단위", "Unit", "단위\n(unit)"]));
+      const note = String(get(row, ["note", "비고", "Note", "비고\n(Note)"]));
+
+      const surchargeRaw = get(row, ["surcharge", "할증", "할증\n(surcharge)"]);
+      const convUnit = String(get(row, ["convUnit", "환산단위", "Conversion unit", "환산단위\n(Conversion unit)"]));
+      const convFactorRaw = get(row, ["convFactor", "환산계수", "Conversion factor", "환산계수\n(Conversion factor)"]);
+
+      const surcharge = (String(surchargeRaw).trim() === "") ? null : Number(surchargeRaw);
+      const convFactor = (String(convFactorRaw).trim() === "") ? null : Number(convFactorRaw);
+
+      next.push({
+        code: code.toUpperCase(),
+        name,
+        spec,
+        unit,
+        surcharge: Number.isFinite(surcharge) ? surcharge : null,
+        convUnit,
+        convFactor: Number.isFinite(convFactor) ? convFactor : null,
+        note,
+      });
+    }
+
+    if (!next.length) {
+      throw new Error("No valid rows");
+    }
+
+    state.codeMaster = next;
+    saveState();
+  }
+
   function bindTopButtons() {
     const btnOpen = document.getElementById("btnOpenPicker");
     const btnExport = document.getElementById("btnExport");
@@ -1306,29 +1614,26 @@
 
     if (btnOpen) btnOpen.onclick = openCodePicker;
 
+    // ✅ v13: Excel 내보내기 (모달)
     if (btnExport) btnExport.onclick = () => {
-      const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "FIN_state.json";
-      a.click();
-      URL.revokeObjectURL(url);
+      openExcelExportModal();
     };
 
+    // ✅ v13: Excel 가져오기 (Codes 시트 → codeMaster 반영)
     if (fileImport) fileImport.onchange = async (e) => {
       const f = e.target.files?.[0];
       if (!f) return;
-      const txt = await f.text();
+
       try {
-        const obj = JSON.parse(txt);
-        state = { ...deepClone(DEFAULT_STATE), ...obj };
-        saveState();
-        render();
-      } catch {
-        alert("가져오기(JSON) 실패: 파일 형식이 올바르지 않습니다.");
+        await importExcelToCodes(f);
+        alert("가져오기(Excel) 완료: codeMaster(코드)가 갱신되었습니다.");
+        render(); // recompute/refresh
+      } catch (err) {
+        console.error(err);
+        alert("가져오기(Excel) 실패: 현재는 'Codes(또는 코드)' 시트를 임시 양식으로 읽습니다.\n(양식 제공 후 매핑을 확정하면 안정적으로 동작합니다.)");
+      } finally {
+        e.target.value = "";
       }
-      e.target.value = "";
     };
 
     if (btnReset) btnReset.onclick = () => {

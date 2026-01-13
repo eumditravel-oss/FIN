@@ -1,4 +1,5 @@
-/* app.js (FINAL FIX v12.3) - FIN 산출자료 (Web)
+/* app.js (FINAL FIX v12.4) - FIN 산출자료 (Web)
+   - ✅ (v12.4) 산출표(계산표)에서 "비고" 컬럼만 숨김(렌더링 제거)
    - ✅ (v12.3) 변수표 영역에서도 Ctrl+F3/Shift+Ctrl+F3 행추가 지원 (변수표 셀 선택 시)
    - ✅ (v12.3) 집계 탭: 구분 개소(count) 반영하여 코드별 수량 합산
    - ✅ (v12.3) 집계 탭: 환산단위/환산계수 있으면 환산후수량 기준으로 단위/할증전/후 집계
@@ -349,25 +350,23 @@
     return cg;
   }
 
-  // ✅ 컬럼폭 조정(요청 반영):
-  // - 코드(입력칸) 1.5배 느낌으로 확대
-  // - 단위(자동) 가로폭 2배
-  // - 물량(=Value) 가로폭 2배
-  // 기존: [0.35,0.5,2.5,2.5,0.25,2.5,0.25,0.25,0.25,0.25,0.25,0.5]
+  // ✅ (v12.4) 산출표 "비고" 컬럼 제거 → weights도 1개 줄임
+  // 기존(12개): [No,코드,품명,규격,단위,산출식,물량,할증,환산단위,환산계수,환산후수량,비고]
+  // 변경(11개): [No,코드,품명,규격,단위,산출식,물량,할증,환산단위,환산계수,환산후수량]
   const CALC_COL_WEIGHTS = [
     0.35,  // No
-    0.75,  // 코드 (↑)
+    0.75,  // 코드
     2.5,   // 품명(자동)
     2.5,   // 규격(자동)
-    0.50,  // 단위(자동) (↑ 2배)
+    0.50,  // 단위(자동)
     2.5,   // 산출식
-    0.50,  // 물량 (↑ 2배)
+    0.50,  // 물량
     0.25,  // 할증(%)
     0.25,  // 환산단위
     0.25,  // 환산계수
     0.25,  // 환산후수량
-    0.5    // 비고
   ];
+
   const CODE_COL_WEIGHTS = [0.6, 2.2, 2.2, 0.6, 0.6, 0.7, 0.7, 1.2, 0.6];
 
   /***************
@@ -651,7 +650,6 @@
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
 
-    // ✅ 변수표도 calc-scroll로 취급해서 방향키 이동 시 스크롤 연계 + Ctrl+F3 대상
     const wrap = el("div", { class: "var-tablewrap calc-scroll", dataset: { scroll: "var" } }, []);
     forceScrollStyle(wrap);
     attachWheelLock(wrap);
@@ -728,6 +726,7 @@
     return el("td", {}, [input]);
   }
 
+  // ✅ (v12.4) 산출표: "비고" 컬럼 제거
   function buildCalcTable(tabId) {
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
@@ -747,12 +746,12 @@
         el("th", {}, ["규격(자동)"]),
         el("th", {}, ["단위(자동)"]),
         el("th", {}, ["산출식"]),
-        el("th", {}, ["물량"]),          // ✅ "물량(Value)" -> "물량"
+        el("th", {}, ["물량"]),
         el("th", {}, ["할증(%)"]),
         el("th", {}, ["환산단위"]),
         el("th", {}, ["환산계수"]),
         el("th", {}, ["환산후수량"]),
-        el("th", {}, ["비고"]),
+        // ❌ 비고 제거
       ])
     ]);
 
@@ -770,7 +769,7 @@
         tdNavInputCalc(tabId, i, 7, "convUnit", r.convUnit || "", { readonly: true }),
         tdNavInputCalc(tabId, i, 8, "convFactor", r.convFactor ?? "", { readonly: true }),
         tdNavInputCalc(tabId, i, 9, "converted", String(r.converted ?? 0), { readonly: true }),
-        tdNavInputCalc(tabId, i, 10, "note", r.note || "", { readonly: true }),
+        // ❌ note(비고) td 제거
       ]);
       tbody.appendChild(tr);
     });
@@ -849,7 +848,8 @@
       const rowObj = sec.rows[r];
       if (!rowObj) return;
 
-      if (["name", "spec", "unit", "value", "convUnit", "convFactor", "converted", "note"].includes(f)) {
+      // ✅ note는 산출표에서 렌더링 안 하므로 갱신 대상에서도 제거
+      if (["name", "spec", "unit", "value", "convUnit", "convFactor", "converted"].includes(f)) {
         inp.value = (rowObj[f] ?? "") + "";
       }
     });
@@ -979,7 +979,6 @@
     });
   }
 
-  // ✅ (v12.3) 변수표 행 추가
   function addVarRows(tabId, n, insertAfterRow = null) {
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
@@ -1098,7 +1097,6 @@
       return;
     }
 
-    // ✅ Ctrl+F3 (Shift 포함): 현재 활성 셀 grid 기준으로 행 추가
     if (e.ctrlKey && (e.key === "F3")) {
       const a = document.activeElement;
       const isEditableEl = (a instanceof HTMLInputElement) || (a instanceof HTMLTextAreaElement);
@@ -1106,7 +1104,6 @@
 
       const grid = a.dataset.grid;
 
-      // 산출표
       if (grid === "calc") {
         e.preventDefault();
         e.stopPropagation();
@@ -1117,7 +1114,6 @@
         return;
       }
 
-      // ✅ 변수표
       if (grid === "var") {
         e.preventDefault();
         e.stopPropagation();
@@ -1128,7 +1124,6 @@
         return;
       }
 
-      // 코드표
       if (grid === "code") {
         e.preventDefault();
         e.stopPropagation();
@@ -1373,7 +1368,6 @@
     });
   }
 
-  // ✅ 집계 탭: 개소(count) 반영 + 환산 규칙 반영
   function renderSummaryTabByCodeOrder(srcTabId, title) {
     const bucket = state[srcTabId];
 
@@ -1392,7 +1386,6 @@
 
       const sec = bucket.sections[sIdx];
 
-      // ✅ 개소: 빈칸=1, 숫자면 그대로(0이면 0)
       let countMul = 1;
       const rawCount = (sec.count ?? "").toString().trim();
       if (rawCount === "") countMul = 1;
@@ -1408,9 +1401,9 @@
         const name = r.name || "";
         const spec = r.spec || "";
 
-        const baseQty = (Number(r.value) || 0) * countMul;        // 할증전(개소반영)
+        const baseQty = (Number(r.value) || 0) * countMul;
         const mul = (Number(r.surchargeMul) || 1);
-        const afterQty = (Number(r.value) || 0) * mul * countMul; // 할증후(개소반영)
+        const afterQty = (Number(r.value) || 0) * mul * countMul;
 
         const convUnit = String(r.convUnit || "").trim();
         const convFactorNum = Number(r.convFactor);

@@ -18,11 +18,21 @@
 
     <div class="actions">
       <button id="btnOpenPicker" class="btn">코드 선택 (Ctrl+.)</button>
+
+      <!-- ✅ (JSON) → (EXCEL) 표기 확정 -->
       <button id="btnExport" class="btn">내보내기(EXCEL)</button>
+
+      <!-- ✅ 가져오기(EXCEL) + ✅ accept를 .xlsx로 변경 -->
       <label class="btn ghost">
         가져오기(EXCEL)
-        <input id="fileImport" type="file" accept="application/json" hidden />
+        <input
+          id="fileImport"
+          type="file"
+          accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          hidden
+        />
       </label>
+
       <button id="btnReset" class="btn danger">초기화</button>
     </div>
   </header>
@@ -39,7 +49,10 @@
     </div>
   </footer>
 
-  <!-- xlsx 라이브러리는 현재 app.js(v12.4)에서 사용하지 않으므로 제거 -->
+  <!--
+    ✅ XLSX 라이브러리는 app.js에서 필요 시 자동 로드(폴백)하도록 처리 권장
+    (즉, 여기서는 고정 script로 넣지 않아도 됨)
+  -->
   <script src="app.js?v=20"></script>
 </body>
 </html>

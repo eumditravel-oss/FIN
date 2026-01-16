@@ -1,13 +1,20 @@
 :root{
-  --bg:#f6f1e6;
-  --paper:#fffaf0;
+  /* ===== Theme: Orange UI (logo title + underline tabs) ===== */
+  --bg:#f3f1ee;
+  --paper:#ffffff;
   --ink:#1d1d1f;
-  --muted:#5a5a61;
+  --muted:#6b6b73;
+
   --line: rgba(0,0,0,.10);
-  --shadow: 0 12px 30px rgba(0,0,0,.08);
+  --softLine: rgba(0,0,0,.06);
+
+  --shadow: 0 10px 26px rgba(0,0,0,.10);
+  --shadow2: 0 16px 38px rgba(0,0,0,.12);
+
   --radius: 18px;
-  --accent:#1a3d7c;
-  --accent2:#d6b25e;
+
+  --accent:#f08a24;     /* 오렌지 */
+  --accent2:#ffb55a;    /* 밝은 오렌지 */
 
   --topbarH: 0px;
   --tabsH: 0px;
@@ -23,7 +30,6 @@
 *{ box-sizing:border-box; }
 html,body{ height:100%; }
 
-/* ✅ 페이지 전체 스크롤 제거 + 앱 레이아웃 고정 */
 body{
   margin:0;
   height:100vh;
@@ -33,9 +39,11 @@ body{
 
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", Arial, "Apple SD Gothic Neo", "Malgun Gothic";
   color:var(--ink);
+
   background:
-    radial-gradient(1200px 600px at 20% 0%, rgba(26,61,124,.05), transparent 60%),
-    radial-gradient(900px 500px at 90% 20%, rgba(214,178,94,.06), transparent 60%),
+    radial-gradient(1200px 680px at 10% 0%, rgba(240,138,36,.12), transparent 55%),
+    radial-gradient(900px 520px at 90% 15%, rgba(255,181,90,.10), transparent 55%),
+    linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,0)),
     var(--bg);
 }
 
@@ -49,15 +57,45 @@ body{
   justify-content:space-between;
   gap:16px;
   padding: 14px 16px;
-  background: rgba(246,241,230,.90);
+
+  background: rgba(255,255,255,.94);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--softLine);
+  box-shadow: 0 8px 22px rgba(0,0,0,.08);
   flex:0 0 auto;
 }
 
-.brand .title{ font-weight: 900; letter-spacing: -0.2px; font-size: 18px; }
-.brand .sub{ margin-top: 4px; color: var(--muted); font-size: 12px; }
-.brand .hint{ margin-top: 8px; color: var(--muted); font-size: 12px; }
+/* ✅ 타이틀 주황 강조(로고 느낌) */
+.brand{ display:flex; flex-direction:column; gap:4px; }
+.brand .title{
+  font-weight: 1000;
+  letter-spacing: -0.4px;
+  font-size: 18px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  line-height: 1.1;
+}
+.brand .title::before{
+  content:"";
+  width: 28px;
+  height: 16px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--accent2), var(--accent));
+  box-shadow: 0 10px 20px rgba(240,138,36,.25);
+  transform: skewX(-12deg);
+}
+.brand .title{
+  color: #222;
+}
+.brand .title span{ color: #222; }
+
+/* 타이틀 텍스트 일부만 오렌지로 강조하고 싶으면(HTML 수정 없이) 전체에 톤만 줌 */
+.brand .title{
+  text-shadow: 0 1px 0 rgba(255,255,255,.8);
+}
+.brand .sub{ color: var(--muted); font-size: 12px; }
+.brand .hint{ color: var(--muted); font-size: 12px; }
 .brand .hint b{ color: var(--accent); }
 
 .actions{
@@ -68,13 +106,13 @@ body{
   justify-content:flex-end;
 }
 
-/* ===== Buttons ===== */
+/* ===== Buttons (캡슐 → 각진 라운드) ===== */
 .btn,
 .smallbtn{
   appearance:none;
-  border:1px solid var(--line);
-  background: rgba(255,250,240,.92);
-  border-radius: 12px;
+  border:1px solid rgba(0,0,0,.12);
+  background: rgba(255,255,255,.92);
+  border-radius: 10px;     /* ✅ 동그라미 제거 */
   cursor:pointer;
   font-weight: 900;
   color: var(--ink);
@@ -83,50 +121,77 @@ body{
   align-items:center;
   gap:8px;
   user-select:none;
-  box-shadow: var(--shadow);
   white-space: nowrap;
+
+  box-shadow: 0 10px 22px rgba(0,0,0,.10);
 }
+
 .btn{ padding: 10px 12px; }
-.smallbtn{ padding: 8px 10px; box-shadow: 0 10px 24px rgba(0,0,0,.08); }
+.smallbtn{
+  padding: 8px 10px;
+  border-radius: 10px;     /* ✅ 동그라미 제거 */
+  box-shadow: 0 12px 26px rgba(0,0,0,.12);
+}
 
 .btn:hover,.smallbtn:hover{ transform: translateY(-1px); }
-.btn:active{ transform: translateY(0); box-shadow: 0 8px 20px rgba(0,0,0,.08); }
-.smallbtn:active{ transform: translateY(0); }
+.btn:active,.smallbtn:active{ transform: translateY(0); box-shadow: 0 8px 18px rgba(0,0,0,.10); }
 
-.btn.ghost{ background: rgba(255,255,255,.55); }
-.btn.danger{ border-color: rgba(180,0,0,.25); background: rgba(255,230,230,.7); }
+.btn.ghost{ background: rgba(255,255,255,.70); }
+.btn.danger{ border-color: rgba(180,0,0,.25); background: rgba(255,230,230,.80); }
 
 .btn input[type="file"],
 .smallbtn input[type="file"]{ display:none; }
 
-/* ===== Tabs ===== */
+/* ===== Tabs (캡슐 → 텍스트 + 밑줄 강조 스타일) ===== */
 .tabs{
   position: sticky;
   top: var(--topbarH);
   z-index: 180;
   display:flex;
-  gap:8px;
-  padding: 10px 16px 10px;
+  gap:14px;                 /* ✅ 버튼처럼 보이지 않게 간격 */
+  padding: 10px 16px 8px;
   flex-wrap:wrap;
-  background: rgba(246,241,230,.74);
+
+  background: rgba(255,255,255,.86);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(0,0,0,.06);
+  border-bottom: 1px solid var(--softLine);
   flex:0 0 auto;
 }
 
+/* ✅ 탭을 “필(캡슐)” 느낌 제거 */
 .tab{
-  border:1px solid var(--line);
-  background: rgba(255,255,255,.50);
-  border-radius: 999px;
-  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  padding: 8px 2px;
   cursor:pointer;
   font-weight: 900;
-  color: var(--muted);
+  color: #2b2b2f;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  position: relative;
+  opacity: .90;
 }
+
+.tab:hover{ opacity: 1; }
+
 .tab.active{
-  background: rgba(26,61,124,.10);
-  border-color: rgba(26,61,124,.25);
   color: var(--accent);
+  opacity: 1;
+}
+
+/* ✅ 활성 탭 밑줄(이미지 느낌) */
+.tab.active::after{
+  content:"";
+  position:absolute;
+  left: 2px;
+  right: 2px;
+  bottom: -8px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 10px 18px rgba(240,138,36,.20);
 }
 
 /* ===== Content ===== */
@@ -137,12 +202,8 @@ body{
   overflow:hidden;
 }
 
-#view{
-  height:100%;
-  min-height:0;
-}
+#view{ height:100%; min-height:0; }
 
-/* ✅ app.js가 div(view-fill)를 넣는 경우 대비 */
 .view-fill{
   height:100%;
   min-height:0;
@@ -153,20 +214,18 @@ body{
 
 /* ===== Panel ===== */
 .panel{
-  background: rgba(255,250,240,.86);
-  border:1px solid var(--line);
+  background: rgba(255,255,255,.94);
+  border:1px solid var(--softLine);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow2);
   padding: 12px;
 
   display:flex;
   flex-direction:column;
   min-height:0;
-
-  overflow:hidden;   /* ✅ 패널 스크롤 금지 */
+  overflow:hidden;
 }
 
-/* ✅ 패널 헤더 */
 .panel-header{
   display:flex;
   align-items:flex-start;
@@ -174,6 +233,7 @@ body{
   gap:12px;
   margin-bottom: 10px;
 }
+
 .panel-header.sticky-head{
   position: static;
   top:auto;
@@ -186,7 +246,21 @@ body{
   border-radius: 0;
 }
 
-.panel-title{ font-weight: 900; font-size: 16px; }
+.panel-title{
+  font-weight: 900;
+  font-size: 16px;
+  position: relative;
+  padding-left: 10px;
+}
+.panel-title::before{
+  content:"";
+  position:absolute;
+  left:0; top: 3px;
+  width:4px; height: 14px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
 .panel-desc{
   margin-top: 4px;
   font-size: 12px;
@@ -202,14 +276,13 @@ body{
 }
 
 /* ===========================
-   ✅ Tables / Scroll container
+   Tables / Scroll container
    =========================== */
-/* ✅ app.js(v12): table-wrap + calc-scroll을 "하나"로 사용 */
 .table-wrap{
-  border:1px solid var(--line);
+  border:1px solid var(--softLine);
   border-radius: 16px;
-  overflow:auto;           /* ✅ 내부 스크롤(세로/가로) */
-  background: rgba(255,255,255,.55);
+  overflow:auto;
+  background: rgba(255,255,255,.84);
   flex:1 1 auto;
   min-height:0;
 
@@ -217,7 +290,6 @@ body{
   -webkit-overflow-scrolling: touch;
 }
 
-/* ✅ 중요: width:max-content 제거 → colgroup% + table-layout:fixed 정상 동작 */
 table{
   width: 100%;
   min-width: 100%;
@@ -226,42 +298,40 @@ table{
   font-size: 12px;
 }
 
-/* ✅ 산출/코드 표는 화면이 좁으면 가로스크롤이 자연스럽게 생기도록 최소폭 부여 */
 .calc-table{ min-width: 1180px; }
 .code-table{ min-width: 1180px; }
 
 thead th{
   position: sticky;
-  top: 0;                  /* ✅ table-wrap 스크롤 기준 */
+  top: 0;
   z-index: 5;
-  background: rgba(255,250,240,.95);
-  border-bottom: 1px solid var(--line);
-  padding: 8px 8px;
+
+  background: rgba(250,250,250,.98);
+  border-bottom: 2px solid rgba(240,138,36,.55);
+  padding: 10px 10px;
   text-align:left;
   font-weight: 900;
   white-space: nowrap;
 }
 
-/* ✅ fixed layout일 때 넘침/깨짐 방지 */
 th, td{ min-width:0; }
 
 tbody td{
   border-bottom: 1px solid rgba(0,0,0,.06);
-  padding: 4px 6px;
+  padding: 6px 8px;
   vertical-align: middle;
 }
 
 /* ===== Inputs ===== */
-/* ✅ fixed table에서 input이 칸 밖으로 튀는 문제 방지 */
 .cell{
   width: 100%;
   min-width: 0;
   display: block;
 
-  border: 1px solid rgba(0,0,0,.14);
-  background: rgba(255,255,255,.72);
-  border-radius: 10px;
-  padding: 6px 8px;
+  border: 2px solid rgba(240,138,36,.45);
+  background: rgba(255,255,255,.96);
+  border-radius: 12px;
+  padding: 7px 10px;
   font-size: 12px;
   outline: none;
 
@@ -276,22 +346,30 @@ tbody td{
 }
 
 .cell:focus{
-  border-color: rgba(26,61,124,.35);
-  box-shadow: 0 0 0 3px rgba(26,61,124,.12);
+  border-color: rgba(240,138,36,.92);
+  box-shadow: 0 0 0 4px rgba(240,138,36,.18);
 }
 
-/* ✅ (3) F2 편집모드 표시: 이동모드와 구분되게 확실히 */
 .cell[data-editing="1"]{
-  border-color: rgba(26,61,124,.55) !important;
-  box-shadow: 0 0 0 4px rgba(26,61,124,.18) !important;
-  background: rgba(255,255,255,.92) !important;
+  border-color: rgba(240,138,36,.95) !important;
+  box-shadow: 0 0 0 5px rgba(240,138,36,.22) !important;
+  background: rgba(255,255,255,1) !important;
 }
 
-/* readonly */
 .cell.readonly{
-  background: rgba(255,255,255,.45);
-  color: rgba(0,0,0,.65);
+  background: rgba(245,245,245,.85);
+  color: rgba(0,0,0,.60);
+  border-color: rgba(0,0,0,.10);
 }
+
+/* smallbtn: 오렌지 솔리드(이미지 느낌) */
+.smallbtn{
+  background: linear-gradient(180deg, rgba(240,138,36,.92), rgba(220,110,20,.92));
+  border-color: rgba(240,138,36,.55);
+  color: #fff;
+}
+.smallbtn:hover{ filter: brightness(1.02); }
+.smallbtn:active{ filter: brightness(.98); }
 
 .footer{
   padding: 10px 16px 16px;
@@ -301,7 +379,7 @@ tbody td{
 }
 
 /* ===========================
-   ✅ 상단(구분/변수)
+   상단(구분/변수)
    =========================== */
 .top-split{
   flex:0 0 auto;
@@ -317,10 +395,10 @@ tbody td{
 }
 
 .rail-box{
-  background: rgba(255,250,240,.88);
-  border:1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.94);
+  border:1px solid var(--softLine);
   border-radius:16px;
-  box-shadow: 0 10px 26px rgba(0,0,0,.06);
+  box-shadow: var(--shadow);
   padding:10px;
 
   height: var(--topSplitH);
@@ -338,6 +416,17 @@ tbody td{
   font-weight:900;
   font-size:12px;
   margin:0;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.rail-title::before{
+  content:"";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  display:inline-block;
 }
 
 /* 구분 리스트 */
@@ -349,24 +438,28 @@ tbody td{
   flex-direction:column;
   gap:6px;
 }
+
 .section-item{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:8px;
   border:1px solid rgba(0,0,0,.10);
-  background: rgba(255,255,255,.70);
+  background: rgba(255,255,255,.96);
   border-radius:12px;
   padding:8px 10px;
   cursor:pointer;
   font-weight:800;
   font-size:12px;
   min-width:0;
+  box-shadow: 0 6px 16px rgba(0,0,0,.06);
 }
+
 .section-item.active{
-  background: rgba(26,61,124,.10);
-  border-color: rgba(26,61,124,.25);
+  background: rgba(240,138,36,.12);
+  border-color: rgba(240,138,36,.35);
 }
+
 .section-item .name{
   flex:1;
   min-width:0;
@@ -391,9 +484,9 @@ tbody td{
 }
 .section-editor input{
   min-width:0;
-  border:1px solid rgba(0,0,0,.12);
-  background:rgba(255,255,255,.85);
-  border-radius:10px;
+  border:2px solid rgba(240,138,36,.30);
+  background:rgba(255,255,255,.96);
+  border-radius:12px;
   padding:7px 10px;
   outline:none;
   font-size:12px;
@@ -402,17 +495,20 @@ tbody td{
   text-overflow:ellipsis;
   white-space:nowrap;
 }
+.section-editor input:focus{
+  border-color: rgba(240,138,36,.85);
+  box-shadow: 0 0 0 4px rgba(240,138,36,.16);
+}
 
 /* 변수표 */
 .var-tablewrap{
   flex: 1 1 auto;
-  border:1px solid rgba(0,0,0,.10);
+  border:1px solid var(--softLine);
   border-radius:14px;
   overflow:auto;
-  background: rgba(255,255,255,.55);
+  background: rgba(255,255,255,.86);
   min-height:0;
 
-  /* ✅ (1)(2) 내부 스크롤 컨테이너로 확실히 고정 */
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
@@ -425,20 +521,41 @@ tbody td{
   font-size:12px;
 }
 
-/* ✅ 변수표 thead도 스크롤 기준 상단 고정 */
 .var-table thead th{
   position: sticky;
   top:0;
   z-index: 6;
-  background: rgba(255,250,240,.95);
-  border-bottom: 1px solid rgba(0,0,0,.10);
-  padding: 8px 8px;
+  background: rgba(250,250,250,.98);
+  border-bottom: 2px solid rgba(240,138,36,.55);
+  padding: 10px 10px;
   text-align:left;
   font-weight:900;
 }
+
 .var-table tbody td{
   border-bottom:1px solid rgba(0,0,0,.06);
   padding:6px 8px;
+}
+
+/* ===== Scrollbar ===== */
+.table-wrap::-webkit-scrollbar,
+.section-list::-webkit-scrollbar,
+.var-tablewrap::-webkit-scrollbar{
+  height: 12px;
+  width: 12px;
+}
+.table-wrap::-webkit-scrollbar-thumb,
+.section-list::-webkit-scrollbar-thumb,
+.var-tablewrap::-webkit-scrollbar-thumb{
+  background: rgba(0,0,0,.18);
+  border-radius: 999px;
+  border: 3px solid rgba(255,255,255,.75);
+}
+.table-wrap::-webkit-scrollbar-track,
+.section-list::-webkit-scrollbar-track,
+.var-tablewrap::-webkit-scrollbar-track{
+  background: rgba(255,255,255,.55);
+  border-radius: 999px;
 }
 
 @media (max-width: 980px){

@@ -562,3 +562,23 @@ tbody td{
   .calc-layout.top-grid{ grid-template-columns: 1fr; }
   :root{ --topSplitH: 220px; }
 }
+
+/* =========================================================
+   ✅ Help button (추가)
+   ========================================================= */
+.btn.help{
+  border-color: rgba(240,138,36,.35);
+}
+.btn.help::before{
+  content:"?";
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-weight: 1000;
+  color:#fff;
+  background: linear-gradient(180deg, var(--accent2), var(--accent));
+  box-shadow: 0 10px 18px rgba(240,138,36,.22);
+}

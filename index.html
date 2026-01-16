@@ -11,12 +11,13 @@
     <div class="brand">
       <div class="title">FIN 산출자료 (Web)</div>
       <div class="sub">산출식 → 물량 자동계산 · 자동환산/할증 · 자동집계 · 로컬저장</div>
-      <div class="hint">
-        코드 선택 새 창: <b>Ctrl+.</b> · (새 창에서) <b>Ctrl+B</b> 다중선택 · <b>Ctrl+Enter</b> 삽입
-      </div>
+      <!-- ✅ (요청 반영) 상단 안내/힌트(빨간박스 영역) 제거 -->
     </div>
 
     <div class="actions">
+      <!-- ✅ 도움말 버튼 추가 (노란박스 위치) -->
+      <button id="btnHelp" class="btn help" title="도움말">도움말</button>
+
       <button id="btnOpenPicker" class="btn">코드 선택 (Ctrl+.)</button>
       <button id="btnExport" class="btn">내보내기(EXCEL)</button>
 

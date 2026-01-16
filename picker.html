@@ -3,268 +3,185 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>0.코드 선택</title>
+  <title>코드 선택</title>
+
+  <!-- ✅ 메인과 동일 테마 사용 -->
+  <link rel="stylesheet" href="styles.css?v=14" />
+
+  <!-- ✅ picker 전용 레이아웃 보정(메인 레이아웃 영향 최소화) -->
   <style>
-    :root{
-      --bg:#f6f1e6;
-      --paper:#fffaf0;
-      --ink:#1d1d1f;
-      --muted:#5a5a61;
-      --line:rgba(0,0,0,.10);
-      --shadow:0 10px 26px rgba(0,0,0,.08);
-      --radius:16px;
-      --accent:#1a3d7c;
-      --accent2:#d6b25e;
-      --danger:#b42318;
-    }
-    *{ box-sizing:border-box; }
     body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", Arial;
-      color:var(--ink);
-      background:
-        radial-gradient(1200px 600px at 20% 0%, rgba(26,61,124,.08), transparent 55%),
-        radial-gradient(900px 500px at 90% 20%, rgba(214,178,94,.12), transparent 50%),
-        var(--bg);
+      height:auto;
+      overflow:auto;
+      display:block;
+      padding: 14px;
     }
-    header{
-      position: sticky; top:0; z-index:10;
-      background: rgba(246,241,230,.86);
-      backdrop-filter: blur(10px);
-      border-bottom:1px solid var(--line);
-      padding: 12px 14px;
-      display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
-    }
-    .title{ font-weight:900; font-size:16px; }
-    .sub{ font-size:12px; color:var(--muted); margin-top:4px; line-height:1.4; }
-    .right{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-
-    button, .btnlike{
-      border:1px solid var(--line);
-      background:var(--paper);
-      border-radius:12px;
-      padding:10px 12px;
-      cursor:pointer;
-      box-shadow: var(--shadow);
-      font-weight:900;
-      user-select:none;
-    }
-    button.ghost{ background: rgba(255,255,255,.35); }
-    button.danger{
-      border-color: rgba(180,35,24,.25);
-      background: rgba(180,35,24,.08);
-      color: var(--danger);
+    .picker-wrap{
+      max-width: 1100px;
+      margin: 0 auto;
     }
 
-    main{ padding: 12px 14px 16px; }
-    .panel{
-      background: rgba(255,250,240,.86);
-      border:1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding:12px;
+    .picker-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom: 10px;
     }
-
-    .tabs{
-      display:flex; gap:8px; flex-wrap:wrap;
-      margin-bottom:10px;
-    }
-    .tabbtn{
-      padding:9px 12px;
-      border-radius: 999px;
-      border:1px solid rgba(0,0,0,.12);
-      background: rgba(255,255,255,.55);
-      font-weight:900;
-      cursor:pointer;
-      user-select:none;
-    }
-    .tabbtn.active{
-      border-color: rgba(26,61,124,.35);
-      background: rgba(26,61,124,.10);
+    .picker-title{
+      font-weight: 900;
+      font-size: 18px;
+      letter-spacing: -0.2px;
       color: var(--accent);
     }
-
-    .tools{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
-    select, input, textarea{
-      border:1px solid rgba(0,0,0,.12);
-      background:rgba(255,255,255,.8);
-      border-radius:10px;
-      padding:9px 10px;
-      outline:none;
-      font-size:12px;
+    .picker-sub{
+      margin-top: 2px;
+      font-size: 12px;
+      color: var(--muted);
     }
-    textarea{ resize: vertical; min-height: 34px; }
-    .status{ margin-left:auto; font-size:12px; color:var(--muted); }
 
-    .tablewrap{
+    .picker-tools{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+
+    .picker-bar{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+      margin: 10px 0 8px;
+    }
+    .picker-bar select,
+    .picker-bar input{
       border:1px solid var(--line);
-      border-radius: 14px;
+      background: rgba(255,255,255,.72);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 13px;
+      outline: none;
+    }
+    .picker-bar input{
+      flex: 1 1 320px;
+      min-width: 220px;
+    }
+
+    /* 테이블 영역 */
+    .picker-tablewrap{
+      border:1px solid var(--line);
+      border-radius: 16px;
       overflow:auto;
       background: rgba(255,255,255,.55);
-      max-height: 68vh;
+      box-shadow: var(--shadow);
+      max-height: 70vh;
     }
-    table{ width:max-content; min-width:100%; border-collapse:separate; border-spacing:0; font-size:12px; }
-    thead th{
-      position:sticky; top:0;
+    .picker-table{
+      width:100%;
+      min-width: 980px;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 12px;
+    }
+    .picker-table thead th{
+      position: sticky;
+      top: 0;
+      z-index: 5;
       background: rgba(255,250,240,.95);
       border-bottom: 1px solid var(--line);
-      padding: 9px 8px;
+      padding: 10px 10px;
       text-align:left;
-      font-weight:900;
-      white-space:nowrap;
+      font-weight: 900;
+      white-space: nowrap;
     }
-    tbody td{ border-bottom:1px solid rgba(0,0,0,.06); padding:6px 8px; vertical-align: top; }
-    tr.cursor td{ background: rgba(26,61,124,.10) !important; }
-    tr.sel td{ outline: 2px solid rgba(26,61,124,.35); outline-offset:-2px; }
+    .picker-table tbody td{
+      border-bottom: 1px solid rgba(0,0,0,.06);
+      padding: 8px 10px;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
 
-    .foot{
-      display:flex; gap:10px; align-items:center; justify-content:space-between;
-      margin-top:10px;
+    /* 커서/선택 스타일 */
+    tr.cursor td{
+      outline: 2px solid rgba(26,61,124,.22);
+      outline-offset: -2px;
+      background: rgba(26,61,124,.06);
     }
-    .badge{
-      display:inline-flex; align-items:center; gap:6px;
-      border-radius:999px;
-      padding:6px 10px;
-      background:rgba(26,61,124,.08);
-      border:1px solid rgba(26,61,124,.18);
-      font-weight:900;
-      font-size:12px;
-      white-space:nowrap;
+    tr.sel td{
+      background: rgba(255,140,0,.10);
     }
-    .kbd{ font-weight:900; color: var(--accent); }
 
-    .hint{
-      font-size:12px;
+    .picker-foot{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-top: 10px;
       color: var(--muted);
-      margin-left: 2px;
+      font-size: 12px;
     }
-    .hr{
-      height:1px;
-      background: rgba(0,0,0,.08);
-      margin: 10px 0;
-    }
-    .filebtn{
-      display:inline-flex; align-items:center; gap:8px;
+    .picker-hotkeys{
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
     }
   </style>
 </head>
+
 <body>
-  <header>
-    <div>
-      <div class="title">0.코드 선택</div>
-      <div class="sub" id="subHelp">
-        검색어 입력 후 <span class="kbd">Enter</span> → 결과 리스트<br/>
-        <span class="kbd">↑/↓</span> 커서 이동 · <span class="kbd">Shift+↑/↓</span> 블록선택 ·
-        <span class="kbd">Ctrl+B</span> 다중선택 · <span class="kbd">Ctrl+Enter</span> 삽입 ·
-        <span class="kbd">Esc</span> 닫기
-      </div>
-    </div>
-    <div class="right">
-      <button id="btnInsert">삽입 (Ctrl+Enter)</button>
-      <button id="btnApplyCodes" class="ghost">코드저장/반영</button>
-      <button id="btnClose">닫기</button>
-    </div>
-  </header>
-
-  <main>
+  <div class="picker-wrap">
     <div class="panel">
+      <div class="picker-head">
+        <div>
+          <div class="picker-title">코드 선택</div>
+          <div class="picker-sub">
+            Ctrl+B 선택토글 · Shift+↑/↓ 블록선택 · Ctrl+Enter 삽입/닫기 · Esc 닫기
+          </div>
+        </div>
 
-      <div class="tabs">
-        <div class="tabbtn active" data-tab="pick">코드 선택</div>
-        <div class="tabbtn" data-tab="edit">코드 편집(마스터)</div>
+        <div class="picker-tools">
+          <button id="btnInsert" class="btn">삽입(Ctrl+Enter)</button>
+          <button id="btnClose" class="btn ghost">닫기(Esc)</button>
+        </div>
       </div>
 
-      <!-- ===== PICK VIEW ===== -->
-      <section id="viewPick">
-        <div class="tools">
-          <select id="searchMode">
-            <option value="code">코드</option>
-            <option value="name">품명</option>
-            <option value="spec">규격</option>
-            <option value="name_spec">품명+규격</option>
-          </select>
-          <input id="q" placeholder="검색어 입력 후 Enter (비우면 전체)" style="min-width:320px;" />
-          <div class="status" id="status">대기중…</div>
-        </div>
+      <div class="picker-bar">
+        <select id="searchMode" aria-label="검색 기준">
+          <option value="name_spec">품명+규격</option>
+          <option value="code">코드</option>
+          <option value="name">품명</option>
+          <option value="spec">규격</option>
+        </select>
 
-        <div class="tablewrap" id="tablewrap">
-          <table>
-            <thead>
-              <tr>
-                <th style="min-width:160px;">코드</th>
-                <th style="min-width:220px;">품명</th>
-                <th style="min-width:220px;">규격</th>
-                <th style="min-width:90px;">단위</th>
-                <th style="min-width:110px;">할증(%)</th>
-                <th style="min-width:120px;">환산단위</th>
-                <th style="min-width:140px;">환산계수</th>
-              </tr>
-            </thead>
-            <tbody id="tbody"></tbody>
-          </table>
-        </div>
+        <input id="q" type="text" placeholder="검색어 입력 후 Enter (미입력 = 전체)" />
+        <div id="pickInfo" class="picker-sub"></div>
+      </div>
 
-        <div class="foot">
-          <div class="badge" id="pickInfo">선택 0개</div>
-          <div class="badge" id="originInfo">대상: -</div>
-        </div>
-      </section>
+      <div class="picker-tablewrap">
+        <table class="picker-table">
+          <thead>
+            <tr>
+              <th style="width: 140px;">코드</th>
+              <th style="width: 260px;">품명</th>
+              <th style="width: 260px;">규격</th>
+              <th style="width: 80px;">단위</th>
+              <th style="width: 80px;">할증(%)</th>
+              <th style="width: 100px;">환산단위</th>
+              <th style="width: 110px;">환산계수</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
 
-      <!-- ===== EDIT VIEW ===== -->
-      <section id="viewEdit" style="display:none;">
-        <div class="tools">
-          <button id="btnAddRow">행 추가</button>
-
-          <label class="btnlike filebtn">
-            엑셀 업로드(.xlsx)
-            <input id="fileXlsx" type="file" accept=".xlsx,.xls" hidden />
-          </label>
-
-          <button id="btnExportCodes" class="ghost">코드 내보내기(JSON)</button>
-
-          <span class="status" id="editStatus">코드 0개</span>
-        </div>
-
-        <div class="hint">
-          - 이 화면에서 수정한 코드는 <b>임시 상태</b>입니다. 상단의 <b>“코드저장/반영”</b>을 눌러야 부모창(app)에 반영됩니다.<br/>
-          - 엑셀 헤더: <b>코드/품명/규격/단위/할증/환산단위/환산계수/비고</b> (또는 code/name/spec/unit/surcharge/conv_unit/conv_factor/note)
-        </div>
-
-        <div class="hr"></div>
-
-        <div class="tablewrap">
-          <table>
-            <thead>
-              <tr>
-                <th style="min-width:70px;">No</th>
-                <th style="min-width:170px;">코드</th>
-                <th style="min-width:220px;">품명</th>
-                <th style="min-width:220px;">규격</th>
-                <th style="min-width:90px;">단위</th>
-                <th style="min-width:110px;">할증(%)</th>
-                <th style="min-width:120px;">환산단위</th>
-                <th style="min-width:140px;">환산계수</th>
-                <th style="min-width:240px;">비고</th>
-                <th style="min-width:120px;">작업</th>
-              </tr>
-            </thead>
-            <tbody id="editBody"></tbody>
-          </table>
-        </div>
-
-        <div class="foot">
-          <div class="badge" id="editInfo">변경사항: 0</div>
-          <div class="badge">저장/반영: 상단 버튼</div>
-        </div>
-      </section>
-
+      <div class="picker-foot">
+        <div id="status">준비중…</div>
+        <div class="picker-hotkeys" id="originInfo"></div>
+      </div>
     </div>
-  </main>
+  </div>
 
-  <!-- SheetJS -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-
-  <!-- picker logic -->
-  <script src="picker.js?v=9"></script>
+  <script src="picker.js?v=30"></script>
 </body>
 </html>

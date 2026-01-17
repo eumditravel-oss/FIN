@@ -556,11 +556,16 @@ tbody td{
 /* 구분 편집 */
 .section-editor{
   display:grid;
-  grid-template-columns: 1fr 90px 72px;
+
+  /* ✅ FIX: 버튼영역이 72px면 저장+ + - 가 절대 안 들어감
+     → 개소는 더 줄이고, 버튼영역을 넓혀서 “한 줄” 고정 */
+  grid-template-columns: 1fr 54px 132px; /* ✅ FIX (90/72 → 54/132) */
+
   gap:8px;
   align-items:center;
   min-width:0;
 }
+
 .section-editor input{
   min-width:0;
   border:2px solid rgba(240,138,36,.30);
@@ -574,9 +579,16 @@ tbody td{
   text-overflow:ellipsis;
   white-space:nowrap;
 }
+
 .section-editor input:focus{
   border-color: rgba(240,138,36,.85);
   box-shadow: 0 0 0 4px rgba(240,138,36,.16);
+}
+
+/* ✅ FIX: 개소 input(2번째) 더 타이트 + 중앙정렬 */
+.section-editor input:nth-child(2){
+  padding: 7px 8px;
+  text-align:center;
 }
 
 /* 변수표 */
@@ -765,9 +777,15 @@ body.is-resizing{
 
 /* (6) 모바일에서 더 좁아질 경우 대비(여백 살짝 줄임) */
 @media (max-width: 420px){
+  /* ✅ FIX: 모바일도 버튼영역 확보 + 개소 더 줄임 */
   .section-editor{
-    grid-template-columns: 1fr 78px 72px;
+    grid-template-columns: 1fr 44px 124px; /* ✅ FIX (78/72 → 44/124) */
   }
+
+  .section-editor input:nth-child(2){
+    padding: 6px 6px;
+  }
+
   .section-editor .row-actions .smallbtn{
     height: 32px;
   }

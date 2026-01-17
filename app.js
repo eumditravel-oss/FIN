@@ -9,6 +9,7 @@
    - ✅ (v12.3) 산출표 헤더 "물량(Value)" -> "물량"
    - ✅ (v12.3) 산출표 컬럼폭: 단위/물량(및 코드) 가로폭 증가 (CALC_COL_WEIGHTS 조정)
    - ✅ (v13.1) 도움말 버튼 추가: 화면 안내문구 제거 + help.html로 이동
+   - ✅ (v13.2) 구분명 리스트: 클릭 후에도 ↑/↓ 키로 이동 가능(렌더 후 포커스 복원)
 */
 
 (() => {
@@ -205,6 +206,9 @@
   }
 
   let state = loadState();
+
+  // ✅ (v13.2) 구분명 리스트 클릭/↑↓ 후 렌더링되면 포커스 복원
+  let __pendingSectionFocus = null;
 
   /***************
    * DOM
@@ -472,7 +476,6 @@
     const panelHeader = el("div", { class: "panel-header sticky-head", dataset: { sticky: "panel" } }, [
       el("div", {}, [
         el("div", { class: "panel-title" }, ["코드"]),
-        // ✅ (요청 반영) 화면 안내문구 제거
       ]),
       el("div", { class: "row-actions" }, [
         el("button", { class: "smallbtn", onclick: () => addCodeRows(1) }, ["행 추가 (Ctrl+F3)"]),
@@ -553,7 +556,6 @@
       value: value ?? "",
       readonly: opts.readonly ? "readonly" : null,
       dataset: ds,
-      onna: null,
       oninput: (e) => {
         const v = e.target.value;
         if (scope === "codeMaster") {
@@ -613,7 +615,6 @@
     const panelHeader = el("div", { class: "panel-header sticky-head", dataset: { sticky: "panel" } }, [
       el("div", {}, [
         el("div", { class: "panel-title" }, [title]),
-        // ✅ (요청 반영) 화면 안내문구 제거
       ]),
       el("div", { class: "row-actions" }, [
         el("button", { class: "smallbtn", onclick: () => addRows(tabId, 1) }, ["행 추가 (Ctrl+F3)"]),
@@ -630,9 +631,15 @@
     return el("div", {}, [top, panel]);
   }
 
+  // ✅ (v13.2) 구분리스트: 클릭/↑↓ 후 렌더링해도 포커스 유지 + ↑/↓ 이동 가능
   function buildSectionList(tabId) {
     const bucket = state[tabId];
-    const list = el("div", { class: "section-list", dataset: { nav: "sectionList" } }, []);
+
+    const list = el("div", {
+      class: "section-list",
+      tabindex: "0",
+      dataset: { nav: "sectionList", tab: tabId }
+    }, []);
 
     bucket.sections.forEach((s, idx) => {
       const item = el("div", {
@@ -641,6 +648,7 @@
         onclick: () => {
           bucket.activeSection = idx;
           saveState();
+          __pendingSectionFocus = { tabId, index: idx };
           render();
         },
       }, [
@@ -651,21 +659,30 @@
       list.appendChild(item);
     });
 
+    // 리스트 클릭만 해도 키보드가 먹도록(리스트에 포커스 부여)
+    list.addEventListener("mousedown", () => {
+      safeFocus(list);
+    });
+
     list.addEventListener("keydown", (e) => {
       if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+
+      // 입력 중인 셀(변수표/산출표 input)에서는 방해하지 않음
+      const a = document.activeElement;
+      if (a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement) return;
+
       e.preventDefault();
+      e.stopPropagation();
 
       const dir = e.key === "ArrowDown" ? 1 : -1;
-      bucket.activeSection = clamp(bucket.activeSection + dir, 0, bucket.sections.length - 1);
-      saveState();
-      render();
+      const nextIdx = clamp(bucket.activeSection + dir, 0, bucket.sections.length - 1);
+      if (nextIdx === bucket.activeSection) return;
 
-      raf2(() => {
-        const newList = document.querySelector(".section-list");
-        const items = newList ? [...newList.querySelectorAll(".section-item")] : [];
-        if (items[bucket.activeSection]) safeFocus(items[bucket.activeSection]);
-      });
-    });
+      bucket.activeSection = nextIdx;
+      saveState();
+      __pendingSectionFocus = { tabId, index: nextIdx };
+      render();
+    }, true);
 
     return list;
   }
@@ -1733,6 +1750,25 @@
       updateStickyVars();
       applyPanelStickyTop();
       updateScrollHeights();
+
+      // ✅ 구분명 리스트: 클릭/↑↓ 후 포커스 복원 (렌더 후 DOM 재생성 대응)
+      if (__pendingSectionFocus && __pendingSectionFocus.tabId === state.activeTab) {
+        const { tabId, index } = __pendingSectionFocus;
+        __pendingSectionFocus = null;
+
+        const list = document.querySelector(`.section-list[data-tab="${tabId}"]`);
+        if (list) {
+          const items = [...list.querySelectorAll(".section-item")];
+          const idx = clamp(Number(index || 0), 0, items.length - 1);
+          const target = items[idx];
+          if (target) {
+            safeFocus(target);
+            try { target.scrollIntoView({ block: "nearest" }); } catch {}
+          } else {
+            safeFocus(list);
+          }
+        }
+      }
     });
   }
 
@@ -1822,7 +1858,6 @@
     const panelHeader = el("div", { class: "panel-header sticky-head", dataset: { sticky: "panel" } }, [
       el("div", {}, [
         el("div", { class: "panel-title" }, [title]),
-        // ✅ (요청 반영) 화면 안내문구 제거
       ])
     ]);
 

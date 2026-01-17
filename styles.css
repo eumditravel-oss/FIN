@@ -262,23 +262,23 @@ body{
   overflow-x:hidden !important;
 }
 
-/* ✅ FIX: #view는 레이아웃 100% 유지 + zoom으로 “진짜 축소”
-   - zoom 적용 시에도 내부가 끝까지 차도록 flex 컨테이너로 구성 */
+/* ✅ FIX FINAL: zoom + 레이아웃 보정(공백 제거, 아래 끝까지 채움) */
 #view{
-  height:100%;
+  height: calc(100% / var(--uiScale));
+  width:  calc(100% / var(--uiScale));
+
   min-height:0;
   overflow:hidden;
 
-  zoom: var(--uiScale); /* ✅ 핵심 */
+  zoom: var(--uiScale);
 
-  /* ✅ 추가: 남는 높이를 자식이 끝까지 쓰게 */
   display:flex;
   flex-direction:column;
 }
 
 /* view 내부 레이아웃 안정 */
 .view-fill{
-  flex:1 1 auto;          /* ✅ (핵심) #view 안에서 끝까지 늘어남 */
+  flex:1 1 auto;          /* ✅ #view 안에서 끝까지 늘어남 */
   min-height:0;
   display:flex;
   flex-direction:column;
@@ -289,7 +289,7 @@ body{
    ✅ (핵심) Splitter 레이아웃 컨테이너
    ========================================================= */
 .work-area{
-  flex:1 1 auto;          /* ✅ (핵심) 남는 높이를 끝까지 먹음 */
+  flex:1 1 auto;          /* ✅ 남는 높이를 끝까지 먹음 */
   min-height:0;
   display:flex;
   flex-direction:column;
@@ -316,7 +316,7 @@ body{
   overflow:hidden;
 }
 
-/* ✅ (핵심) bottom-pane 안 panel도 남는 높이를 전부 차지 */
+/* ✅ bottom-pane 안 panel도 남는 높이를 전부 차지 */
 .bottom-pane > .panel{
   flex:1 1 auto;
   min-height:0;
@@ -690,7 +690,11 @@ tbody td{
   :root{ --uiScale: .95; }
 
   /* ✅ 모바일에서 zoom은 이질감이 있을 수 있어 해제(원하면 유지 가능) */
-  #view{ zoom: 1; }
+  #view{
+    zoom: 1;
+    height: 100%;
+    width: 100%;
+  }
 }
 
 /* =========================================================

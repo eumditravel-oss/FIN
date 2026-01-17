@@ -1220,6 +1220,8 @@ raf2(() => __applyCalcRowSelectionStyles(tabId));
       const grid = t.dataset.grid;
       if (grid !== "calc" && grid !== "var" && grid !== "code") return;
 
+       
+
              // ✅ (NEW) ESC : calc 멀티선택 취소
       if (grid === "calc" && e.key === "Escape") {
         const tabId = t.dataset.tab;
@@ -1232,6 +1234,10 @@ raf2(() => __applyCalcRowSelectionStyles(tabId));
         return;
       }
 
+
+       
+
+       
 
       if (e.key === "F2") {
         if (t.hasAttribute("readonly")) return;
@@ -1285,6 +1291,99 @@ raf2(() => __applyCalcRowSelectionStyles(tabId));
       }
 
 
+             // ✅ (NEW) PageUp / PageDown : 한 페이지 점프 (현재 열 유지)
+      // ✅ (NEW) Ctrl+Home / Ctrl+End : 최상단/최하단 셀로 이동 (현재 열 유지)
+      const isPage = (e.key === "PageDown" || e.key === "PageUp");
+      const isHomeEnd = (e.key === "Home" || e.key === "End");
+
+      if (isPage || isHomeEnd) {
+        // 입력 중이면 브라우저 기본 동작 유지(원하면 막아도 됨)
+        // 여기서는 "editing 모드가 아닐 때만" 처리
+        e.preventDefault();
+        e.stopPropagation();
+
+        const tabId = t.dataset.tab || null;
+        const row = Number(t.dataset.row || 0);
+        const col = Number(t.dataset.col || 0);
+
+        // grid별 rowCount 계산
+        const getRowCount = () => {
+          if (grid === "code") return (state.codeMaster?.length ?? 0);
+          if (grid === "calc") {
+            const bucket = state[tabId];
+            const sec = bucket?.sections?.[bucket?.activeSection ?? 0];
+            return (sec?.rows?.length ?? 0);
+          }
+          if (grid === "var") {
+            const bucket = state[tabId];
+            const sec = bucket?.sections?.[bucket?.activeSection ?? 0];
+            return (sec?.vars?.length ?? 0);
+          }
+          return 0;
+        };
+
+        const rowCount = getRowCount();
+        if (!rowCount) return;
+
+        const clampRow = (r) => clamp(r, 0, rowCount - 1);
+
+        // 스크롤 컨테이너(현재 셀이 들어있는 calc-scroll)를 기준으로 페이지 크기 계산
+        const sc = t.closest(".calc-scroll") || container.closest(".calc-scroll") || container;
+
+        const head = sc?.querySelector?.("thead");
+        const headH = head ? Math.ceil(head.getBoundingClientRect().height) : 0;
+
+        // 현재 행 높이(없으면 fallback)
+        const tr = t.closest("tr");
+        const rowH = tr ? Math.max(18, Math.ceil(tr.getBoundingClientRect().height)) : 34;
+
+        // 한 페이지에 들어갈 row 개수(헤더 제외)
+        const pageRows = Math.max(1, Math.floor((sc.clientHeight - headH - 12) / rowH));
+
+        let targetRow = row;
+
+        // Ctrl+Home / Ctrl+End
+        if (e.ctrlKey && !e.shiftKey && !e.altKey && isHomeEnd) {
+          targetRow = (e.key === "Home") ? 0 : (rowCount - 1);
+        }
+        // PageUp / PageDown
+        else if (!e.ctrlKey && !e.shiftKey && !e.altKey && isPage) {
+          targetRow = (e.key === "PageDown") ? (row + pageRows) : (row - pageRows);
+
+          // 스크롤도 같이 페이지 단위로 이동(체감 “바로 이동”)
+          const delta = (sc.clientHeight - headH - 12);
+          sc.scrollTop += (e.key === "PageDown" ? delta : -delta);
+        } else {
+          // 다른 조합(예: Shift+PageDown)은 일단 무시
+          return;
+        }
+
+        targetRow = clampRow(targetRow);
+
+        // 다음 셀로 포커스 이동 (현재 열 유지)
+        const baseSel = `[data-grid="${grid}"]` +
+          (grid === "calc" || grid === "var" ? `[data-tab="${tabId}"]` : "") +
+          `[data-row="${targetRow}"][data-col="${col}"]`;
+
+        let next = container.querySelector(baseSel);
+
+        // 혹시 해당 열이 없는 케이스 대비(안전장치): 같은 row의 col=0으로 fallback
+        if (!next) {
+          const fallbackSel = `[data-grid="${grid}"]` +
+            (grid === "calc" || grid === "var" ? `[data-tab="${tabId}"]` : "") +
+            `[data-row="${targetRow}"][data-col="0"]`;
+          next = container.querySelector(fallbackSel);
+        }
+
+        if (next && (next instanceof HTMLInputElement || next instanceof HTMLTextAreaElement)) {
+          safeFocus(next);
+          ensureScrollIntoView();
+        }
+
+        return;
+      }
+
+
       const key = e.key;
       if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) return;
 
@@ -1299,7 +1398,12 @@ raf2(() => __applyCalcRowSelectionStyles(tabId));
       if (key === "ArrowLeft") nc = col - 1;
       if (key === "ArrowRight") nc = col + 1;
 
-      const selector = `[data-grid="${grid}"][data-row="${nr}"][data-col="${nc}"]`;
+      let selector = `[data-grid="${grid}"][data-row="${nr}"][data-col="${nc}"]`;
+if (grid === "calc" || grid === "var") {
+  const tabId = t.dataset.tab;
+  selector = `[data-grid="${grid}"][data-tab="${tabId}"][data-row="${nr}"][data-col="${nc}"]`;
+}
+
       const next = container.querySelector(selector);
 
       if (next && ((next instanceof HTMLInputElement) || (next instanceof HTMLTextAreaElement))) {
@@ -2187,8 +2291,11 @@ raf2(() => __applyCalcRowSelectionStyles(tabId));
     // ✅ (v13.2b) topSplit 높이 먼저 적용
     applyTopSplitH();
 
-         // ✅ 다른 화면으로 렌더되면 멀티선택은 기본 해제
-    __calcMultiClear();
+         // ✅ 탭이 바뀔 때만 멀티선택 해제
+if (__calcMulti.active && __calcMulti.tabId !== state.activeTab) {
+  __calcMultiClear();
+}
+
 
 
     renderTabs();
@@ -2208,7 +2315,8 @@ raf2(() => __applyCalcRowSelectionStyles(tabId));
 
     raf2(() => {
   // ✅ (PATCH) zoom(--uiScale)일 때 렌더 직후 view 높이 보정이 가장 중요
-  
+
+  updateViewFillHeight();     
   updateStickyVars();
   applyPanelStickyTop();
   updateScrollHeights();

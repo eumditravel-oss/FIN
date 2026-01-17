@@ -310,22 +310,19 @@ body{
   margin-bottom: 10px;
 }
 
-/* ✅ FIX: sticky 제거 (이게 “철골 헤더가 아래로 붙는” 문제를 만들었음)
-   - 테이블 thead는 sticky 유지
-   - 패널 헤더는 기존처럼 자연스러운 흐름으로 */
 .panel-header.sticky-head{
-  position: static;
-  top:auto;
-  z-index:auto;
+  position: sticky;
+  top: var(--panelStickyTop);
+  z-index: 60;
 
-  background: transparent;
-  backdrop-filter:none;
+  background: rgba(255,255,255,.92);
+  backdrop-filter: blur(10px);
 
-  border-bottom:none;
+  border-bottom: 1px solid var(--softLine);
   margin: 0 0 10px;
-  padding: 0;
+  padding: 10px 10px;
 
-  border-radius: 0;
+  border-radius: 14px;
 }
 
 .panel-title{
@@ -712,4 +709,71 @@ body.is-resizing{
   cursor: row-resize !important;
   user-select:none !important;
   -webkit-user-select:none !important;
+}
+
+/* =========================================================
+   ✅ ✅ 추가 반영(요청): 구분 추가/삭제 버튼을 + / - 로 축소
+   - app.js 수정 없이 styles.css만으로 "보이는 것"을 바꿈
+   - 3번째 칸(row-actions) 안의 smallbtn 중:
+     1) 첫번째: 저장 (그대로)
+     2) 두번째: 구분 추가 → "+"
+     3) 세번째: 구분 삭제 → "-"
+   ========================================================= */
+
+/* (1) 섹션 에디터 3번째 칸의 버튼 줄: 한 줄 고정 + 오른쪽 정렬 */
+.section-editor .row-actions{
+  justify-content:flex-end;
+  flex-wrap: nowrap;        /* ✅ 줄바꿈 금지 */
+  gap:6px;
+}
+
+/* (2) 저장 버튼은 기존 크기 유지, 나머지 2개만 초미니 버튼으로 */
+.section-editor .row-actions .smallbtn{
+  height: 34px;
+  padding: 0 10px;
+}
+
+/* (3) 2번째(추가), 3번째(삭제) 버튼을 아이콘형으로 축소 */
+.section-editor .row-actions .smallbtn:nth-child(2),
+.section-editor .row-actions .smallbtn:nth-child(3){
+  width: 36px;              /* ✅ 가로 폭 최소화 */
+  min-width: 36px;
+  padding: 0;               /* ✅ 텍스트 패딩 제거 */
+  justify-content:center;
+  position: relative;
+  font-size: 0;             /* ✅ 기존 텍스트 숨김(시각적으로만) */
+  line-height: 0;
+}
+
+/* (4) + 표시 */
+.section-editor .row-actions .smallbtn:nth-child(2)::before{
+  content: "+";
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 1000;
+  color: #fff;
+}
+
+/* (5) - 표시 */
+.section-editor .row-actions .smallbtn:nth-child(3)::before{
+  content: "−";             /* ✅ 진짜 마이너스(가운데 정렬) */
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 1000;
+  color: #fff;
+}
+
+/* (6) 모바일에서 더 좁아질 경우 대비(여백 살짝 줄임) */
+@media (max-width: 420px){
+  .section-editor{
+    grid-template-columns: 1fr 78px 72px;
+  }
+  .section-editor .row-actions .smallbtn{
+    height: 32px;
+  }
+  .section-editor .row-actions .smallbtn:nth-child(2),
+  .section-editor .row-actions .smallbtn:nth-child(3){
+    width: 32px;
+    min-width: 32px;
+  }
 }

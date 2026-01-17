@@ -34,15 +34,15 @@
 *{ box-sizing:border-box; }
 html,body{ height:100%; }
 
-/* ✅ FIX: 바깥 가로 스크롤 절대 금지(빨간 가로 스크롤 방지) */
+/* ✅ FIX: 바깥(페이지) 스크롤 절대 금지 */
 html, body{
+  overflow: hidden !important;     /* ← 노란 박스(바깥 스크롤바) 제거 핵심 */
   overflow-x: hidden !important;
 }
 
 body{
   margin:0;
   height:100vh;
-  overflow:hidden; /* 세로 스크롤은 content에서 관리 */
   display:flex;
   flex-direction:column;
 
@@ -257,14 +257,13 @@ body{
   flex:1 1 auto;
   min-height:0;
 
-  /* ✅ content가 스크롤(세로) 담당 */
-  overflow:auto;
+  /* ✅ 바깥(중간) 스크롤바도 없애고, 표/리스트 내부만 스크롤 */
+  overflow: hidden;       /* ← 기존 overflow:auto 제거 */
   overflow-x:hidden !important;
 }
 
-/* ✅ FIX FINAL: zoom + 레이아웃 보정(공백 제거, 아래 끝까지 채움) */
+/* ✅ FIX FINAL: zoom + 레이아웃 보정 */
 #view{
-  /* ✅ CSS에서 1/scale 보정 계산 제거 (공백의 핵심 원인) */
   height: 100%;
   width: 100%;
 
@@ -275,14 +274,12 @@ body{
 
   display:flex;
   flex-direction:column;
-
-  /* ✅ flex 컨테이너에서 끝까지 늘어나도록 */
   flex: 1 1 auto;
 }
 
 /* view 내부 레이아웃 안정 */
 .view-fill{
-  flex:1 1 auto;          /* ✅ #view 안에서 끝까지 늘어남 */
+  flex:1 1 auto;
   min-height:0;
   display:flex;
   flex-direction:column;
@@ -293,7 +290,7 @@ body{
    ✅ (핵심) Splitter 레이아웃 컨테이너
    ========================================================= */
 .work-area{
-  flex:1 1 auto;          /* ✅ 남는 높이를 끝까지 먹음 */
+  flex:1 1 auto;
   min-height:0;
   display:flex;
   flex-direction:column;
@@ -301,7 +298,7 @@ body{
   overflow:hidden;
 }
 
-/* ✅ transform 스케일 적용 제거 (공백/탭 내려감 원인) */
+/* ✅ transform 스케일 적용 제거 */
 .work-area > .top-pane,
 .work-area > .bottom-pane{
   transform: none !important;
@@ -402,7 +399,7 @@ body{
 
   /* ✅ 필요할 때만 테이블영역에서 세로 스크롤 */
   overflow-y:auto;
-  overflow-x:hidden;   /* ✅ 가로 스크롤 제거 */
+  overflow-x:hidden;
 
   background: rgba(255,255,255,.84);
   flex:1 1 auto;
@@ -420,7 +417,6 @@ table{
   font-size: 12px;
 }
 
-/* ✅ 가로 스크롤의 직접 원인 제거 */
 .calc-table{ min-width: 100%; }
 .code-table{ min-width: 100%; }
 
@@ -598,7 +594,8 @@ tbody td{
 /* 구분 편집 */
 .section-editor{
   display:grid;
-  grid-template-columns: 1fr 54px 132px;
+  /* ✅ 개소 칸 폭 더 줄임(겹침 방지) */
+  grid-template-columns: 1fr 46px 132px;   /* ← 54px → 46px */
   gap:8px;
   align-items:center;
   min-width:0;
@@ -625,7 +622,7 @@ tbody td{
 
 /* ✅ FIX: 개소 input(2번째) 더 타이트 + 중앙정렬 */
 .section-editor input:nth-child(2){
-  padding: 7px 8px;
+  padding: 7px 6px;         /* ← 더 타이트 */
   text-align:center;
 }
 

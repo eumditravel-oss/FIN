@@ -839,7 +839,7 @@
         tdNavInputCalc(tabId, i, 3, "unit", r.unit, { readonly: true }),
         tdNavInputCalc(tabId, i, 4, "formula", r.formula, { placeholder: "예: (A+0.5)*2  (<...> 주석)" }),
         tdNavInputCalc(tabId, i, 5, "value", String(r.value ?? 0), { readonly: true }),
-        tdNavInputCalc(tabId, i, 6, "surchargePct", r.surchargePct ?? "", { placeholder: "자동/직접입력" }),
+        tdNavInputCalc(tabId, i, 6, "surchargePct", r.surchargePct ?? "", { readonly: true }),
         tdNavInputCalc(tabId, i, 7, "convUnit", r.convUnit || "", { readonly: true }),
         tdNavInputCalc(tabId, i, 8, "convFactor", r.convFactor ?? "", { readonly: true }),
         tdNavInputCalc(tabId, i, 9, "converted", String(r.converted ?? 0), { readonly: true }),

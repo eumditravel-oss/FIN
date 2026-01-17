@@ -27,8 +27,8 @@
   /* ✅ top-split(구분/변수) 기본 높이 */
   --topSplitH: 190px;
 
-  /* ✅ NEW: 기본 “86% 느낌” 스케일 */
-  --uiScale: .86;
+  /* ✅ NEW: 기본 “70% 느낌” 스케일 */
+  --uiScale: .70;
 }
 
 *{ box-sizing:border-box; }

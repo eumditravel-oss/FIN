@@ -6,7 +6,15 @@
   <title>도움말 - FIN 산출자료</title>
   <link rel="stylesheet" href="styles.css?v=14" />
   <style>
-    body{ overflow:auto; }
+    /* ✅ help.html에서만 스크롤 확실히 허용 (styles.css의 overflow:hidden 무력화) */
+    html, body{
+      height: auto !important;
+      min-height: 100% !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+    }
+    body{ overflow:auto !important; }
+
     .help-wrap{
       max-width: 980px;
       margin: 18px auto;
@@ -22,6 +30,11 @@
       align-items:flex-start;
       justify-content:space-between;
       gap:12px;
+
+      /* ✅ 상단 고정(원치 않으면 제거) */
+      position: sticky;
+      top: 12px;
+      z-index: 10;
     }
     .help-title{
       font-weight: 1000;

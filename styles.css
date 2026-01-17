@@ -827,3 +827,21 @@ body.is-resizing{
     min-width: 32px;
   }
 }
+
+/* =========================================
+   ✅ 코드 탭(코드 영역) 하단 공백 줄이기 (선택자 보강)
+   ========================================= */
+
+/* code 탭의 panel이 어떤 래퍼 안에 있어도 늘어나도록 */
+#view .panel{
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* panel 내부 스크롤 컨테이너도 남는 높이를 다 먹도록 */
+#view .panel .table-wrap{
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+

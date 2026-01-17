@@ -1220,6 +1220,19 @@ raf2(() => __applyCalcRowSelectionStyles(tabId));
       const grid = t.dataset.grid;
       if (grid !== "calc" && grid !== "var" && grid !== "code") return;
 
+             // ✅ (NEW) ESC : calc 멀티선택 취소
+      if (grid === "calc" && e.key === "Escape") {
+        const tabId = t.dataset.tab;
+        if (__calcMultiIsSameContext(tabId)) {
+          e.preventDefault();
+          e.stopPropagation();
+          __calcMultiClear();
+          __applyCalcRowSelectionStyles(tabId);
+        }
+        return;
+      }
+
+
       if (e.key === "F2") {
         if (t.hasAttribute("readonly")) return;
         e.preventDefault();
@@ -1439,6 +1452,18 @@ raf2(() => __applyCalcRowSelectionStyles(tabId));
   }
 
   window.addEventListener("keydown", (e) => {
+         // ✅ (NEW) ESC : calc 멀티선택 취소(포커스가 input이 아니어도 동작)
+    if (!e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "Escape") {
+      if (__calcMulti.active) {
+        e.preventDefault();
+        e.stopPropagation();
+        const tabId = __calcMulti.tabId;
+        __calcMultiClear();
+        if (tabId) __applyCalcRowSelectionStyles(tabId);
+      }
+      return;
+    }
+
     if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") {
       e.preventDefault();
       e.stopPropagation();

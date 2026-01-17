@@ -264,8 +264,9 @@ body{
 
 /* ✅ FIX FINAL: zoom + 레이아웃 보정(공백 제거, 아래 끝까지 채움) */
 #view{
-  height: calc(100% / var(--uiScale));
-  width:  calc(100% / var(--uiScale));
+  /* ✅ CSS에서 1/scale 보정 계산 제거 (공백의 핵심 원인) */
+  height: 100%;
+  width: 100%;
 
   min-height:0;
   overflow:hidden;
@@ -274,6 +275,9 @@ body{
 
   display:flex;
   flex-direction:column;
+
+  /* ✅ flex 컨테이너에서 끝까지 늘어나도록 */
+  flex: 1 1 auto;
 }
 
 /* view 내부 레이아웃 안정 */
@@ -396,9 +400,9 @@ body{
   border:1px solid var(--softLine);
   border-radius: 16px;
 
-  /* ✅ 필요할 때만 테이블영역에서 스크롤 */
+  /* ✅ 필요할 때만 테이블영역에서 세로 스크롤 */
   overflow-y:auto;
-  overflow-x:auto;
+  overflow-x:hidden;   /* ✅ 가로 스크롤 제거 */
 
   background: rgba(255,255,255,.84);
   flex:1 1 auto;
@@ -416,8 +420,9 @@ table{
   font-size: 12px;
 }
 
-.calc-table{ min-width: 1180px; }
-.code-table{ min-width: 1180px; }
+/* ✅ 가로 스크롤의 직접 원인 제거 */
+.calc-table{ min-width: 100%; }
+.code-table{ min-width: 100%; }
 
 thead th{
   position: sticky;

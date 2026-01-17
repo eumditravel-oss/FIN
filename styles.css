@@ -26,6 +26,9 @@
 
   /* ✅ top-split(구분/변수) 기본 높이 */
   --topSplitH: 190px;
+
+  /* ✅ NEW: 기본 “90% 느낌” 스케일 */
+  --uiScale: .90;
 }
 
 *{ box-sizing:border-box; }
@@ -248,11 +251,24 @@ body{
   padding: 12px 16px 12px;
   flex:1 1 auto;
   min-height:0;
-  overflow:hidden;
+
+  /* ✅ FIX: 내부 스케일링 시 “작업영역”이 잘리거나 탭이 밑으로 밀리는 현상 방지 */
+  overflow:auto;
 }
 
-#view{ height:100%; min-height:0; }
+/* ✅ 작업영역(뷰)을 90%로 스케일링: “브라우저 90% 줌” 체감 */
+#view{
+  height:100%;
+  min-height:0;
 
+  transform: scale(var(--uiScale));
+  transform-origin: top left;
+
+  /* ✅ scale로 줄어든 만큼 가로/세로 보정(스크롤 없이 전체를 더 담게) */
+  width: calc(100% / var(--uiScale));
+}
+
+/* view 내부 레이아웃 안정 */
 .view-fill{
   height:100%;
   min-height:0;
@@ -310,20 +326,19 @@ body{
   margin-bottom: 10px;
 }
 
-/* ✅ FIX: 철골 헤더가 테이블 중간으로 내려오는 현상 방지 (sticky 제거) */
 .panel-header.sticky-head{
-  position: static;
-  top: auto;
-  z-index: auto;
+  position: sticky;
+  top: var(--panelStickyTop);
+  z-index: 60;
 
-  background: transparent;
-  backdrop-filter: none;
+  background: rgba(255,255,255,.92);
+  backdrop-filter: blur(10px);
 
-  border-bottom: none;
+  border-bottom: 1px solid var(--softLine);
   margin: 0 0 10px;
-  padding: 0;
+  padding: 10px 10px;
 
-  border-radius: 0;
+  border-radius: 14px;
 }
 
 .panel-title{
@@ -558,7 +573,7 @@ tbody td{
 .section-editor{
   display:grid;
 
-  /* ✅ FIX: 버튼영역 확보 + 개소 축소 (한 줄 고정) */
+  /* ✅ FIX: 버튼영역 확보 + 개소 더 줄이기 */
   grid-template-columns: 1fr 54px 132px;
 
   gap:8px;
@@ -652,6 +667,9 @@ tbody td{
 @media (max-width: 980px){
   .calc-layout.top-grid{ grid-template-columns: 1fr; }
   :root{ --topSplitH: 220px; }
+
+  /* ✅ 모바일에서는 과도한 스케일링이 불편할 수 있어 0.95로 완화 */
+  :root{ --uiScale: .95; }
 }
 
 /* =========================================================
@@ -734,7 +752,7 @@ body.is-resizing{
   gap:6px;
 }
 
-/* (2) 저장 버튼 포함 기본 높이 정리 */
+/* (2) 저장 버튼은 기존 크기 유지, 나머지 2개만 초미니 버튼으로 */
 .section-editor .row-actions .smallbtn{
   height: 34px;
   padding: 0 10px;
@@ -748,7 +766,7 @@ body.is-resizing{
   padding: 0;
   justify-content:center;
   position: relative;
-  font-size: 0;     /* 기존 텍스트 숨김(시각적으로만) */
+  font-size: 0;
   line-height: 0;
 }
 

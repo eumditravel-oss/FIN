@@ -263,8 +263,6 @@ body{
 
 /* =========================================================
    ✅ (핵심 추가) Splitter 레이아웃 컨테이너
-   - app.js가 work-area / top-pane / split-resizer / bottom-pane 를 만들 때
-     높이/스크롤이 안정적으로 동작하도록 함
    ========================================================= */
 .work-area{
   height:100%;
@@ -312,19 +310,22 @@ body{
   margin-bottom: 10px;
 }
 
+/* ✅ FIX: sticky 제거 (이게 “철골 헤더가 아래로 붙는” 문제를 만들었음)
+   - 테이블 thead는 sticky 유지
+   - 패널 헤더는 기존처럼 자연스러운 흐름으로 */
 .panel-header.sticky-head{
-  position: sticky;                 /* ✅ (유지/강화) 상단 고정 */
-  top: var(--panelStickyTop);
-  z-index: 60;
+  position: static;
+  top:auto;
+  z-index:auto;
 
-  background: rgba(255,255,255,.92);
-  backdrop-filter: blur(10px);
+  background: transparent;
+  backdrop-filter:none;
 
-  border-bottom: 1px solid var(--softLine);
+  border-bottom:none;
   margin: 0 0 10px;
-  padding: 10px 10px;
+  padding: 0;
 
-  border-radius: 14px;
+  border-radius: 0;
 }
 
 .panel-title{
@@ -645,7 +646,7 @@ tbody td{
 }
 
 /* =========================================================
-   ✅ Help button (수정: 아이콘 높이/정렬 통일)
+   ✅ Help button
    ========================================================= */
 .btn.help{
   border-color: rgba(240,138,36,.35);
@@ -654,15 +655,15 @@ tbody td{
 .btn.help::before{
   content:"?";
   width: 18px;
-  height: 18px;              /* ✅ 아이콘 박스 높이 고정 */
+  height: 18px;
   border-radius: 6px;
   display:inline-flex;
   align-items:center;
   justify-content:center;
 
   font-weight: 1000;
-  font-size: 12px;           /* ✅ ? 크기 고정 */
-  line-height: 1;            /* ✅ 수직정렬 흔들림 방지 */
+  font-size: 12px;
+  line-height: 1;
 
   color:#fff;
   background: linear-gradient(180deg, var(--accent2), var(--accent));

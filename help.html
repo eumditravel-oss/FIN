@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>도움말 - FIN 산출자료</title>
+  <link rel="stylesheet" href="styles.css?v=14" />
+  <style>
+    body{ overflow:auto; }
+    .help-wrap{
+      max-width: 980px;
+      margin: 18px auto;
+      padding: 0 16px 24px;
+    }
+    .help-hero{
+      background: rgba(255,255,255,.92);
+      border: 1px solid rgba(0,0,0,.06);
+      border-radius: 18px;
+      box-shadow: 0 16px 38px rgba(0,0,0,.10);
+      padding: 14px 16px;
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .help-title{
+      font-weight: 1000;
+      font-size: 18px;
+      letter-spacing:-0.2px;
+    }
+    .help-sub{
+      margin-top:6px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .help-grid{
+      margin-top: 12px;
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .help-card{
+      background: rgba(255,255,255,.94);
+      border: 1px solid rgba(0,0,0,.06);
+      border-radius: 18px;
+      box-shadow: 0 12px 30px rgba(0,0,0,.08);
+      padding: 12px 14px;
+    }
+    .help-card h3{
+      margin: 0 0 8px;
+      font-size: 14px;
+      font-weight: 1000;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .help-card h3::before{
+      content:"";
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+      display:inline-block;
+    }
+    .help-card ul{
+      margin:0;
+      padding-left: 18px;
+      color: #2b2b2f;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .muted{ color: var(--muted); font-size:12px; }
+  </style>
+</head>
+<body>
+  <div class="help-wrap">
+    <div class="help-hero">
+      <div>
+        <div id="helpTitle" class="help-title">FIN 산출자료 도움말</div>
+        <div class="help-sub">단축키/명령어 안내(현재 적용된 규칙)</div>
+      </div>
+      <button class="btn" onclick="window.close()">닫기</button>
+    </div>
+
+    <div id="helpGrid" class="help-grid">
+      <div class="help-card">
+        <h3>로딩 중</h3>
+        <div class="muted">도움말 데이터를 불러오는 중입니다...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function renderHelp(payload){
+      const titleEl = document.getElementById("helpTitle");
+      const grid = document.getElementById("helpGrid");
+      if (!payload || !payload.sections) return;
+
+      titleEl.textContent = payload.title || "FIN 산출자료 도움말";
+      grid.innerHTML = "";
+
+      payload.sections.forEach(sec => {
+        const card = document.createElement("div");
+        card.className = "help-card";
+
+        const h3 = document.createElement("h3");
+        h3.textContent = sec.title || "";
+        card.appendChild(h3);
+
+        const ul = document.createElement("ul");
+        (sec.items || []).forEach(it => {
+          const li = document.createElement("li");
+          li.textContent = it;
+          ul.appendChild(li);
+        });
+        card.appendChild(ul);
+
+        grid.appendChild(card);
+      });
+    }
+
+    window.addEventListener("message", (event) => {
+      if (event.origin !== window.location.origin) return;
+      const msg = event.data;
+      if (!msg || typeof msg !== "object") return;
+      if (msg.type === "HELP_INIT") {
+        renderHelp(msg.payload);
+      }
+    });
+  </script>
+</body>
+</html>

@@ -310,19 +310,20 @@ body{
   margin-bottom: 10px;
 }
 
+/* ✅ FIX: 철골 헤더가 테이블 중간으로 내려오는 현상 방지 (sticky 제거) */
 .panel-header.sticky-head{
-  position: sticky;
-  top: var(--panelStickyTop);
-  z-index: 60;
+  position: static;
+  top: auto;
+  z-index: auto;
 
-  background: rgba(255,255,255,.92);
-  backdrop-filter: blur(10px);
+  background: transparent;
+  backdrop-filter: none;
 
-  border-bottom: 1px solid var(--softLine);
+  border-bottom: none;
   margin: 0 0 10px;
-  padding: 10px 10px;
+  padding: 0;
 
-  border-radius: 14px;
+  border-radius: 0;
 }
 
 .panel-title{
@@ -557,9 +558,8 @@ tbody td{
 .section-editor{
   display:grid;
 
-  /* ✅ FIX: 버튼영역이 72px면 저장+ + - 가 절대 안 들어감
-     → 개소는 더 줄이고, 버튼영역을 넓혀서 “한 줄” 고정 */
-  grid-template-columns: 1fr 54px 132px; /* ✅ FIX (90/72 → 54/132) */
+  /* ✅ FIX: 버튼영역 확보 + 개소 축소 (한 줄 고정) */
+  grid-template-columns: 1fr 54px 132px;
 
   gap:8px;
   align-items:center;
@@ -725,21 +725,16 @@ body.is-resizing{
 
 /* =========================================================
    ✅ ✅ 추가 반영(요청): 구분 추가/삭제 버튼을 + / - 로 축소
-   - app.js 수정 없이 styles.css만으로 "보이는 것"을 바꿈
-   - 3번째 칸(row-actions) 안의 smallbtn 중:
-     1) 첫번째: 저장 (그대로)
-     2) 두번째: 구분 추가 → "+"
-     3) 세번째: 구분 삭제 → "-"
    ========================================================= */
 
 /* (1) 섹션 에디터 3번째 칸의 버튼 줄: 한 줄 고정 + 오른쪽 정렬 */
 .section-editor .row-actions{
   justify-content:flex-end;
-  flex-wrap: nowrap;        /* ✅ 줄바꿈 금지 */
+  flex-wrap: nowrap;
   gap:6px;
 }
 
-/* (2) 저장 버튼은 기존 크기 유지, 나머지 2개만 초미니 버튼으로 */
+/* (2) 저장 버튼 포함 기본 높이 정리 */
 .section-editor .row-actions .smallbtn{
   height: 34px;
   padding: 0 10px;
@@ -748,12 +743,12 @@ body.is-resizing{
 /* (3) 2번째(추가), 3번째(삭제) 버튼을 아이콘형으로 축소 */
 .section-editor .row-actions .smallbtn:nth-child(2),
 .section-editor .row-actions .smallbtn:nth-child(3){
-  width: 36px;              /* ✅ 가로 폭 최소화 */
+  width: 36px;
   min-width: 36px;
-  padding: 0;               /* ✅ 텍스트 패딩 제거 */
+  padding: 0;
   justify-content:center;
   position: relative;
-  font-size: 0;             /* ✅ 기존 텍스트 숨김(시각적으로만) */
+  font-size: 0;     /* 기존 텍스트 숨김(시각적으로만) */
   line-height: 0;
 }
 
@@ -768,18 +763,17 @@ body.is-resizing{
 
 /* (5) - 표시 */
 .section-editor .row-actions .smallbtn:nth-child(3)::before{
-  content: "−";             /* ✅ 진짜 마이너스(가운데 정렬) */
+  content: "−";
   font-size: 18px;
   line-height: 1;
   font-weight: 1000;
   color: #fff;
 }
 
-/* (6) 모바일에서 더 좁아질 경우 대비(여백 살짝 줄임) */
+/* (6) 모바일에서 더 좁아질 경우 대비 */
 @media (max-width: 420px){
-  /* ✅ FIX: 모바일도 버튼영역 확보 + 개소 더 줄임 */
   .section-editor{
-    grid-template-columns: 1fr 44px 124px; /* ✅ FIX (78/72 → 44/124) */
+    grid-template-columns: 1fr 44px 124px;
   }
 
   .section-editor input:nth-child(2){

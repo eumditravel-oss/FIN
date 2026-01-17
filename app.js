@@ -8,6 +8,7 @@
    - ✅ (v12.3) 집계 탭: 환산단위/환산계수 있으면 환산후수량 기준으로 단위/할증전/후 집계
    - ✅ (v12.3) 산출표 헤더 "물량(Value)" -> "물량"
    - ✅ (v12.3) 산출표 컬럼폭: 단위/물량(및 코드) 가로폭 증가 (CALC_COL_WEIGHTS 조정)
+   - ✅ (v13.1) 도움말 버튼 추가: 화면 안내문구 제거 + help.html로 이동
 */
 
 (() => {
@@ -371,6 +372,82 @@
   const CODE_COL_WEIGHTS = [0.6, 2.2, 2.2, 0.6, 0.6, 0.7, 0.7, 1.2, 0.6];
 
   /***************
+   * ✅ Help contents (초록 박스 문구를 도움말로 이동)
+   ***************/
+  function buildHelpPayload() {
+    return {
+      title: "FIN 산출자료 도움말",
+      sections: [
+        {
+          title: "코드 선택(팝업)",
+          items: [
+            "Ctrl+. : 코드 선택 창 열기",
+            "코드 선택 창에서 Ctrl+B : 다중선택",
+            "코드 선택 창에서 Ctrl+Enter : 삽입",
+            "검색 입력 후 Enter : 필터 적용(구현된 검색 방식에 따라 동작)"
+          ]
+        },
+        {
+          title: "표 이동/편집(공통)",
+          items: [
+            "방향키: 셀 이동",
+            "F2: 편집 모드(읽기전용 셀 제외)",
+            "편집 모드에서 Enter: 편집 종료"
+          ]
+        },
+        {
+          title: "행 추가/삭제",
+          items: [
+            "Ctrl+F3: 현재 행 아래 행 추가",
+            "Shift+Ctrl+F3: +10행 추가",
+            "Ctrl+Del: 삭제(확인창) - 산출표/코드표는 현재 '행' 삭제, 변수표는 현재 '셀' 비움"
+          ]
+        },
+        {
+          title: "산출 탭(철골/철골_부자재/구조이기/동바리)",
+          items: [
+            "산출식 Enter: 계산(재계산)",
+            "구분 리스트: ↑/↓ 로 이동 및 선택",
+            "변수표: A, AB, A1, AB1... 최대 3자(첫 글자는 영문)"
+          ]
+        },
+        {
+          title: "집계 탭",
+          items: [
+            "코드별 집계: 구분 개소(count) 반영",
+            "환산단위/환산계수 있으면 환산후수량 기준으로 할증전/할증후 합산"
+          ]
+        },
+        {
+          title: "엑셀 내보내기/가져오기",
+          items: [
+            "내보내기(EXCEL): 선택 모달에서 탭 선택 후 .xlsx 다운로드",
+            "가져오기(EXCEL): 'Codes(또는 코드)' 시트 기반으로 codeMaster 갱신(임시 매핑)"
+          ]
+        }
+      ]
+    };
+  }
+
+  function openHelpWindow() {
+    const w = window.open("help.html", "FIN_HELP", "width=980,height=820");
+    if (!w) {
+      alert("팝업이 차단되었습니다. 브라우저에서 팝업 허용 후 다시 시도해 주세요.");
+      return;
+    }
+
+    const payload = buildHelpPayload();
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries++;
+      try {
+        w.postMessage({ type: "HELP_INIT", payload }, window.location.origin);
+      } catch {}
+      if (tries >= 20) clearInterval(timer);
+    }, 120);
+  }
+
+  /***************
    * UI: Tabs
    ***************/
   function renderTabs() {
@@ -395,9 +472,7 @@
     const panelHeader = el("div", { class: "panel-header sticky-head", dataset: { sticky: "panel" } }, [
       el("div", {}, [
         el("div", { class: "panel-title" }, ["코드"]),
-        el("div", { class: "panel-desc" }, [
-          "방향키: 코드표 셀 이동 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+Del 행삭제(확인)"
-        ])
+        // ✅ (요청 반영) 화면 안내문구 제거
       ]),
       el("div", { class: "row-actions" }, [
         el("button", { class: "smallbtn", onclick: () => addCodeRows(1) }, ["행 추가 (Ctrl+F3)"]),
@@ -538,9 +613,7 @@
     const panelHeader = el("div", { class: "panel-header sticky-head", dataset: { sticky: "panel" } }, [
       el("div", {}, [
         el("div", { class: "panel-title" }, [title]),
-        el("div", { class: "panel-desc" }, [
-          "방향키: 산출표 셀 이동 | 산출식 Enter 계산 | Ctrl+. 코드선택 | Ctrl+F3 행추가 | Shift+Ctrl+F3 +10행 | Ctrl+Del 행삭제(확인)"
-        ])
+        // ✅ (요청 반영) 화면 안내문구 제거
       ]),
       el("div", { class: "row-actions" }, [
         el("button", { class: "smallbtn", onclick: () => addRows(tabId, 1) }, ["행 추가 (Ctrl+F3)"]),
@@ -1351,13 +1424,9 @@
 
   /***************
    * ✅ Excel Export Modal + Export/Import 구현
-   *   - 임시 양식으로 테스트 가능
-   *   - 나중에 사용자 엑셀 양식 오면 매핑만 변경
    ***************/
   function openExcelExportModal() {
     ensureExcelModalStyles();
-
-    // 기존 모달 제거
     document.querySelectorAll(".excel-modal-backdrop").forEach(n => n.remove());
 
     const selections = {
@@ -1441,7 +1510,6 @@
       throw new Error("XLSX not loaded");
     }
 
-    // 최신 계산 반영 (현재 탭만이라도)
     if (state.activeTab === "steel" || state.activeTab === "steel_sub" || state.activeTab === "support") {
       recomputeSection(state.activeTab);
     }
@@ -1486,7 +1554,6 @@
       const sectionName = sec.name ?? `구분 ${sIdx + 1}`;
       const count = sec.count ?? "";
 
-      // 변수 덤프
       for (const v of (sec.vars || [])) {
         if (!v.key && !v.expr && !v.note) continue;
         out.push({
@@ -1500,7 +1567,6 @@
         });
       }
 
-      // 산출행 덤프
       (sec.rows || []).forEach((r, i) => {
         const hasAny =
           (r.code || r.formula || r.value || r.converted || r.name || r.spec || r.unit || r.surchargePct != null);
@@ -1540,7 +1606,6 @@
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: "array" });
 
-    // 시트명 유연 처리
     const sheetNames = wb.SheetNames || [];
     const pickSheet = (candidates) => {
       for (const cand of candidates) {
@@ -1558,10 +1623,8 @@
     const ws = wb.Sheets[sn];
     if (!ws) throw new Error("Sheet missing");
 
-    // 헤더 기반
     const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
 
-    // 헤더 alias (임시)
     const get = (row, keys) => {
       for (const k of keys) {
         if (row[k] !== undefined) return row[k];
@@ -1607,19 +1670,19 @@
   }
 
   function bindTopButtons() {
+    const btnHelp = document.getElementById("btnHelp");
     const btnOpen = document.getElementById("btnOpenPicker");
     const btnExport = document.getElementById("btnExport");
     const btnReset = document.getElementById("btnReset");
     const fileImport = document.getElementById("fileImport");
 
+    if (btnHelp) btnHelp.onclick = openHelpWindow;
     if (btnOpen) btnOpen.onclick = openCodePicker;
 
-    // ✅ v13: Excel 내보내기 (모달)
     if (btnExport) btnExport.onclick = () => {
       openExcelExportModal();
     };
 
-    // ✅ v13: Excel 가져오기 (Codes 시트 → codeMaster 반영)
     if (fileImport) fileImport.onchange = async (e) => {
       const f = e.target.files?.[0];
       if (!f) return;
@@ -1627,7 +1690,7 @@
       try {
         await importExcelToCodes(f);
         alert("가져오기(Excel) 완료: codeMaster(코드)가 갱신되었습니다.");
-        render(); // recompute/refresh
+        render();
       } catch (err) {
         console.error(err);
         alert("가져오기(Excel) 실패: 현재는 'Codes(또는 코드)' 시트를 임시 양식으로 읽습니다.\n(양식 제공 후 매핑을 확정하면 안정적으로 동작합니다.)");
@@ -1759,9 +1822,7 @@
     const panelHeader = el("div", { class: "panel-header sticky-head", dataset: { sticky: "panel" } }, [
       el("div", {}, [
         el("div", { class: "panel-title" }, [title]),
-        el("div", { class: "panel-desc" }, [
-          "코드별 집계: (구분 개소 반영) · 환산단위/계수 있으면 환산후수량 기준으로 할증전/할증후 합산"
-        ])
+        // ✅ (요청 반영) 화면 안내문구 제거
       ])
     ]);
 

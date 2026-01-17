@@ -1,4 +1,4 @@
-/* app.js (FINAL FIX v13.2a) - FIN 산출자료 (Web)
+/* app.js (FINAL FIX v13.2b) - FIN 산출자료 (Web)
    - ✅ (v13.0) 내보내기/가져오기: JSON → Excel(.xlsx) 기반으로 변경
    - ✅ (v13.0) 내보내기 클릭 시 탭 선택 팝업(모달) 제공 (코드/철골/철골_부자재/구조이기-동바리)
    - ✅ (v13.0) 가져오기(Excel): Codes 시트 기반으로 codeMaster 갱신 (임시 양식)
@@ -11,6 +11,8 @@
    - ✅ (v13.1) 도움말 버튼 추가: 화면 안내문구 제거 + help.html로 이동
    - ✅ (v13.2) 구분명 리스트: 클릭 후에도 ↑/↓ 키로 이동 가능(렌더 후 포커스 복원)
    - ✅ (v13.2a) 내보내기 모달 '전체선택' 버튼이 실제 체크박스에 반영되도록 수정(모달 재오픈 제거)
+   - ✅ (v13.2b) ✅ top-split(구분/변수) ↔ panel 사이 리사이저(split-resizer) 적용 + 높이 상태 저장(ui.topSplitH)
+   - ✅ (v13.2b) ✅ section-editor(구분 편집) CSS(3컬럼)와 맞게 버튼들을 한 칸으로 묶음
 
    - 🛠 (Patch) LS_KEY 버전 분리 + 구버전(V11) 데이터 자동 마이그레이션 + 초기화 시 구키도 함께 삭제
 */
@@ -21,7 +23,7 @@
   /***************
    * Storage
    ***************/
-  const LS_KEY = "FIN_WEB_STATE_V13_2A";   // ✅ v13.2a 전용 저장키
+  const LS_KEY = "FIN_WEB_STATE_V13_2A";   // ✅ v13.2a 전용 저장키(유지)
   const LS_KEY_OLD = "FIN_WEB_STATE_V11"; // ✅ 기존 저장키(자동 마이그레이션용)
 
   const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
@@ -180,6 +182,11 @@
     steel: { activeSection: 0, sections: [defaultSection("구분 1", 1)] },
     steel_sub: { activeSection: 0, sections: [defaultSection("구분 1", 1)] },
     support: { activeSection: 0, sections: [defaultSection("구분 1", 1)] },
+
+    // ✅ (v13.2b) UI 상태(리사이저 높이)
+    ui: {
+      topSplitH: 190, // CSS :root --topSplitH 기본값과 맞춤
+    }
   };
 
   // ✅ (Patch) 구버전 LS_KEY(V11) 자동 마이그레이션
@@ -189,7 +196,6 @@
 
     const rawOld = localStorage.getItem(LS_KEY_OLD);
     if (rawOld) {
-      // 새 키가 비어있으면 구키 값을 새 키로 복사(마이그레이션)
       try { localStorage.setItem(LS_KEY, rawOld); } catch {}
       return { raw: rawOld, migrated: true };
     }
@@ -212,6 +218,10 @@
         }
         s[k].activeSection = clamp(Number(s[k].activeSection || 0), 0, s[k].sections.length - 1);
       }
+
+      // ✅ ui
+      if (!s.ui || typeof s.ui !== "object") s.ui = deepClone(DEFAULT_STATE.ui);
+      s.ui.topSplitH = clamp(Number(s.ui.topSplitH ?? 190), 120, 520);
 
       if (!TABS.some(t => t.id === s.activeTab)) s.activeTab = "code";
       return s;
@@ -254,6 +264,15 @@
 
   function clear(node) {
     while (node.firstChild) node.removeChild(node.firstChild);
+  }
+
+  /***************
+   * ✅ (v13.2b) topSplit height 적용
+   ***************/
+  function applyTopSplitH() {
+    const root = document.documentElement;
+    const h = clamp(Number(state?.ui?.topSplitH ?? 190), 120, 520);
+    root.style.setProperty("--topSplitH", `${Math.round(h)}px`);
   }
 
   /***************
@@ -396,7 +415,7 @@
   const CODE_COL_WEIGHTS = [0.6, 2.2, 2.2, 0.6, 0.6, 0.7, 0.7, 1.2, 0.6];
 
   /***************
-   * ✅ Help contents (초록 박스 문구를 도움말로 이동)
+   * ✅ Help contents
    ***************/
   function buildHelpPayload() {
     return {
@@ -432,7 +451,8 @@
           items: [
             "산출식 Enter: 계산(재계산)",
             "구분 리스트: ↑/↓ 로 이동 및 선택",
-            "변수표: A, AB, A1, AB1... 최대 3자(첫 글자는 영문)"
+            "변수표: A, AB, A1, AB1... 최대 3자(첫 글자는 영문)",
+            "구분/변수 영역 높이 조절: 중간 점선 바(리사이저)를 드래그"
           ]
         },
         {
@@ -613,6 +633,70 @@
   }
 
   /***************
+   * ✅ (v13.2b) Split resizer: top-split 높이 조절
+   ***************/
+  function attachSplitResizer(resizerEl, topPaneEl) {
+    if (!resizerEl || !topPaneEl) return;
+
+    const root = document.documentElement;
+
+    const begin = (clientY) => {
+      const startH = topPaneEl.getBoundingClientRect().height;
+      const startY = clientY;
+
+      document.body.classList.add("is-resizing");
+
+      const move = (y) => {
+        const dy = y - startY;
+        const next = clamp(startH + dy, 120, 520);
+        state.ui.topSplitH = next;
+        root.style.setProperty("--topSplitH", `${Math.round(next)}px`);
+        saveState();
+        updateStickyVars();
+        applyPanelStickyTop();
+        updateScrollHeights();
+      };
+
+      const onMove = (e) => {
+        if (e.touches && e.touches[0]) move(e.touches[0].clientY);
+        else move(e.clientY);
+      };
+
+      const end = () => {
+        document.body.classList.remove("is-resizing");
+        window.removeEventListener("mousemove", onMove, true);
+        window.removeEventListener("mouseup", end, true);
+        window.removeEventListener("touchmove", onMove, { capture: true });
+        window.removeEventListener("touchend", end, true);
+        window.removeEventListener("touchcancel", end, true);
+
+        raf2(() => {
+          updateStickyVars();
+          applyPanelStickyTop();
+          updateScrollHeights();
+        });
+      };
+
+      window.addEventListener("mousemove", onMove, true);
+      window.addEventListener("mouseup", end, true);
+      window.addEventListener("touchmove", onMove, { capture: true, passive: false });
+      window.addEventListener("touchend", end, true);
+      window.addEventListener("touchcancel", end, true);
+    };
+
+    resizerEl.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      begin(e.clientY);
+    });
+
+    resizerEl.addEventListener("touchstart", (e) => {
+      if (!e.touches || !e.touches[0]) return;
+      e.preventDefault();
+      begin(e.touches[0].clientY);
+    }, { passive: false });
+  }
+
+  /***************
    * Calc tab
    ***************/
   function renderCalcTab(tabId, title) {
@@ -648,7 +732,18 @@
     attachWheelLock(scroll);
 
     const panel = el("div", { class: "panel" }, [panelHeader, scroll]);
-    return el("div", {}, [top, panel]);
+
+    // ✅ (v13.2b) work-area / top-pane / split-resizer / bottom-pane 구조로 렌더
+    const topPane = el("div", { class: "pane top-pane" }, [top]);
+    const resizer = el("div", { class: "split-resizer", dataset: { ui: "splitResizer" } }, []);
+    const bottomPane = el("div", { class: "pane bottom-pane" }, [panel]);
+
+    const workArea = el("div", { class: "work-area" }, [topPane, resizer, bottomPane]);
+
+    // 렌더 직후 attach
+    raf2(() => attachSplitResizer(resizer, topPane));
+
+    return workArea;
   }
 
   // ✅ (v13.2) 구분리스트: 클릭/↑↓ 후 렌더링해도 포커스 유지 + ↑/↓ 이동 가능
@@ -753,7 +848,12 @@
       }
     }, ["구분 삭제"]);
 
-    return el("div", { class: "section-editor" }, [nameInput, countInput, saveBtn, addBtn, delBtn]);
+    // ✅ (v13.2b) CSS 3컬럼(.section-editor: 1fr 90px 72px)에 맞게 버튼 묶음(3번째 칸)
+    const btnWrap = el("div", { class: "row-actions", style: "justify-content:flex-end; gap:6px;" }, [
+      saveBtn, addBtn, delBtn
+    ]);
+
+    return el("div", { class: "section-editor" }, [nameInput, countInput, btnWrap]);
   }
 
   function buildVarTable(tabId) {
@@ -1765,6 +1865,9 @@
   }
 
   function render() {
+    // ✅ (v13.2b) topSplit 높이 먼저 적용
+    applyTopSplitH();
+
     renderTabs();
     clear($view);
 

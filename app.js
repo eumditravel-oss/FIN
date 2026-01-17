@@ -144,7 +144,7 @@
     { id: "support_sum", title: "구조이기/동바리_집계" },
   ];
 
-  /***************
+    /***************
    * Default State
    ***************/
   const defaultCalcRow = () => ({
@@ -273,6 +273,30 @@
     const root = document.documentElement;
     const h = clamp(Number(state?.ui?.topSplitH ?? 190), 120, 520);
     root.style.setProperty("--topSplitH", `${Math.round(h)}px`);
+  }
+
+  /***************
+   * ✅ (PATCH) zoom(--uiScale) 대응: 하단 공백 제거 + calc-scroll 높이 보정
+   * - styles.css에서 :root { --uiScale: 0.75; } 같은 값을 사용하는 경우 대응
+   ***************/
+  function getUiScale() {
+    const v = getComputedStyle(document.documentElement).getPropertyValue("--uiScale").trim();
+    const n = Number(v);
+    return (Number.isFinite(n) && n > 0.2 && n < 2.5) ? n : 1;
+  }
+
+  function updateViewFillHeight() {
+    const view = document.getElementById("view");
+    if (!view) return;
+
+    const scale = getUiScale();
+    const vh = window.innerHeight || document.documentElement.clientHeight || 800;
+    const target = Math.ceil(vh / scale);
+
+    // zoom은 "시각적" 크기만 줄여서 레이아웃 하단이 남는 문제가 생김
+    // → view 자체 높이를 1/scale로 키워서 보이는 화면을 꽉 채움
+    view.style.height = `${target}px`;
+    view.style.minHeight = `${target}px`;
   }
 
   /***************
@@ -625,7 +649,10 @@
     render();
 
     raf2(() => {
+      // ✅ (PATCH) zoom 공백 제거/높이 보정
+      updateViewFillHeight();
       updateScrollHeights();
+
       const first = document.querySelector(`input[data-grid="code"][data-row="${insertPos}"][data-col="0"]`);
       if (first) safeFocus(first);
       ensureScrollIntoView();
@@ -654,6 +681,9 @@
         saveState();
         updateStickyVars();
         applyPanelStickyTop();
+
+        // ✅ (PATCH) zoom 공백 제거/높이 보정
+        updateViewFillHeight();
         updateScrollHeights();
       };
 
@@ -673,6 +703,9 @@
         raf2(() => {
           updateStickyVars();
           applyPanelStickyTop();
+
+          // ✅ (PATCH) zoom 공백 제거/높이 보정
+          updateViewFillHeight();
           updateScrollHeights();
         });
       };
@@ -741,12 +774,18 @@
     const workArea = el("div", { class: "work-area" }, [topPane, resizer, bottomPane]);
 
     // 렌더 직후 attach
-    raf2(() => attachSplitResizer(resizer, topPane));
+    raf2(() => {
+      attachSplitResizer(resizer, topPane);
+
+      // ✅ (PATCH) 첫 렌더에서도 zoom 공백 제거/높이 보정
+      updateViewFillHeight();
+      updateScrollHeights();
+    });
 
     return workArea;
   }
 
-  // ✅ (v13.2) 구분리스트: 클릭/↑↓ 후 렌더링해도 포커스 유지 + ↑/↓ 이동 가능
+  // ✅ (v13.2) 구분리스트: 클릭/↑/↓ 후 렌더링해도 포커스 유지 + ↑/↓ 이동 가능
   function buildSectionList(tabId) {
     const bucket = state[tabId];
 
@@ -848,7 +887,6 @@
       }
     }, ["구분 삭제"]);
 
-    // ✅ (v13.2b) CSS 3컬럼(.section-editor: 1fr 90px 72px)에 맞게 버튼 묶음(3번째 칸)
     const btnWrap = el("div", { class: "row-actions", style: "justify-content:flex-end; gap:6px;" }, [
       saveBtn, addBtn, delBtn
     ]);
@@ -897,11 +935,23 @@
         if (valueInputs[i]) valueInputs[i].value = String(vv.value ?? 0);
       });
       refreshCalcComputed(tabId);
+
+      // ✅ (PATCH) 변수 입력으로 높이/레이아웃이 변하면 공백이 다시 생길 수 있어 보정
+      updateViewFillHeight();
+      updateScrollHeights();
     });
 
     attachGridNav(wrap);
+
+    // ✅ (PATCH) 최초 렌더 시에도 1회 보정
+    raf2(() => {
+      updateViewFillHeight();
+      updateScrollHeights();
+    });
+
     return wrap;
   }
+
 
   function tdNavInputVar(tabId, row, col, field, value, opts = {}) {
     const bucket = state[tabId];

@@ -11,6 +11,8 @@
    - ✅ (v13.1) 도움말 버튼 추가: 화면 안내문구 제거 + help.html로 이동
    - ✅ (v13.2) 구분명 리스트: 클릭 후에도 ↑/↓ 키로 이동 가능(렌더 후 포커스 복원)
    - ✅ (v13.2a) 내보내기 모달 '전체선택' 버튼이 실제 체크박스에 반영되도록 수정(모달 재오픈 제거)
+
+   - 🛠 (Patch) LS_KEY 버전 분리 + 구버전(V11) 데이터 자동 마이그레이션 + 초기화 시 구키도 함께 삭제
 */
 
 (() => {
@@ -19,7 +21,9 @@
   /***************
    * Storage
    ***************/
-  const LS_KEY = "FIN_WEB_STATE_V11";
+  const LS_KEY = "FIN_WEB_STATE_V13_2A";   // ✅ v13.2a 전용 저장키
+  const LS_KEY_OLD = "FIN_WEB_STATE_V11"; // ✅ 기존 저장키(자동 마이그레이션용)
+
   const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 
@@ -178,10 +182,25 @@
     support: { activeSection: 0, sections: [defaultSection("구분 1", 1)] },
   };
 
+  // ✅ (Patch) 구버전 LS_KEY(V11) 자동 마이그레이션
+  function getRawStateFromStorage() {
+    const rawNew = localStorage.getItem(LS_KEY);
+    if (rawNew) return { raw: rawNew, migrated: false };
+
+    const rawOld = localStorage.getItem(LS_KEY_OLD);
+    if (rawOld) {
+      // 새 키가 비어있으면 구키 값을 새 키로 복사(마이그레이션)
+      try { localStorage.setItem(LS_KEY, rawOld); } catch {}
+      return { raw: rawOld, migrated: true };
+    }
+    return { raw: null, migrated: false };
+  }
+
   function loadState() {
     try {
-      const raw = localStorage.getItem(LS_KEY);
+      const { raw } = getRawStateFromStorage();
       if (!raw) return deepClone(DEFAULT_STATE);
+
       const parsed = JSON.parse(raw);
 
       const s = { ...deepClone(DEFAULT_STATE), ...parsed };
@@ -660,7 +679,6 @@
       list.appendChild(item);
     });
 
-    // 리스트 클릭만 해도 키보드가 먹도록(리스트에 포커스 부여)
     list.addEventListener("mousedown", () => {
       safeFocus(list);
     });
@@ -668,7 +686,6 @@
     list.addEventListener("keydown", (e) => {
       if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
 
-      // 입력 중인 셀(변수표/산출표 input)에서는 방해하지 않음
       const a = document.activeElement;
       if (a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement) return;
 
@@ -1447,7 +1464,6 @@
     ensureExcelModalStyles();
     document.querySelectorAll(".excel-modal-backdrop").forEach(n => n.remove());
 
-    // 기본 체크(원본 v13.0 유지)
     const selections = {
       code: true,
       steel: true,
@@ -1455,7 +1471,6 @@
       support: false,
     };
 
-    // ✅ (v13.2a) 체크박스 DOM 참조 저장
     const checkboxMap = Object.create(null);
 
     const makeItem = (key, title, desc) => {
@@ -1496,7 +1511,6 @@
       el("button", {
         class: "btn ghost",
         onclick: () => {
-          // ✅ (v13.2a) 모달 재오픈 없이 즉시 반영
           for (const k of Object.keys(selections)) {
             selections[k] = true;
             if (checkboxMap[k]) checkboxMap[k].checked = true;
@@ -1530,7 +1544,6 @@
     backdrop.appendChild(modal);
     document.body.appendChild(backdrop);
 
-    // 키보드 닫기(ESC) - 기존 영향 없음
     const onKey = (e) => {
       if (e.key === "Escape") {
         backdrop.remove();
@@ -1735,7 +1748,11 @@
 
     if (btnReset) btnReset.onclick = () => {
       if (!confirm("정말 초기화할까요? (로컬 저장 데이터가 삭제됩니다)")) return;
+
+      // ✅ (Patch) 새키/구키 모두 삭제
       localStorage.removeItem(LS_KEY);
+      localStorage.removeItem(LS_KEY_OLD);
+
       state = loadState();
       render();
     };
@@ -1768,7 +1785,6 @@
       applyPanelStickyTop();
       updateScrollHeights();
 
-      // ✅ 구분명 리스트: 클릭/↑↓ 후 포커스 복원 (렌더 후 DOM 재생성 대응)
       if (__pendingSectionFocus && __pendingSectionFocus.tabId === state.activeTab) {
         const { tabId, index } = __pendingSectionFocus;
         __pendingSectionFocus = null;

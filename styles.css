@@ -27,7 +27,7 @@
   /* ✅ top-split(구분/변수) 기본 높이 */
   --topSplitH: 190px;
 
-  /* ✅ NEW: 기본 “75% 느낌” 스케일 */
+  /* ✅ 기본 스케일 */
   --uiScale: .75;
 }
 
@@ -257,17 +257,20 @@ body{
   flex:1 1 auto;
   min-height:0;
 
-  /* ✅ FIX: content가 스크롤(세로) 담당 */
+  /* ✅ content가 스크롤(세로) 담당 */
   overflow:auto;
   overflow-x:hidden !important;
 }
 
-/* ✅ FIX: #view에 직접 scale 걸면 레이아웃(높이/폭) 계산 깨짐
-   → #view는 100% 레이아웃 유지 */
+/* ✅ FIX: #view는 레이아웃 100% 유지 + zoom으로 “진짜 축소”
+   - transform(scale)은 레이아웃 계산이 안 줄어서 공백(노란 영역)이 남음
+   - zoom은 레이아웃 계산 자체가 축소되어 공백이 사라짐(Chrome/Edge 최적) */
 #view{
   height:100%;
   min-height:0;
   overflow:hidden;
+
+  zoom: var(--uiScale); /* ✅ 핵심 변경 */
 }
 
 /* view 내부 레이아웃 안정 */
@@ -281,8 +284,6 @@ body{
 
 /* =========================================================
    ✅ (핵심) Splitter 레이아웃 컨테이너
-   - 레이아웃은 100% 유지
-   - 실제 스케일은 work-area 내부 컨텐츠에만 적용
    ========================================================= */
 .work-area{
   height:100%;
@@ -293,18 +294,13 @@ body{
   overflow:hidden;
 }
 
-/* ✅ 스케일 적용: top-pane/bottom-pane “내용”만 줄임
-   - width 보정(calc(100%/scale))을 없애서 가로스크롤 원천 제거
-   - 바깥은 overflow-x:hidden으로 안전 */
+/* ✅ transform 스케일 적용 제거 (공백/탭 내려감 원인) */
 .work-area > .top-pane,
 .work-area > .bottom-pane{
-  transform: scale(var(--uiScale));
-  transform-origin: top left;
+  transform: none !important;
   width: 100%;
 }
 
-/* ✅ 스케일로 줄어든 만큼 아래가 비어보이지 않게
-   - bottom-pane이 남는 높이를 계속 차지하도록 flex 유지 */
 .pane{ min-height:0; min-width:0; }
 .top-pane{ flex:0 0 auto; }
 .bottom-pane{
@@ -389,7 +385,7 @@ body{
   border:1px solid var(--softLine);
   border-radius: 16px;
 
-  /* ✅ FIX: 가로 스크롤은 “테이블 영역”에서만 필요할 때 발생 */
+  /* ✅ 필요할 때만 테이블영역에서 스크롤 */
   overflow-y:auto;
   overflow-x:auto;
 
@@ -683,6 +679,9 @@ tbody td{
 
   /* ✅ 모바일에서는 과도한 스케일링이 불편할 수 있어 0.95로 완화 */
   :root{ --uiScale: .95; }
+
+  /* ✅ 모바일에서 zoom은 이질감이 있을 수 있어 해제(원하면 유지 가능) */
+  #view{ zoom: 1; }
 }
 
 /* =========================================================

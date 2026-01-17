@@ -118,8 +118,8 @@
       h = clamp(h, 160, 20000);
 
       // ✅ 핵심: maxHeight 대신 height로 고정 (공백 제거)
-      sc.style.height = `${h}px`;
-      sc.style.maxHeight = "none";
+      sc.style.height = "";
+      sc.style.maxHeight = `${h}px`;
     });
   }
 
@@ -1955,8 +1955,7 @@
 
     raf2(() => {
   // ✅ (PATCH) zoom(--uiScale)일 때 렌더 직후 view 높이 보정이 가장 중요
-  updateViewFillHeight();
-
+  
   updateStickyVars();
   applyPanelStickyTop();
   updateScrollHeights();

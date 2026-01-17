@@ -85,15 +85,9 @@ body{
   box-shadow: 0 10px 20px rgba(240,138,36,.25);
   transform: skewX(-12deg);
 }
-.brand .title{
-  color: #222;
-}
+.brand .title{ color: #222; }
 .brand .title span{ color: #222; }
-
-/* 타이틀 텍스트 일부만 오렌지로 강조하고 싶으면(HTML 수정 없이) 전체에 톤만 줌 */
-.brand .title{
-  text-shadow: 0 1px 0 rgba(255,255,255,.8);
-}
+.brand .title{ text-shadow: 0 1px 0 rgba(255,255,255,.8); }
 .brand .sub{ color: var(--muted); font-size: 12px; }
 .brand .hint{ color: var(--muted); font-size: 12px; }
 .brand .hint b{ color: var(--accent); }
@@ -147,28 +141,56 @@ body{
    - 도움말 / 코드선택 / 내보내기 / 가져오기 => 동일 느낌
    - 초기화(danger)만 예외 유지
    ========================================================= */
-.topbar .actions .btn:not(.danger){
+.topbar .actions .btn:not(.danger),
+.topbar .actions label.btn:not(.danger){
   background: rgba(255,255,255,.70);
   border: 2px solid rgba(240,138,36,.45);
   color: var(--accent);
 }
 
-.topbar .actions .btn:not(.danger):hover{
+.topbar .actions .btn:not(.danger):hover,
+.topbar .actions label.btn:not(.danger):hover{
   transform: translateY(-1px);
   border-color: rgba(240,138,36,.70);
   box-shadow: 0 14px 28px rgba(0,0,0,.12);
 }
 
-.topbar .actions .btn:not(.danger):active{
+.topbar .actions .btn:not(.danger):active,
+.topbar .actions label.btn:not(.danger):active{
   transform: translateY(0);
   box-shadow: 0 8px 18px rgba(0,0,0,.10);
 }
 
 /* 초기화(danger)는 기존 유지(강조) */
-.topbar .actions .btn.danger{
+.topbar .actions .btn.danger,
+.topbar .actions label.btn.danger{
   border: 1px solid rgba(180,0,0,.25);
   background: rgba(255,230,230,.80);
   color: var(--ink);
+}
+
+/* =========================================================
+   ✅ Topbar actions 버튼 높이/폰트/정렬 완전 통일 (추가)
+   - <button class="btn"> 와 <label class="btn"> (가져오기) 모두 동일 처리
+   ========================================================= */
+.topbar .actions .btn,
+.topbar .actions label.btn{
+  height: 38px;              /* ✅ 전체 높이 통일 */
+  padding: 0 12px;           /* ✅ 세로 패딩 제거(높이로 고정) */
+  font-size: 12px;           /* ✅ 폰트 크기 통일 */
+  font-weight: 900;
+  line-height: 1;            /* ✅ 줄간격 통일 */
+  display: inline-flex;
+  align-items: center;       /* ✅ 수직 가운데 */
+  justify-content: center;
+  font-family: inherit;
+  vertical-align: middle;
+}
+
+/* ✅ Topbar 버튼은 떠오르는 효과 제거(높이 착시 방지) */
+.topbar .actions .btn:hover,
+.topbar .actions label.btn:hover{
+  transform: none;
 }
 
 /* ===== Tabs (캡슐 → 텍스트 + 밑줄 강조 스타일) ===== */
@@ -593,20 +615,25 @@ tbody td{
 }
 
 /* =========================================================
-   ✅ Help button (추가)
+   ✅ Help button (수정: 아이콘 높이/정렬 통일)
    ========================================================= */
 .btn.help{
   border-color: rgba(240,138,36,.35);
 }
+
 .btn.help::before{
   content:"?";
   width: 18px;
-  height: 18px;
+  height: 18px;              /* ✅ 아이콘 박스 높이 고정 */
   border-radius: 6px;
   display:inline-flex;
   align-items:center;
   justify-content:center;
+
   font-weight: 1000;
+  font-size: 12px;           /* ✅ ? 크기 고정 */
+  line-height: 1;            /* ✅ 수직정렬 흔들림 방지 */
+
   color:#fff;
   background: linear-gradient(180deg, var(--accent2), var(--accent));
   box-shadow: 0 10px 18px rgba(240,138,36,.22);

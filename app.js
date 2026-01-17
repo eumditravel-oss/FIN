@@ -1,4 +1,4 @@
-/* app.js (FINAL FIX v13.0) - FIN 산출자료 (Web)
+/* app.js (FINAL FIX v13.2a) - FIN 산출자료 (Web)
    - ✅ (v13.0) 내보내기/가져오기: JSON → Excel(.xlsx) 기반으로 변경
    - ✅ (v13.0) 내보내기 클릭 시 탭 선택 팝업(모달) 제공 (코드/철골/철골_부자재/구조이기-동바리)
    - ✅ (v13.0) 가져오기(Excel): Codes 시트 기반으로 codeMaster 갱신 (임시 양식)
@@ -10,6 +10,7 @@
    - ✅ (v12.3) 산출표 컬럼폭: 단위/물량(및 코드) 가로폭 증가 (CALC_COL_WEIGHTS 조정)
    - ✅ (v13.1) 도움말 버튼 추가: 화면 안내문구 제거 + help.html로 이동
    - ✅ (v13.2) 구분명 리스트: 클릭 후에도 ↑/↓ 키로 이동 가능(렌더 후 포커스 복원)
+   - ✅ (v13.2a) 내보내기 모달 '전체선택' 버튼이 실제 체크박스에 반영되도록 수정(모달 재오픈 제거)
 */
 
 (() => {
@@ -1446,6 +1447,7 @@
     ensureExcelModalStyles();
     document.querySelectorAll(".excel-modal-backdrop").forEach(n => n.remove());
 
+    // 기본 체크(원본 v13.0 유지)
     const selections = {
       code: true,
       steel: true,
@@ -1453,11 +1455,16 @@
       support: false,
     };
 
+    // ✅ (v13.2a) 체크박스 DOM 참조 저장
+    const checkboxMap = Object.create(null);
+
     const makeItem = (key, title, desc) => {
       const chk = document.createElement("input");
       chk.type = "checkbox";
       chk.checked = !!selections[key];
       chk.addEventListener("change", () => selections[key] = chk.checked);
+
+      checkboxMap[key] = chk;
 
       return el("div", { class: "excel-modal-item" }, [
         el("div", {}, [
@@ -1489,9 +1496,11 @@
       el("button", {
         class: "btn ghost",
         onclick: () => {
-          selections.code = selections.steel = selections.steel_sub = selections.support = true;
-          backdrop.remove();
-          openExcelExportModal();
+          // ✅ (v13.2a) 모달 재오픈 없이 즉시 반영
+          for (const k of Object.keys(selections)) {
+            selections[k] = true;
+            if (checkboxMap[k]) checkboxMap[k].checked = true;
+          }
         }
       }, ["전체선택"]),
       el("button", {
@@ -1520,6 +1529,14 @@
 
     backdrop.appendChild(modal);
     document.body.appendChild(backdrop);
+
+    // 키보드 닫기(ESC) - 기존 영향 없음
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        backdrop.remove();
+      }
+    };
+    window.addEventListener("keydown", onKey, { capture: true, once: true });
   }
 
   function exportSelectedToExcel(sel) {

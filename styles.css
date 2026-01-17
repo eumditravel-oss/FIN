@@ -142,6 +142,35 @@ body{
 .btn input[type="file"],
 .smallbtn input[type="file"]{ display:none; }
 
+/* =========================================================
+   ✅ Topbar 오른쪽 버튼(도움말 스타일로 통일)
+   - 도움말 / 코드선택 / 내보내기 / 가져오기 => 동일 느낌
+   - 초기화(danger)만 예외 유지
+   ========================================================= */
+.topbar .actions .btn:not(.danger){
+  background: rgba(255,255,255,.70);
+  border: 2px solid rgba(240,138,36,.45);
+  color: var(--accent);
+}
+
+.topbar .actions .btn:not(.danger):hover{
+  transform: translateY(-1px);
+  border-color: rgba(240,138,36,.70);
+  box-shadow: 0 14px 28px rgba(0,0,0,.12);
+}
+
+.topbar .actions .btn:not(.danger):active{
+  transform: translateY(0);
+  box-shadow: 0 8px 18px rgba(0,0,0,.10);
+}
+
+/* 초기화(danger)는 기존 유지(강조) */
+.topbar .actions .btn.danger{
+  border: 1px solid rgba(180,0,0,.25);
+  background: rgba(255,230,230,.80);
+  color: var(--ink);
+}
+
 /* ===== Tabs (캡슐 → 텍스트 + 밑줄 강조 스타일) ===== */
 .tabs{
   position: sticky;

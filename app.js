@@ -1934,28 +1934,32 @@
     bindTopButtons();
 
     raf2(() => {
-      updateStickyVars();
-      applyPanelStickyTop();
-      updateScrollHeights();
+  // ✅ (PATCH) zoom(--uiScale)일 때 렌더 직후 view 높이 보정이 가장 중요
+  updateViewFillHeight();
 
-      if (__pendingSectionFocus && __pendingSectionFocus.tabId === state.activeTab) {
-        const { tabId, index } = __pendingSectionFocus;
-        __pendingSectionFocus = null;
+  updateStickyVars();
+  applyPanelStickyTop();
+  updateScrollHeights();
 
-        const list = document.querySelector(`.section-list[data-tab="${tabId}"]`);
-        if (list) {
-          const items = [...list.querySelectorAll(".section-item")];
-          const idx = clamp(Number(index || 0), 0, items.length - 1);
-          const target = items[idx];
-          if (target) {
-            safeFocus(target);
-            try { target.scrollIntoView({ block: "nearest" }); } catch {}
-          } else {
-            safeFocus(list);
-          }
-        }
+  if (__pendingSectionFocus && __pendingSectionFocus.tabId === state.activeTab) {
+    const { tabId, index } = __pendingSectionFocus;
+    __pendingSectionFocus = null;
+
+    const list = document.querySelector(`.section-list[data-tab="${tabId}"]`);
+    if (list) {
+      const items = [...list.querySelectorAll(".section-item")];
+      const idx = clamp(Number(index || 0), 0, items.length - 1);
+      const target = items[idx];
+      if (target) {
+        safeFocus(target);
+        try { target.scrollIntoView({ block: "nearest" }); } catch {}
+      } else {
+        safeFocus(list);
       }
-    });
+    }
+  }
+});
+
   }
 
   function renderSummaryTabByCodeOrder(srcTabId, title) {

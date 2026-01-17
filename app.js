@@ -260,6 +260,77 @@
   // ✅ (v13.2) 구분명 리스트 클릭/↑↓ 후 렌더링되면 포커스 복원
   let __pendingSectionFocus = null;
 
+
+     /***************
+   * ✅ Calc(산출표) 멀티선택 상태 (비저장/런타임)
+   ***************/
+  const __calcMulti = {
+    active: false,
+    tabId: null,
+    sectionIndex: null,
+    anchorRow: null,
+    rows: new Set(),   // 선택된 row index들
+  };
+
+  function __calcMultiClear() {
+    __calcMulti.active = false;
+    __calcMulti.tabId = null;
+    __calcMulti.sectionIndex = null;
+    __calcMulti.anchorRow = null;
+    __calcMulti.rows.clear();
+  }
+
+  function __calcMultiIsSameContext(tabId) {
+    const bucket = state?.[tabId];
+    const secIdx = bucket?.activeSection ?? 0;
+    return __calcMulti.active && __calcMulti.tabId === tabId && __calcMulti.sectionIndex === secIdx;
+  }
+
+  function __calcMultiBegin(tabId, anchorRow) {
+    const bucket = state?.[tabId];
+    const secIdx = bucket?.activeSection ?? 0;
+
+    __calcMulti.active = true;
+    __calcMulti.tabId = tabId;
+    __calcMulti.sectionIndex = secIdx;
+    __calcMulti.anchorRow = clamp(Number(anchorRow || 0), 0, (bucket?.sections?.[secIdx]?.rows?.length ?? 1) - 1);
+
+    __calcMulti.rows.clear();
+    __calcMulti.rows.add(__calcMulti.anchorRow);
+  }
+
+  function __calcMultiSetRange(tabId, fromRow, toRow) {
+    if (!__calcMultiIsSameContext(tabId)) {
+      __calcMultiBegin(tabId, fromRow);
+    }
+    const a = __calcMulti.anchorRow ?? fromRow;
+    const lo = Math.min(a, toRow);
+    const hi = Math.max(a, toRow);
+
+    __calcMulti.rows.clear();
+    for (let r = lo; r <= hi; r++) __calcMulti.rows.add(r);
+  }
+
+  function __applyCalcRowSelectionStyles(tabId) {
+  // ✅ 현재 탭(tabId)의 calc-table만 하이라이트 처리
+  const table = document.querySelector(`table.calc-table input[data-grid="calc"][data-tab="${tabId}"]`)?.closest("table.calc-table");
+  if (!table) return;
+
+  const should = __calcMultiIsSameContext(tabId);
+  const trs = table.querySelectorAll("tbody tr");
+  trs.forEach((tr, i) => {
+    if (should && __calcMulti.rows.has(i)) tr.classList.add("row-selected");
+    else tr.classList.remove("row-selected");
+  });
+}
+
+
+  function __getSelectedCalcRows(tabId) {
+    if (!__calcMultiIsSameContext(tabId)) return [];
+    return [...__calcMulti.rows].sort((a, b) => a - b);
+  }
+
+
   /***************
    * DOM
    ***************/
@@ -624,6 +695,9 @@
 
     table.appendChild(thead);
     table.appendChild(tbody);
+
+
+
     return table;
   }
 
@@ -1054,6 +1128,8 @@
 
     table.appendChild(thead);
     table.appendChild(tbody);
+     // ✅ 멀티선택 하이라이트 반영(렌더 직후)
+raf2(() => __applyCalcRowSelectionStyles(tabId));
 
     table.addEventListener("keydown", (e) => {
       const t = e.target;
@@ -1154,6 +1230,7 @@
         } catch {}
         return;
       }
+       
 
       if (t.dataset.editing === "1") {
         if (e.key === "Enter") {
@@ -1162,6 +1239,38 @@
         }
         return;
       }
+
+             // ✅ (NEW) calc-table 멀티선택: Shift + ↑/↓
+      // - Shift만 누르고 이동하면 자동으로 멀티선택 시작/확장
+      if (grid === "calc" && e.shiftKey && !e.ctrlKey && !e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        e.preventDefault();
+
+        const row = Number(t.dataset.row);
+        const col = Number(t.dataset.col);
+        const tabId = t.dataset.tab;
+
+        let nr = row + (e.key === "ArrowDown" ? 1 : -1);
+
+        const bucket = state[tabId];
+        const sec = bucket.sections[bucket.activeSection];
+        nr = clamp(nr, 0, sec.rows.length - 1);
+
+        // ✅ 선택 범위 갱신 (anchor ~ nr)
+        __calcMultiSetRange(tabId, row, nr);
+
+        // ✅ 포커스 이동 (같은 col 유지)
+        const selector = `[data-grid="calc"][data-tab="${tabId}"][data-row="${nr}"][data-col="${col}"]`;
+        const next = container.querySelector(selector);
+        if (next && (next instanceof HTMLInputElement || next instanceof HTMLTextAreaElement)) {
+          safeFocus(next);
+          ensureScrollIntoView();
+        }
+
+        // ✅ 하이라이트 적용
+        __applyCalcRowSelectionStyles(tabId);
+        return;
+      }
+
 
       const key = e.key;
       if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) return;
@@ -1337,6 +1446,72 @@
       return;
     }
 
+         // ✅ (NEW) Shift+B : 멀티선택 토글(현재 행을 anchor로)
+    if (!e.ctrlKey && e.shiftKey && !e.altKey && (e.key === "B" || e.key === "b")) {
+      const a = document.activeElement;
+      if (!(a instanceof HTMLInputElement)) return;
+      if (a.dataset?.grid !== "calc") return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const tabId = a.dataset.tab;
+      const row = Number(a.dataset.row);
+
+      if (__calcMultiIsSameContext(tabId)) {
+        __calcMultiClear();
+      } else {
+        __calcMultiBegin(tabId, row);
+      }
+      __applyCalcRowSelectionStyles(tabId);
+      return;
+    }
+
+    // ✅ (NEW) Ctrl+G : 멀티선택된 "행들"을 현재 행 아래로 복사(행추가)
+    if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === "g" || e.key === "G")) {
+      const a = document.activeElement;
+      if (!(a instanceof HTMLInputElement)) return;
+      if (a.dataset?.grid !== "calc") return;
+
+      const tabId = a.dataset.tab;
+      const col = Number(a.dataset.col);
+      const curRow = Number(a.dataset.row);
+
+      const selected = __getSelectedCalcRows(tabId);
+      if (!selected.length) return; // 선택 없으면 아무것도 안 함
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const bucket = state[tabId];
+      const sec = bucket.sections[bucket.activeSection];
+
+      // ✅ 선택된 행 데이터 deep clone
+      const clones = selected.map((ri) => deepClone(sec.rows[ri] || defaultCalcRow()));
+
+      // ✅ "선택된 셀(현재 포커스 행)" 아래로 삽입
+      const insertPos = clamp(curRow + 1, 0, sec.rows.length);
+      sec.rows.splice(insertPos, 0, ...clones);
+
+      recomputeSection(tabId);
+      saveState();
+      render();
+
+      raf2(() => {
+        updateScrollHeights();
+        const target = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${insertPos}"][data-col="${col}"]`);
+        if (target) safeFocus(target);
+
+        // 복붙 후 선택은 해제(원하면 유지로 바꿔줄 수 있음)
+        __calcMultiClear();
+        __applyCalcRowSelectionStyles(tabId);
+
+        ensureScrollIntoView();
+      });
+      return;
+    }
+
+
     const isCtrlDel =
       e.ctrlKey &&
       !e.shiftKey &&
@@ -1347,14 +1522,22 @@
         e.keyCode === 46 || e.keyCode === 8
       );
 
-    if (isCtrlDel) {
+        if (isCtrlDel) {
       const a = document.activeElement;
       const isEditableEl = (a instanceof HTMLInputElement) || (a instanceof HTMLTextAreaElement);
       if (!isEditableEl) return;
 
       const grid = a.dataset?.grid;
       if (grid !== "calc" && grid !== "var" && grid !== "code") return;
-      if (a.hasAttribute("readonly")) return;
+
+      // ✅ calc 멀티선택이 있으면 readonly여도 "행 삭제"는 허용
+      const tabId = a.dataset?.tab;
+      const hasMulti = (grid === "calc" && tabId && __getSelectedCalcRows(tabId).length > 0);
+
+      if (!hasMulti) {
+        // 기존 정책 유지: readonly 셀에서는 삭제 금지(단일)
+        if (a.hasAttribute("readonly")) return;
+      }
 
       const ok = confirm("정말로 삭제할까요?\n- 산출표/코드표: 현재 '행'이 삭제됩니다.\n- 변수표: 현재 '셀'이 비워집니다.");
       if (!ok) {
@@ -1366,13 +1549,54 @@
       e.preventDefault();
       e.stopPropagation();
 
+      // ✅ (NEW) calc 멀티선택 행 삭제
+      if (hasMulti) {
+        const bucket = state[tabId];
+        const sec = bucket.sections[bucket.activeSection];
+
+        const col = Number(a.dataset.col);
+        const selected = __getSelectedCalcRows(tabId);
+
+        // 뒤에서부터 삭제(인덱스 꼬임 방지)
+        for (let i = selected.length - 1; i >= 0; i--) {
+          const rIdx = selected[i];
+          if (sec.rows.length <= 1) {
+            sec.rows[0] = defaultCalcRow();
+            break;
+          }
+          sec.rows.splice(rIdx, 1);
+        }
+
+        recomputeSection(tabId);
+        saveState();
+        render();
+
+        raf2(() => {
+          updateScrollHeights();
+
+          // 삭제 후 포커스: "가장 위 선택 행" 위치로 복원
+          const base = selected[0] ?? 0;
+          const nr = clamp(base, 0, sec.rows.length - 1);
+          const target = document.querySelector(`input[data-grid="calc"][data-tab="${tabId}"][data-row="${nr}"][data-col="${col}"]`);
+          if (target) safeFocus(target);
+
+          __calcMultiClear();
+          __applyCalcRowSelectionStyles(tabId);
+          ensureScrollIntoView();
+        });
+        return;
+      }
+
+      // ✅ 기존 단일 삭제 로직
       if (grid === "calc") { deleteCalcRowAtActiveCell(a); return; }
       if (grid === "code") { deleteCodeMasterRowAtActiveCell(a); return; }
 
+      // var: 셀 비움
       a.value = "";
       a.dispatchEvent(new Event("input", { bubbles: true }));
       return;
     }
+
 
     if (e.ctrlKey && (e.key === "F3")) {
       const a = document.activeElement;
@@ -1937,6 +2161,10 @@
   function render() {
     // ✅ (v13.2b) topSplit 높이 먼저 적용
     applyTopSplitH();
+
+         // ✅ 다른 화면으로 렌더되면 멀티선택은 기본 해제
+    __calcMultiClear();
+
 
     renderTabs();
     clear($view);

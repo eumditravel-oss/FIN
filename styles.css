@@ -34,10 +34,15 @@
 *{ box-sizing:border-box; }
 html,body{ height:100%; }
 
+/* ✅ FIX: 바깥 가로 스크롤 절대 금지(빨간 가로 스크롤 방지) */
+html, body{
+  overflow-x: hidden !important;
+}
+
 body{
   margin:0;
   height:100vh;
-  overflow:hidden;
+  overflow:hidden; /* 세로 스크롤은 content에서 관리 */
   display:flex;
   flex-direction:column;
 
@@ -252,20 +257,17 @@ body{
   flex:1 1 auto;
   min-height:0;
 
-  /* ✅ FIX: 내부 스케일링 시 “작업영역”이 잘리거나 탭이 밑으로 밀리는 현상 방지 */
+  /* ✅ FIX: content가 스크롤(세로) 담당 */
   overflow:auto;
+  overflow-x:hidden !important;
 }
 
-/* ✅ 작업영역(뷰)을 90%로 스케일링: “브라우저 90% 줌” 체감 */
+/* ✅ FIX: #view에 직접 scale 걸면 레이아웃(높이/폭) 계산 깨짐
+   → #view는 100% 레이아웃 유지 */
 #view{
   height:100%;
   min-height:0;
-
-  transform: scale(var(--uiScale));
-  transform-origin: top left;
-
-  /* ✅ scale로 줄어든 만큼 가로/세로 보정(스크롤 없이 전체를 더 담게) */
-  width: calc(100% / var(--uiScale));
+  overflow:hidden;
 }
 
 /* view 내부 레이아웃 안정 */
@@ -278,7 +280,9 @@ body{
 }
 
 /* =========================================================
-   ✅ (핵심 추가) Splitter 레이아웃 컨테이너
+   ✅ (핵심) Splitter 레이아웃 컨테이너
+   - 레이아웃은 100% 유지
+   - 실제 스케일은 work-area 내부 컨텐츠에만 적용
    ========================================================= */
 .work-area{
   height:100%;
@@ -286,22 +290,29 @@ body{
   display:flex;
   flex-direction:column;
   gap:0;
+  overflow:hidden;
 }
 
-.pane{
-  min-height:0;
-  min-width:0;
+/* ✅ 스케일 적용: top-pane/bottom-pane “내용”만 줄임
+   - width 보정(calc(100%/scale))을 없애서 가로스크롤 원천 제거
+   - 바깥은 overflow-x:hidden으로 안전 */
+.work-area > .top-pane,
+.work-area > .bottom-pane{
+  transform: scale(var(--uiScale));
+  transform-origin: top left;
+  width: 100%;
 }
 
-.top-pane{
-  flex:0 0 auto;
-}
-
+/* ✅ 스케일로 줄어든 만큼 아래가 비어보이지 않게
+   - bottom-pane이 남는 높이를 계속 차지하도록 flex 유지 */
+.pane{ min-height:0; min-width:0; }
+.top-pane{ flex:0 0 auto; }
 .bottom-pane{
   flex:1 1 auto;
   min-height:0;
   display:flex;
   flex-direction:column;
+  overflow:hidden;
 }
 
 /* ===== Panel ===== */
@@ -342,7 +353,6 @@ body{
   border-radius: 0;
 }
 
-
 .panel-title{
   font-weight: 900;
   font-size: 16px;
@@ -378,7 +388,11 @@ body{
 .table-wrap{
   border:1px solid var(--softLine);
   border-radius: 16px;
-  overflow:auto;
+
+  /* ✅ FIX: 가로 스크롤은 “테이블 영역”에서만 필요할 때 발생 */
+  overflow-y:auto;
+  overflow-x:auto;
+
   background: rgba(255,255,255,.84);
   flex:1 1 auto;
   min-height:0;
@@ -574,10 +588,7 @@ tbody td{
 /* 구분 편집 */
 .section-editor{
   display:grid;
-
-  /* ✅ FIX: 버튼영역 확보 + 개소 더 줄이기 */
   grid-template-columns: 1fr 54px 132px;
-
   gap:8px;
   align-items:center;
   min-width:0;
@@ -746,21 +757,17 @@ body.is-resizing{
 /* =========================================================
    ✅ ✅ 추가 반영(요청): 구분 추가/삭제 버튼을 + / - 로 축소
    ========================================================= */
-
-/* (1) 섹션 에디터 3번째 칸의 버튼 줄: 한 줄 고정 + 오른쪽 정렬 */
 .section-editor .row-actions{
   justify-content:flex-end;
   flex-wrap: nowrap;
   gap:6px;
 }
 
-/* (2) 저장 버튼은 기존 크기 유지, 나머지 2개만 초미니 버튼으로 */
 .section-editor .row-actions .smallbtn{
   height: 34px;
   padding: 0 10px;
 }
 
-/* (3) 2번째(추가), 3번째(삭제) 버튼을 아이콘형으로 축소 */
 .section-editor .row-actions .smallbtn:nth-child(2),
 .section-editor .row-actions .smallbtn:nth-child(3){
   width: 36px;
@@ -772,7 +779,6 @@ body.is-resizing{
   line-height: 0;
 }
 
-/* (4) + 표시 */
 .section-editor .row-actions .smallbtn:nth-child(2)::before{
   content: "+";
   font-size: 16px;
@@ -781,7 +787,6 @@ body.is-resizing{
   color: #fff;
 }
 
-/* (5) - 표시 */
 .section-editor .row-actions .smallbtn:nth-child(3)::before{
   content: "−";
   font-size: 18px;
@@ -790,7 +795,6 @@ body.is-resizing{
   color: #fff;
 }
 
-/* (6) 모바일에서 더 좁아질 경우 대비 */
 @media (max-width: 420px){
   .section-editor{
     grid-template-columns: 1fr 44px 124px;

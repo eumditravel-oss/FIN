@@ -78,8 +78,10 @@
     });
   });
 
-  /***************
-   * ✅ 내부 스크롤 높이 자동 보정
+    /***************
+   * ✅ 내부 스크롤 높이 자동 보정 (PATCH: 하단 공백 제거)
+   * - viewport 기준 maxHeight → panel 기준 "height" 고정
+   * - flex 레이아웃과 max-height 충돌로 생기던 하단 공백 방지
    ***************/
   function updateScrollHeights() {
     const scrolls = document.querySelectorAll(".calc-scroll");
@@ -92,14 +94,32 @@
       sc.style.webkitOverflowScrolling = "touch";
       sc.tabIndex = -1;
 
-      const rect = sc.getBoundingClientRect();
+      // ✅ 중요: flex 컨테이너 안에서 스크롤 영역이 제대로 줄어들도록
+      sc.style.minHeight = "0";
+
+      const scRect = sc.getBoundingClientRect();
       const viewportH = window.innerHeight || document.documentElement.clientHeight || 800;
 
-      const bottomPad = 18;
-      let maxH = Math.floor(viewportH - rect.top - bottomPad);
-      maxH = clamp(maxH, 180, 20000);
+      const bottomPad = 12;
 
-      sc.style.maxHeight = `${maxH}px`;
+      // ✅ 우선순위:
+      // 1) scroll이 들어있는 panel 기준으로 bottom까지 꽉 채우기
+      // 2) 없으면 viewport 기준 fallback
+      const panel = sc.closest(".panel");
+      let h = 0;
+
+      if (panel instanceof HTMLElement) {
+        const panelRect = panel.getBoundingClientRect();
+        h = Math.floor(panelRect.bottom - scRect.top - bottomPad);
+      } else {
+        h = Math.floor(viewportH - scRect.top - bottomPad);
+      }
+
+      h = clamp(h, 160, 20000);
+
+      // ✅ 핵심: maxHeight 대신 height로 고정 (공백 제거)
+      sc.style.height = `${h}px`;
+      sc.style.maxHeight = "none";
     });
   }
 
@@ -144,7 +164,7 @@
     { id: "support_sum", title: "구조이기/동바리_집계" },
   ];
 
-    /***************
+  /***************
    * Default State
    ***************/
   const defaultCalcRow = () => ({
@@ -952,7 +972,6 @@
     return wrap;
   }
 
-
   function tdNavInputVar(tabId, row, col, field, value, opts = {}) {
     const bucket = state[tabId];
     const sec = bucket.sections[bucket.activeSection];
@@ -997,6 +1016,7 @@
     table.style.minWidth = "100%";
 
     table.appendChild(buildColGroupFromWeights(CALC_COL_WEIGHTS));
+
 
     const thead = el("thead", {}, [
       el("tr", {}, [

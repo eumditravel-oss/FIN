@@ -328,8 +328,9 @@ function loadProjectState(projectId) {
 
 function saveProjectState(projectId) {
   if (!projectId) return;
-  ProjectStore.saveProjectState(projectId, state);
+  ProjectStore.saveProjectState(projectId, deepClone(state)); // ✅ 안전
 }
+
 
 
   let projectIndex = loadProjectIndex();
@@ -2785,7 +2786,8 @@ if (__calcMulti.active && __calcMulti.tabId !== state.activeTab) {
   }
 
   /***************
-   * Init
-   ***************/
-  render();
-})();
+ * Init
+ ***************/
+updateProjectHeaderUI();   // ✅ 최초 1회 (프로젝트 미선택이면 버튼 잠금)
+render();
+

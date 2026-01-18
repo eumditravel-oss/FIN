@@ -18,42 +18,31 @@
       <div class="sub">Viet QS x Con-cost Tool</div>
     </div>
 
-    <!-- ✅ 프로젝트 열기 -->
-    <div class="project-slot">
-      <!-- ✅ app.js와 id 맞춤: btnProjectOpen 을 topbar 버튼으로 사용 -->
-      <button id="btnProjectOpen" class="btn btn-project" title="프로젝트 선택/관리">
-        프로젝트 열기
-      </button>
-
-      <!-- ✅ app.js와 id 맞춤: projectName / projectCode -->
-      <div class="project-badge" title="현재 프로젝트">
-        <span id="projectName">(미선택)</span>
-        <span class="sep">·</span>
-        <span id="projectCode">공사코드 -</span>
+    <!-- ✅ Project strip (프로젝트 UI) -->
+    <div class="project-strip">
+      <button id="btnProjectOpen" class="btn project">프로젝트 열기</button>
+      <div class="project-meta">
+        <div id="projectName" class="project-name">프로젝트 미선택</div>
+        <div id="projectCode" class="project-code">공사코드 -</div>
       </div>
     </div>
 
     <div class="actions">
       <button id="btnHelp" class="btn help" title="도움말">도움말</button>
+      <button id="btnOpenPicker" class="btn">코드 선택 (Ctrl+.)</button>
+      <button id="btnExport" class="btn">내보내기(EXCEL)</button>
 
-      <!-- ✅ 프로젝트 선택 전에는 비활성 -->
-      <button id="btnOpenPicker" class="btn" disabled>코드 선택 (Ctrl+.)</button>
-      <button id="btnExport" class="btn" disabled>내보내기(EXCEL)</button>
-
-      <!-- ✅ label 자체는 그대로 두되, app.js에서 pointer-events/opacity를 제어하지 않으므로
-           초기 상태만 잠금 + 프로젝트 선택 시 app.js가 fileImport disabled만 풀어줌 -->
-      <label class="btn ghost" id="btnImportWrap" aria-disabled="true" style="opacity:.55; pointer-events:none;">
+      <label class="btn ghost">
         가져오기(EXCEL)
         <input
           id="fileImport"
           type="file"
           accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           hidden
-          disabled
         />
       </label>
 
-      <button id="btnReset" class="btn danger" disabled>초기화</button>
+      <button id="btnReset" class="btn danger">초기화</button>
     </div>
   </header>
 
@@ -80,38 +69,25 @@
   </footer>
 
   <!-- ======================
-       프로젝트 열기 모달
+       ✅ Project Modal (필수 DOM)
        ====================== -->
-  <!-- ✅ app.js는 hidden 속성으로 열고/닫으므로 hidden 기본값 적용 -->
-  <div id="projectModal" class="modal" hidden>
-    <!-- ✅ app.js: 모달 배경 클릭 닫기 로직을 projectModal 자체 click으로 처리
-         (e.target === projectModal) 이므로 backdrop이 projectModal의 직접 자식이어야 함 -->
-    <div class="modal-card modal-wide" role="dialog" aria-modal="true" aria-labelledby="projectModalTitle">
-      <div class="modal-head">
-        <div class="modal-title" id="projectModalTitle">프로젝트 열기</div>
-        <div class="modal-head-actions">
-          <!-- ✅ app.js에서 쓰는 id: btnProjectAdd / btnProjectClose 만 존재 -->
-          <button id="btnProjectAdd" class="btn">추가</button>
-          <button id="btnProjectClose" class="btn">닫기</button>
+  <div id="projectModal" class="project-modal" hidden>
+    <div class="project-modal-card">
+      <div class="project-modal-head">
+        <div class="project-modal-title">프로젝트 관리</div>
+        <div class="project-modal-actions">
+          <button id="btnProjectAdd" class="smallbtn">+ 프로젝트 추가</button>
+          <button id="btnProjectClose" class="smallbtn">닫기</button>
         </div>
       </div>
 
-      <div class="modal-body">
-        <div class="project-hint">
-          공사코드/프로젝트명 수정 → 저장 → “열기”로 적용됩니다.
-          (현재는 로컬 저장 / 추후 서버 연결로 다중 사용자 확장 가능)
+      <div class="project-modal-body">
+        <div class="project-modal-desc">
+          - 프로젝트를 “열기” 하면 해당 프로젝트 데이터가 활성화됩니다.<br/>
+          - “저장”으로 프로젝트명/공사코드를 수정할 수 있습니다.
         </div>
 
-        <!-- ✅ app.js가 찾는 id: projectList -->
-        <div id="projectList" class="project-list">
-          <!-- app.js에서 렌더 -->
-        </div>
-      </div>
-
-      <div class="modal-foot">
-        <div class="muted">
-          * 프로젝트가 선택되면, 아래의 “코드선택/내보내기/가져오기/초기화”는 해당 프로젝트 하위로 관리됩니다.
-        </div>
+        <div id="projectList" class="project-list"></div>
       </div>
     </div>
   </div>

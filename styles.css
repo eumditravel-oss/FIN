@@ -935,8 +935,17 @@ table.calc-table thead tr.row-selected th{
    ✅ Project Modal (공사 리스트 입력 UI)
    - 너의 기존 .btn 디자인과 충돌 없이 추가
    ========================================================= */
-.modal{ position: fixed; inset:0; display:none; z-index: 9999; }
+.modal{
+  position: fixed;
+  inset:0;
+  display:none;
+  z-index: 9999;
+}
 .modal[aria-hidden="false"]{ display:block; }
+
+/* ✅ hidden 방식도 지원(aria-hidden 방식과 동시 호환) */
+.modal[hidden]{ display:none !important; }
+.modal:not([hidden]){ display:block; }
 
 .modal-backdrop{
   position:absolute; inset:0;
@@ -1101,5 +1110,3 @@ table.calc-table thead tr.row-selected th{
     max-height: 70vh;
   }
 }
-
-

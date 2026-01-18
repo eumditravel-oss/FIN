@@ -18,13 +18,18 @@
       <div class="sub">Viet QS x Con-cost Tool</div>
     </div>
 
-    <!-- ✅ (노란 박스 위치 역할) 프로젝트 열기 -->
+    <!-- ✅ 프로젝트 열기 -->
     <div class="project-slot">
-      <button id="btnProject" class="btn btn-project" title="프로젝트 선택/관리">
+      <!-- ✅ app.js와 id 맞춤: btnProjectOpen 을 topbar 버튼으로 사용 -->
+      <button id="btnProjectOpen" class="btn btn-project" title="프로젝트 선택/관리">
         프로젝트 열기
       </button>
-      <div id="activeProjectBadge" class="project-badge" title="현재 프로젝트">
-        (미선택)
+
+      <!-- ✅ app.js와 id 맞춤: projectName / projectCode -->
+      <div class="project-badge" title="현재 프로젝트">
+        <span id="projectName">(미선택)</span>
+        <span class="sep">·</span>
+        <span id="projectCode">공사코드 -</span>
       </div>
     </div>
 
@@ -35,6 +40,8 @@
       <button id="btnOpenPicker" class="btn" disabled>코드 선택 (Ctrl+.)</button>
       <button id="btnExport" class="btn" disabled>내보내기(EXCEL)</button>
 
+      <!-- ✅ label 자체는 그대로 두되, app.js에서 pointer-events/opacity를 제어하지 않으므로
+           초기 상태만 잠금 + 프로젝트 선택 시 app.js가 fileImport disabled만 풀어줌 -->
       <label class="btn ghost" id="btnImportWrap" aria-disabled="true" style="opacity:.55; pointer-events:none;">
         가져오기(EXCEL)
         <input
@@ -59,12 +66,6 @@
        Main Content
        ====================== -->
   <main class="content">
-    <!--
-      ⚠️ 중요
-      - app.js에서 이 #view 안에
-        work-area / topPane / splitter / bottomPane 구조를 렌더링함
-      - index에서는 절대 내부 구조를 건드리지 않음
-    -->
     <section id="view" class="view-fill"></section>
   </main>
 
@@ -81,48 +82,35 @@
   <!-- ======================
        프로젝트 열기 모달
        ====================== -->
-  <div id="projectModal" class="modal" aria-hidden="true">
-    <div class="modal-backdrop" data-close="1"></div>
-
+  <!-- ✅ app.js는 hidden 속성으로 열고/닫으므로 hidden 기본값 적용 -->
+  <div id="projectModal" class="modal" hidden>
+    <!-- ✅ app.js: 모달 배경 클릭 닫기 로직을 projectModal 자체 click으로 처리
+         (e.target === projectModal) 이므로 backdrop이 projectModal의 직접 자식이어야 함 -->
     <div class="modal-card modal-wide" role="dialog" aria-modal="true" aria-labelledby="projectModalTitle">
       <div class="modal-head">
         <div class="modal-title" id="projectModalTitle">프로젝트 열기</div>
         <div class="modal-head-actions">
+          <!-- ✅ app.js에서 쓰는 id: btnProjectAdd / btnProjectClose 만 존재 -->
           <button id="btnProjectAdd" class="btn">추가</button>
-          <button id="btnProjectDelete" class="btn btn-danger">삭제</button>
-          <button id="btnProjectSave" class="btn btn-primary">저장</button>
           <button id="btnProjectClose" class="btn">닫기</button>
         </div>
       </div>
 
       <div class="modal-body">
         <div class="project-hint">
-          공사코드/프로젝트명 수정 → 저장 → “선택 프로젝트 열기”로 적용됩니다.
+          공사코드/프로젝트명 수정 → 저장 → “열기”로 적용됩니다.
           (현재는 로컬 저장 / 추후 서버 연결로 다중 사용자 확장 가능)
         </div>
 
-        <div class="project-table-wrap">
-          <table class="project-table" id="projectTable">
-            <thead>
-              <tr>
-                <th style="width: 220px;">공사코드</th>
-                <th>프로젝트명</th>
-                <th style="width: 140px;">등록일자</th>
-              </tr>
-            </thead>
-            <tbody id="projectTbody">
-              <!-- app.js에서 렌더 -->
-            </tbody>
-          </table>
+        <!-- ✅ app.js가 찾는 id: projectList -->
+        <div id="projectList" class="project-list">
+          <!-- app.js에서 렌더 -->
         </div>
       </div>
 
       <div class="modal-foot">
         <div class="muted">
           * 프로젝트가 선택되면, 아래의 “코드선택/내보내기/가져오기/초기화”는 해당 프로젝트 하위로 관리됩니다.
-        </div>
-        <div class="modal-foot-actions">
-          <button id="btnProjectOpen" class="btn btn-primary">선택 프로젝트 열기</button>
         </div>
       </div>
     </div>

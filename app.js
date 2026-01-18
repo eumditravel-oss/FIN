@@ -1778,54 +1778,60 @@ const CALC_COL_INDEX = {
   }
 
   /* ============================
-     ✅ Top Buttons (bind once)
-  ============================ */
-  let __topButtonsBound = false;
-  function bindTopButtonsOnce() {
-    if (__topButtonsBound) return;
-    __topButtonsBound = true;
+   ✅ Top Buttons (bind once)
+   - 요소가 아직 없으면 raf2로 재시도
+============================ */
+let __topButtonsBound = false;
 
-    const btnHelp = document.getElementById("btnHelp");
-    if (btnHelp) btnHelp.addEventListener("click", openHelpWindow);
+function bindTopButtonsOnce(forceRetry = false) {
+  if (__topButtonsBound && !forceRetry) return;
 
-    // ✅ 프로젝트 열기(상단 버튼)
-    const btnProjectOpen = document.getElementById("btnProjectOpen");
-    if (btnProjectOpen) btnProjectOpen.addEventListener("click", openProjectModal);
+  const btnHelp = document.getElementById("btnHelp");
+  const btnProjectOpen = document.getElementById("btnProjectOpen");
+  const btnProjectAdd = document.getElementById("btnProjectAdd");
+  const btnProjectClose = document.getElementById("btnProjectClose");
 
-    // ✅ 프로젝트 모달 버튼
-    const btnProjectAdd = document.getElementById("btnProjectAdd");
-    const btnProjectClose = document.getElementById("btnProjectClose");
-    if (btnProjectAdd) btnProjectAdd.addEventListener("click", createProject);
-    if (btnProjectClose) btnProjectClose.addEventListener("click", closeProjectModal);
+  const btnExport = document.getElementById("btnExport");
+  const fileImport = document.getElementById("fileImport");
+  const btnReset = document.getElementById("btnReset");
 
-    // ✅ 내보내기
-    const btnExport = document.getElementById("btnExport");
-    if (btnExport) btnExport.addEventListener("click", () => {
-      // 기존 v13.0 모달이 있다면 그 모달을 여는 함수로 연결
-      // 임시: 현재 탭만 내보내기
-      exportToExcelSelectedTabs([state.activeTab]);
-    });
+  // ✅ 아직 DOM이 없으면 다음 프레임에 재시도
+  const needRetry = !btnProjectOpen || !btnProjectAdd || !btnProjectClose || !btnExport || !fileImport || !btnReset;
+  if (needRetry) {
+    raf2(() => bindTopButtonsOnce(true));
+    return;
+  }
 
-    // ✅ 가져오기
-    const fileImport = document.getElementById("fileImport");
-    if (fileImport) fileImport.addEventListener("change", (e) => {
-      const f = e.target.files?.[0];
-      if (!f) return;
-      importFromExcelFile(f);
-      e.target.value = "";
-    });
+  // ✅ 여기부터는 확실히 DOM 존재
+  __topButtonsBound = true;
 
-    // ✅ 리셋
-    const btnReset = document.getElementById("btnReset");
-    if (btnReset) btnReset.addEventListener("click", () => {
-      if (!activeProjectId) return;
-      if (!confirm("현재 프로젝트를 초기화할까요?")) return;
-      state = deepClone(DEFAULT_STATE);
-      saveState();
-      render();
-    });
+  // 중복 바인딩 방지: onclick 사용(1회 덮어쓰기)
+  if (btnHelp) btnHelp.onclick = openHelpWindow;
 
-    // ✅ ESC로 프로젝트 모달 닫기
+  if (btnProjectOpen) btnProjectOpen.onclick = openProjectModal;
+  if (btnProjectAdd) btnProjectAdd.onclick = createProject;
+  if (btnProjectClose) btnProjectClose.onclick = closeProjectModal;
+
+  if (btnExport) btnExport.onclick = () => exportToExcelSelectedTabs([state.activeTab]);
+
+  if (fileImport) fileImport.onchange = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    importFromExcelFile(f);
+    e.target.value = "";
+  };
+
+  if (btnReset) btnReset.onclick = () => {
+    if (!activeProjectId) return;
+    if (!confirm("현재 프로젝트를 초기화할까요?")) return;
+    state = deepClone(DEFAULT_STATE);
+    saveState();
+    render();
+  };
+
+  // ESC로 모달 닫기(중복 등록 방지 위해 onclick 대신 한번만 등록)
+  if (!window.__finEscBound) {
+    window.__finEscBound = true;
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
       const modal = document.getElementById("projectModal");
@@ -1834,6 +1840,8 @@ const CALC_COL_INDEX = {
       if (hidden === "false") closeProjectModal();
     });
   }
+}
+
 
   /* ============================
      ✅ Project UI (list 기반) — 너가 전에 올린 방식 유지
@@ -2056,19 +2064,29 @@ const CALC_COL_INDEX = {
   }
 
   /* ============================
-     ✅ Init (중복 호출 제거)
-  ============================ */
-  bindTopButtonsOnce();
+   ✅ Init (DOM 준비 후 1회)
+============================ */
+function initAppOnce() {
+  // DOM이 준비된 뒤에 바인딩
+  bindTopButtonsOnce(true);   // ✅ 강제 재시도 옵션
   updateProjectHeaderUI();
   render();
 
-  // 초기 높이/스티키 계산
   raf2(() => {
     updateStickyVars();
     applyPanelStickyTop();
     updateViewFillHeight();
     updateScrollHeights();
   });
+}
+
+// DOMContentLoaded 보장
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initAppOnce, { once: true });
+} else {
+  initAppOnce();
+}
+);
 
 })();
 

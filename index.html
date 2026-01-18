@@ -18,22 +18,35 @@
       <div class="sub">Viet QS x Con-cost Tool</div>
     </div>
 
+    <!-- ✅ (노란 박스 위치 역할) 프로젝트 열기 -->
+    <div class="project-slot">
+      <button id="btnProject" class="btn btn-project" title="프로젝트 선택/관리">
+        프로젝트 열기
+      </button>
+      <div id="activeProjectBadge" class="project-badge" title="현재 프로젝트">
+        (미선택)
+      </div>
+    </div>
+
     <div class="actions">
       <button id="btnHelp" class="btn help" title="도움말">도움말</button>
-      <button id="btnOpenPicker" class="btn">코드 선택 (Ctrl+.)</button>
-      <button id="btnExport" class="btn">내보내기(EXCEL)</button>
 
-      <label class="btn ghost">
+      <!-- ✅ 프로젝트 선택 전에는 비활성 -->
+      <button id="btnOpenPicker" class="btn" disabled>코드 선택 (Ctrl+.)</button>
+      <button id="btnExport" class="btn" disabled>내보내기(EXCEL)</button>
+
+      <label class="btn ghost" id="btnImportWrap" aria-disabled="true" style="opacity:.55; pointer-events:none;">
         가져오기(EXCEL)
         <input
           id="fileImport"
           type="file"
           accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           hidden
+          disabled
         />
       </label>
 
-      <button id="btnReset" class="btn danger">초기화</button>
+      <button id="btnReset" class="btn danger" disabled>초기화</button>
     </div>
   </header>
 
@@ -64,6 +77,56 @@
       (구분 개소 반영, 환산단위/계수 있으면 환산후수량 기준)
     </div>
   </footer>
+
+  <!-- ======================
+       프로젝트 열기 모달
+       ====================== -->
+  <div id="projectModal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close="1"></div>
+
+    <div class="modal-card modal-wide" role="dialog" aria-modal="true" aria-labelledby="projectModalTitle">
+      <div class="modal-head">
+        <div class="modal-title" id="projectModalTitle">프로젝트 열기</div>
+        <div class="modal-head-actions">
+          <button id="btnProjectAdd" class="btn">추가</button>
+          <button id="btnProjectDelete" class="btn btn-danger">삭제</button>
+          <button id="btnProjectSave" class="btn btn-primary">저장</button>
+          <button id="btnProjectClose" class="btn">닫기</button>
+        </div>
+      </div>
+
+      <div class="modal-body">
+        <div class="project-hint">
+          공사코드/프로젝트명 수정 → 저장 → “선택 프로젝트 열기”로 적용됩니다.
+          (현재는 로컬 저장 / 추후 서버 연결로 다중 사용자 확장 가능)
+        </div>
+
+        <div class="project-table-wrap">
+          <table class="project-table" id="projectTable">
+            <thead>
+              <tr>
+                <th style="width: 220px;">공사코드</th>
+                <th>프로젝트명</th>
+                <th style="width: 140px;">등록일자</th>
+              </tr>
+            </thead>
+            <tbody id="projectTbody">
+              <!-- app.js에서 렌더 -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-foot">
+        <div class="muted">
+          * 프로젝트가 선택되면, 아래의 “코드선택/내보내기/가져오기/초기화”는 해당 프로젝트 하위로 관리됩니다.
+        </div>
+        <div class="modal-foot-actions">
+          <button id="btnProjectOpen" class="btn btn-primary">선택 프로젝트 열기</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ======================
        Libraries

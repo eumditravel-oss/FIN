@@ -21,19 +21,18 @@
   "use strict";
 
   /***************
- * Storage (✅ Project-ready)
- * - 프로젝트 목록/선택/CRUD는 "index"로 관리
- * - 실제 산출 데이터는 프로젝트별 key로 저장
- * - 추후 서버 연동 시 adapter만 교체하면 됨
- ***************/
-const PROJECT_INDEX_KEY  = "FIN_PROJECT_INDEX_V1";
-const PROJECT_ACTIVE_KEY = "FIN_PROJECT_ACTIVE_V1";
-const PROJECT_STATE_PREFIX = "FIN_PROJECT_STATE_V1::";
+   * Storage (✅ Project-ready)
+   * - 프로젝트 목록/선택/CRUD는 "index"로 관리
+   * - 실제 산출 데이터는 프로젝트별 key로 저장
+   * - 추후 서버 연동 시 adapter만 교체하면 됨
+   ***************/
+  const PROJECT_INDEX_KEY = "FIN_PROJECT_INDEX_V1";
+  const PROJECT_ACTIVE_KEY = "FIN_PROJECT_ACTIVE_V1";
+  const PROJECT_STATE_PREFIX = "FIN_PROJECT_STATE_V1::";
 
-// (기존 단일 저장키 마이그레이션용)
-const LS_KEY_OLD_SINGLE_V13 = "FIN_WEB_STATE_V13_2A";
-const LS_KEY_OLD_SINGLE_V11 = "FIN_WEB_STATE_V11";
-
+  // (기존 단일 저장키 마이그레이션용)
+  const LS_KEY_OLD_SINGLE_V13 = "FIN_WEB_STATE_V13_2A";
+  const LS_KEY_OLD_SINGLE_V11 = "FIN_WEB_STATE_V11";
 
   const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
@@ -87,7 +86,7 @@ const LS_KEY_OLD_SINGLE_V11 = "FIN_WEB_STATE_V11";
     });
   });
 
-    /***************
+  /***************
    * ✅ 내부 스크롤 높이 자동 보정 (PATCH: 하단 공백 제거)
    * - viewport 기준 maxHeight → panel 기준 "height" 고정
    * - flex 레이아웃과 max-height 충돌로 생기던 하단 공백 방지
@@ -127,9 +126,8 @@ const LS_KEY_OLD_SINGLE_V11 = "FIN_WEB_STATE_V11";
       h = clamp(h, 160, 20000);
 
       // ✅ 핵심: maxHeight 대신 height로 고정
-sc.style.maxHeight = "";
-sc.style.height = `${h}px`;
-
+      sc.style.maxHeight = "";
+      sc.style.height = `${h}px`;
     });
   }
 
@@ -219,157 +217,180 @@ sc.style.height = `${h}px`;
     }
   };
 
-   /***************
- * ✅ Project Store Adapter (Local now, Server later)
- ***************/
-const ProjectStore = (() => {
-  // ---- Local adapter ----
-  const local = {
-    loadIndex() {
-      try {
-        const raw = localStorage.getItem(PROJECT_INDEX_KEY);
-        const parsed = raw ? JSON.parse(raw) : null;
-        if (!parsed || !Array.isArray(parsed.projects)) return { projects: [] };
-        return parsed;
-      } catch { return { projects: [] }; }
-    },
-    saveIndex(index) {
-      localStorage.setItem(PROJECT_INDEX_KEY, JSON.stringify(index));
-    },
-    loadActiveId() {
-      return localStorage.getItem(PROJECT_ACTIVE_KEY) || "";
-    },
-    saveActiveId(id) {
-      if (!id) localStorage.removeItem(PROJECT_ACTIVE_KEY);
-      else localStorage.setItem(PROJECT_ACTIVE_KEY, id);
-    },
-    loadProjectState(id) {
-      const k = PROJECT_STATE_PREFIX + id;
-      const raw = localStorage.getItem(k);
-      return raw ? JSON.parse(raw) : null;
-    },
-    saveProjectState(id, projectState) {
-      const k = PROJECT_STATE_PREFIX + id;
-      localStorage.setItem(k, JSON.stringify(projectState));
-    },
-    deleteProject(id) {
-      localStorage.removeItem(PROJECT_STATE_PREFIX + id);
-    }
-  };
-
-  // ---- Server adapter placeholder ----
-  // 나중에 서버 붙이면 아래 객체를 server로 구현해서 return만 바꾸면 됨.
-  // const server = { ...same methods... }
-
-  return local;
-})();
-
-function genId() {
-  // 충돌 방지용(서버 붙여도 무난)
-  return "p_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
-}
-
-function normalizeProjectMeta(p) {
-  return {
-    id: String(p?.id || genId()),
-    name: String(p?.name || "새 프로젝트"),
-    code: String(p?.code || ""),
-    updatedAt: Number(p?.updatedAt || Date.now()),
-    createdAt: Number(p?.createdAt || Date.now()),
-  };
-}
-
-
-  // ✅ (Patch) 구버전 LS_KEY(V11) 자동 마이그레이션
   /***************
- * ✅ Project-aware load/save
- ***************/
-function loadProjectIndex() {
-  const idx = ProjectStore.loadIndex();
-  return { projects: Array.isArray(idx.projects) ? idx.projects.map(normalizeProjectMeta) : [] };
-}
-
-   function saveState() {
-  if (!activeProjectId) return;           // ✅ 프로젝트 선택 전엔 저장 안 함
-  saveProjectState(activeProjectId);
-}
-
-
-
-function saveProjectIndex(index) {
-  ProjectStore.saveIndex(index);
-}
-
-function loadProjectState(projectId) {
-  try {
-    const parsed = ProjectStore.loadProjectState(projectId);
-    if (!parsed) return deepClone(DEFAULT_STATE);
-
-    const s = { ...deepClone(DEFAULT_STATE), ...parsed };
-    s.codeMaster = Array.isArray(parsed?.codeMaster) ? parsed.codeMaster : deepClone(DEFAULT_CODE_MASTER);
-
-    for (const k of ["steel", "steel_sub", "support"]) {
-      if (!s[k] || !Array.isArray(s[k].sections) || s[k].sections.length === 0) {
-        s[k] = deepClone(DEFAULT_STATE[k]);
+   * ✅ Project Store Adapter (Local now, Server later)
+   ***************/
+  const ProjectStore = (() => {
+    // ---- Local adapter ----
+    const local = {
+      loadIndex() {
+        try {
+          const raw = localStorage.getItem(PROJECT_INDEX_KEY);
+          const parsed = raw ? JSON.parse(raw) : null;
+          if (!parsed || !Array.isArray(parsed.projects)) return { projects: [] };
+          return parsed;
+        } catch { return { projects: [] }; }
+      },
+      saveIndex(index) {
+        localStorage.setItem(PROJECT_INDEX_KEY, JSON.stringify(index));
+      },
+      loadActiveId() {
+        return localStorage.getItem(PROJECT_ACTIVE_KEY) || "";
+      },
+      saveActiveId(id) {
+        if (!id) localStorage.removeItem(PROJECT_ACTIVE_KEY);
+        else localStorage.setItem(PROJECT_ACTIVE_KEY, id);
+      },
+      loadProjectState(id) {
+        try {
+          const k = PROJECT_STATE_PREFIX + id;
+          const raw = localStorage.getItem(k);
+          return raw ? JSON.parse(raw) : null;
+        } catch {
+          return null;
+        }
+      },
+      saveProjectState(id, projectState) {
+        const k = PROJECT_STATE_PREFIX + id;
+        localStorage.setItem(k, JSON.stringify(projectState));
+      },
+      deleteProject(id) {
+        localStorage.removeItem(PROJECT_STATE_PREFIX + id);
       }
-      s[k].activeSection = clamp(Number(s[k].activeSection || 0), 0, s[k].sections.length - 1);
-    }
+    };
 
-    if (!s.ui || typeof s.ui !== "object") s.ui = deepClone(DEFAULT_STATE.ui);
-    s.ui.topSplitH = clamp(Number(s.ui.topSplitH ?? 190), 120, 520);
+    // ---- Server adapter placeholder ----
+    // 나중에 서버 붙이면 아래 객체를 server로 구현해서 return만 바꾸면 됨.
+    // const server = { ...same methods... }
 
-    if (!TABS.some(t => t.id === s.activeTab)) s.activeTab = "code";
-    return s;
-  } catch (e) {
-    console.warn("loadProjectState failed:", e);
-    return deepClone(DEFAULT_STATE);
+    return local;
+  })();
+
+  function genId() {
+    // 충돌 방지용(서버 붙여도 무난)
+    return "p_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
   }
-}
 
-function saveProjectState(projectId) {
-  if (!projectId) return;
-  ProjectStore.saveProjectState(projectId, deepClone(state)); // ✅ 안전
-}
+  function normalizeProjectMeta(p) {
+    return {
+      id: String(p?.id || genId()),
+      name: String(p?.name || "새 프로젝트"),
+      code: String(p?.code || ""),
+      updatedAt: Number(p?.updatedAt || Date.now()),
+      createdAt: Number(p?.createdAt || Date.now()),
+    };
+  }
 
+  /***************
+   * ✅ Project-aware load/save
+   ***************/
+  function loadProjectIndex() {
+    const idx = ProjectStore.loadIndex();
+    return { projects: Array.isArray(idx.projects) ? idx.projects.map(normalizeProjectMeta) : [] };
+  }
 
+  function saveProjectIndex(index) {
+    ProjectStore.saveIndex(index);
+  }
+
+  function loadProjectState(projectId) {
+    try {
+      const parsed = ProjectStore.loadProjectState(projectId);
+      if (!parsed) return deepClone(DEFAULT_STATE);
+
+      const s = { ...deepClone(DEFAULT_STATE), ...parsed };
+      s.codeMaster = Array.isArray(parsed?.codeMaster) ? parsed.codeMaster : deepClone(DEFAULT_CODE_MASTER);
+
+      for (const k of ["steel", "steel_sub", "support"]) {
+        if (!s[k] || !Array.isArray(s[k].sections) || s[k].sections.length === 0) {
+          s[k] = deepClone(DEFAULT_STATE[k]);
+        }
+        s[k].activeSection = clamp(Number(s[k].activeSection || 0), 0, s[k].sections.length - 1);
+      }
+
+      if (!s.ui || typeof s.ui !== "object") s.ui = deepClone(DEFAULT_STATE.ui);
+      s.ui.topSplitH = clamp(Number(s.ui.topSplitH ?? 190), 120, 520);
+
+      if (!TABS.some(t => t.id === s.activeTab)) s.activeTab = "code";
+      return s;
+    } catch (e) {
+      console.warn("loadProjectState failed:", e);
+      return deepClone(DEFAULT_STATE);
+    }
+  }
+
+  function saveProjectState(projectId) {
+    if (!projectId) return;
+    ProjectStore.saveProjectState(projectId, deepClone(state)); // ✅ 안전
+  }
+
+  // ✅ activeProjectId가 준비되기 전 호출 방지 포함
+  function saveState() {
+    if (!activeProjectId) return;           // ✅ 프로젝트 선택 전엔 저장 안 함
+    saveProjectState(activeProjectId);
+  }
 
   let projectIndex = loadProjectIndex();
-let activeProjectId = ProjectStore.loadActiveId();
+  let activeProjectId = ProjectStore.loadActiveId();
 
-// ✅ (마이그레이션) 예전 단일키가 남아있으면 "마이그레이션 프로젝트"로 1회 옮김
-(function migrateLegacySingleToProjectOnce(){
-  const legacy = localStorage.getItem(LS_KEY_OLD_SINGLE_V13) || localStorage.getItem(LS_KEY_OLD_SINGLE_V11);
-  if (!legacy) return;
+  // ✅ (마이그레이션) 예전 단일키가 남아있으면 "마이그레이션 프로젝트"로 1회 옮김
+  (function migrateLegacySingleToProjectOnce(){
+    const legacy = localStorage.getItem(LS_KEY_OLD_SINGLE_V13) || localStorage.getItem(LS_KEY_OLD_SINGLE_V11);
+    if (!legacy) return;
 
-  // 이미 프로젝트가 있으면 마이그레이션 생략
-  if (projectIndex.projects.length > 0) return;
+    // 이미 프로젝트가 있으면 마이그레이션 생략
+    if (projectIndex.projects.length > 0) return;
 
-  try {
-    const parsed = JSON.parse(legacy);
+    try {
+      const parsed = JSON.parse(legacy);
+      const pid = genId();
+      const meta = normalizeProjectMeta({ id: pid, name: "마이그레이션 프로젝트", code: "LEGACY" });
+      projectIndex.projects.push(meta);
+      saveProjectIndex(projectIndex);
+      ProjectStore.saveActiveId(pid);
+      activeProjectId = pid;
+
+      // 상태 저장
+      ProjectStore.saveProjectState(pid, { ...deepClone(DEFAULT_STATE), ...parsed });
+    } catch {}
+  })();
+
+  // ✅ (Patch) 초기화 시 구키도 함께 삭제 (마이그레이션 되었거나, 프로젝트가 이미 존재하면 정리)
+  (function cleanupLegacyKeys(){
+    if (projectIndex.projects.length <= 0) return;
+    try { localStorage.removeItem(LS_KEY_OLD_SINGLE_V13); } catch {}
+    try { localStorage.removeItem(LS_KEY_OLD_SINGLE_V11); } catch {}
+  })();
+
+  // ✅ (안전) 프로젝트가 하나도 없으면 기본 프로젝트 1개 생성 (저장 가능 상태 보장)
+  (function ensureAtLeastOneProject(){
+    if (projectIndex.projects.length > 0) {
+      // activeProjectId가 유효하지 않으면 첫 프로젝트로 보정
+      if (!activeProjectId || !projectIndex.projects.some(p => p.id === activeProjectId)) {
+        activeProjectId = projectIndex.projects[0].id;
+        ProjectStore.saveActiveId(activeProjectId);
+      }
+      return;
+    }
+
     const pid = genId();
-    const meta = normalizeProjectMeta({ id: pid, name: "마이그레이션 프로젝트", code: "LEGACY" });
+    const meta = normalizeProjectMeta({ id: pid, name: "프로젝트 1", code: "" });
     projectIndex.projects.push(meta);
     saveProjectIndex(projectIndex);
-    ProjectStore.saveActiveId(pid);
+
     activeProjectId = pid;
+    ProjectStore.saveActiveId(pid);
 
-    // 상태 저장
-    ProjectStore.saveProjectState(pid, { ...deepClone(DEFAULT_STATE), ...parsed });
+    // 기본 상태 저장(바로 저장/렌더 안정)
+    ProjectStore.saveProjectState(pid, deepClone(DEFAULT_STATE));
+  })();
 
-    // 기존 키는 남겨도 되지만, 혼동 방지 위해 삭제 권장
-    // localStorage.removeItem(LS_KEY_OLD_SINGLE_V13);
-    // localStorage.removeItem(LS_KEY_OLD_SINGLE_V11);
-  } catch {}
-})();
-
-let state = activeProjectId ? loadProjectState(activeProjectId) : deepClone(DEFAULT_STATE);
-
+  let state = activeProjectId ? loadProjectState(activeProjectId) : deepClone(DEFAULT_STATE);
 
   // ✅ (v13.2) 구분명 리스트 클릭/↑↓ 후 렌더링되면 포커스 복원
   let __pendingSectionFocus = null;
 
-
-     /***************
+  /***************
    * ✅ Calc(산출표) 멀티선택 상태 (비저장/런타임)
    ***************/
   const __calcMulti = {
@@ -401,7 +422,11 @@ let state = activeProjectId ? loadProjectState(activeProjectId) : deepClone(DEFA
     __calcMulti.active = true;
     __calcMulti.tabId = tabId;
     __calcMulti.sectionIndex = secIdx;
-    __calcMulti.anchorRow = clamp(Number(anchorRow || 0), 0, (bucket?.sections?.[secIdx]?.rows?.length ?? 1) - 1);
+    __calcMulti.anchorRow = clamp(
+      Number(anchorRow || 0),
+      0,
+      (bucket?.sections?.[secIdx]?.rows?.length ?? 1) - 1
+    );
 
     __calcMulti.rows.clear();
     __calcMulti.rows.add(__calcMulti.anchorRow);
@@ -420,24 +445,24 @@ let state = activeProjectId ? loadProjectState(activeProjectId) : deepClone(DEFA
   }
 
   function __applyCalcRowSelectionStyles(tabId) {
-  // ✅ 현재 탭(tabId)의 calc-table만 하이라이트 처리
-  const table = document.querySelector(`table.calc-table input[data-grid="calc"][data-tab="${tabId}"]`)?.closest("table.calc-table");
-  if (!table) return;
+    // ✅ 현재 탭(tabId)의 calc-table만 하이라이트 처리
+    const table = document
+      .querySelector(`table.calc-table input[data-grid="calc"][data-tab="${tabId}"]`)
+      ?.closest("table.calc-table");
+    if (!table) return;
 
-  const should = __calcMultiIsSameContext(tabId);
-  const trs = table.querySelectorAll("tbody tr");
-  trs.forEach((tr, i) => {
-    if (should && __calcMulti.rows.has(i)) tr.classList.add("row-selected");
-    else tr.classList.remove("row-selected");
-  });
-}
-
+    const should = __calcMultiIsSameContext(tabId);
+    const trs = table.querySelectorAll("tbody tr");
+    trs.forEach((tr, i) => {
+      if (should && __calcMulti.rows.has(i)) tr.classList.add("row-selected");
+      else tr.classList.remove("row-selected");
+    });
+  }
 
   function __getSelectedCalcRows(tabId) {
     if (!__calcMultiIsSameContext(tabId)) return [];
     return [...__calcMulti.rows].sort((a, b) => a - b);
   }
-
 
   /***************
    * DOM
@@ -641,80 +666,79 @@ let state = activeProjectId ? loadProjectState(activeProjectId) : deepClone(DEFA
    * ✅ Help contents
    ***************/
   function buildHelpPayload() {
-  return {
-    title: "FIN 산출자료 도움말",
-    sections: [
-      {
-        title: "코드 선택(팝업)",
-        items: [
-          "Ctrl+. : 코드 선택 창 열기",
-          "코드 선택 창에서 Ctrl+B : 다중선택",
-          "코드 선택 창에서 Ctrl+Enter : 삽입",
-          "검색 입력 후 Enter : 필터 적용(구현된 검색 방식에 따라 동작)"
-        ]
-      },
-      {
-        title: "표 이동/편집(공통)",
-        items: [
-          "방향키: 셀 이동",
-          "F2: 편집 모드(읽기전용 셀 제외)",
-          "편집 모드에서 Enter: 편집 종료",
-          "PageUp / PageDown: 한 페이지 단위로 위/아래 이동(현재 열 유지)",
-          "Ctrl+Home / Ctrl+End: 최상단/최하단으로 이동(현재 열 유지)"
-        ]
-      },
-      {
-        title: "행 추가/삭제",
-        items: [
-          "Ctrl+F3: 현재 행 아래 행 추가",
-          "Shift+Ctrl+F3: +10행 추가",
-          "Ctrl+Del: 삭제(확인창) - 산출표/코드표는 현재 '행' 삭제, 변수표는 현재 '셀' 비움",
-          "ESC: (산출표 다중선택 중) 다중선택 취소"
-        ]
-      },
-      {
-        title: "산출 탭(철골/철골_부자재/구조이기/동바리)",
-        items: [
-          "산출식 Enter: 계산(재계산)",
-          "구분 리스트: ↑/↓ 로 이동 및 선택",
-          "변수표: A, AB, A1, AB1... 최대 3자(첫 글자는 영문)",
-          "구분/변수 영역 높이 조절: 중간 점선 바(리사이저)를 드래그"
-        ]
-      },
-      {
-        title: "산출표(하단 표) 다중선택/다중작업",
-        items: [
-          "Shift+B: 다중선택 모드 토글(현재 행을 기준(anchor)으로 선택 시작/해제)",
-          "Shift+↑ / Shift+↓: 다중선택 범위 확장(연속 선택)",
-          "Ctrl+Del: (다중선택 중) 선택된 행들을 한 번에 삭제",
-          "Ctrl+G: (다중선택 중) 선택된 행들을 현재 행 아래로 복사/삽입(행추가 붙여넣기)"
-        ]
-      },
-      {
-        title: "집계 탭",
-        items: [
-          "코드별 집계: 구분 개소(count) 반영",
-          "환산단위/환산계수 있으면 환산후수량 기준으로 할증전/할증후 합산"
-        ]
-      },
-      {
-        title: "엑셀 내보내기/가져오기",
-        items: [
-          "내보내기(EXCEL): 선택 모달에서 탭 선택 후 .xlsx 다운로드",
-          "가져오기(EXCEL): 'Codes(또는 코드)' 시트 기반으로 codeMaster 갱신(임시 매핑)"
-        ]
-      },
-      {
-        title: "UI/레이아웃(패치)",
-        items: [
-          "상단(구분/변수) ↔ 하단(산출표) 사이 높이 조절: 리사이저 드래그(높이 저장: ui.topSplitH)",
-          "하단 공백 최소화: 내부 스크롤 높이 자동 보정(calc-scroll 자동 높이)"
-        ]
-      }
-    ]
-  };
-}
-
+    return {
+      title: "FIN 산출자료 도움말",
+      sections: [
+        {
+          title: "코드 선택(팝업)",
+          items: [
+            "Ctrl+. : 코드 선택 창 열기",
+            "코드 선택 창에서 Ctrl+B : 다중선택",
+            "코드 선택 창에서 Ctrl+Enter : 삽입",
+            "검색 입력 후 Enter : 필터 적용(구현된 검색 방식에 따라 동작)"
+          ]
+        },
+        {
+          title: "표 이동/편집(공통)",
+          items: [
+            "방향키: 셀 이동",
+            "F2: 편집 모드(읽기전용 셀 제외)",
+            "편집 모드에서 Enter: 편집 종료",
+            "PageUp / PageDown: 한 페이지 단위로 위/아래 이동(현재 열 유지)",
+            "Ctrl+Home / Ctrl+End: 최상단/최하단으로 이동(현재 열 유지)"
+          ]
+        },
+        {
+          title: "행 추가/삭제",
+          items: [
+            "Ctrl+F3: 현재 행 아래 행 추가",
+            "Shift+Ctrl+F3: +10행 추가",
+            "Ctrl+Del: 삭제(확인창) - 산출표/코드표는 현재 '행' 삭제, 변수표는 현재 '셀' 비움",
+            "ESC: (산출표 다중선택 중) 다중선택 취소"
+          ]
+        },
+        {
+          title: "산출 탭(철골/철골_부자재/구조이기/동바리)",
+          items: [
+            "산출식 Enter: 계산(재계산)",
+            "구분 리스트: ↑/↓ 로 이동 및 선택",
+            "변수표: A, AB, A1, AB1... 최대 3자(첫 글자는 영문)",
+            "구분/변수 영역 높이 조절: 중간 점선 바(리사이저)를 드래그"
+          ]
+        },
+        {
+          title: "산출표(하단 표) 다중선택/다중작업",
+          items: [
+            "Shift+B: 다중선택 모드 토글(현재 행을 기준(anchor)으로 선택 시작/해제)",
+            "Shift+↑ / Shift+↓: 다중선택 범위 확장(연속 선택)",
+            "Ctrl+Del: (다중선택 중) 선택된 행들을 한 번에 삭제",
+            "Ctrl+G: (다중선택 중) 선택된 행들을 현재 행 아래로 복사/삽입(행추가 붙여넣기)"
+          ]
+        },
+        {
+          title: "집계 탭",
+          items: [
+            "코드별 집계: 구분 개소(count) 반영",
+            "환산단위/환산계수 있으면 환산후수량 기준으로 할증전/할증후 합산"
+          ]
+        },
+        {
+          title: "엑셀 내보내기/가져오기",
+          items: [
+            "내보내기(EXCEL): 선택 모달에서 탭 선택 후 .xlsx 다운로드",
+            "가져오기(EXCEL): 'Codes(또는 코드)' 시트 기반으로 codeMaster 갱신(임시 매핑)"
+          ]
+        },
+        {
+          title: "UI/레이아웃(패치)",
+          items: [
+            "상단(구분/변수) ↔ 하단(산출표) 사이 높이 조절: 리사이저 드래그(높이 저장: ui.topSplitH)",
+            "하단 공백 최소화: 내부 스크롤 높이 자동 보정(calc-scroll 자동 높이)"
+          ]
+        }
+      ]
+    };
+  }
 
   function openHelpWindow() {
     const w = window.open("help.html", "FIN_HELP", "width=980,height=820");
@@ -823,8 +847,6 @@ let state = activeProjectId ? loadProjectState(activeProjectId) : deepClone(DEFA
 
     table.appendChild(thead);
     table.appendChild(tbody);
-
-
 
     return table;
   }
@@ -1109,6 +1131,7 @@ let state = activeProjectId ? loadProjectState(activeProjectId) : deepClone(DEFA
       }
     }, ["구분 삭제"]);
 
+    // ✅ (v13.2b) section-editor CSS(3컬럼) 대응: 버튼을 한 칸으로 묶어서 배치
     const btnWrap = el("div", { class: "row-actions", style: "justify-content:flex-end; gap:6px;" }, [
       saveBtn, addBtn, delBtn
     ]);
@@ -1219,7 +1242,6 @@ let state = activeProjectId ? loadProjectState(activeProjectId) : deepClone(DEFA
 
     table.appendChild(buildColGroupFromWeights(CALC_COL_WEIGHTS));
 
-
     const thead = el("thead", {}, [
       el("tr", {}, [
         el("th", {}, ["No"]),
@@ -1256,8 +1278,9 @@ let state = activeProjectId ? loadProjectState(activeProjectId) : deepClone(DEFA
 
     table.appendChild(thead);
     table.appendChild(tbody);
-     // ✅ 멀티선택 하이라이트 반영(렌더 직후)
-raf2(() => __applyCalcRowSelectionStyles(tabId));
+
+    // ✅ 멀티선택 하이라이트 반영(렌더 직후)
+    raf2(() => __applyCalcRowSelectionStyles(tabId));
 
     table.addEventListener("keydown", (e) => {
       const t = e.target;
@@ -1280,6 +1303,7 @@ raf2(() => __applyCalcRowSelectionStyles(tabId));
 
     return table;
   }
+
 
   function tdNavInputCalc(tabId, row, col, field, value, opts = {}) {
     const bucket = state[tabId];
@@ -2369,21 +2393,44 @@ if (grid === "calc" || grid === "var") {
 
    /***************
  * ✅ Project UI (Open/Add/Edit/Delete/Select)
+ * - 프로젝트 선택 전: 주요 버튼 잠금
+ * - 프로젝트 선택 후: 프로젝트별 state 로드/저장
+ *
+ * (필요 id)
+ * - projectName, projectCode
+ * - btnProjectOpen, btnProjectClose, btnProjectAdd
+ * - projectModal, projectList
+ * - btnOpenPicker, btnExport, btnReset, fileImport
+ * - btnImportWrap (fileImport를 감싸는 label/div)
+ * - btnHelp
  ***************/
-function setTopButtonsEnabled(enabled) {
-  const ids = ["btnOpenPicker", "btnExport", "fileImport", "btnReset"];
-  ids.forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    if (el instanceof HTMLInputElement) el.disabled = !enabled;
-    else el.disabled = !enabled;
-  });
 
-  // 도움말은 항상 사용 가능
+function setTopButtonsEnabled(enabled) {
+  const btnOpen = document.getElementById("btnOpenPicker");
+  const btnExport = document.getElementById("btnExport");
+  const btnReset = document.getElementById("btnReset");
+  const fileImport = document.getElementById("fileImport");
+  const btnImportWrap = document.getElementById("btnImportWrap"); // ✅ label wrapper 잠금 처리
+
+  if (btnOpen) btnOpen.disabled = !enabled;
+  if (btnExport) btnExport.disabled = !enabled;
+  if (btnReset) btnReset.disabled = !enabled;
+  if (fileImport) fileImport.disabled = !enabled;
+
+  // ✅ label wrapper는 disabled가 안 먹어서 스타일로 잠금
+  if (btnImportWrap) {
+    btnImportWrap.style.opacity = enabled ? "1" : "0.45";
+    btnImportWrap.style.pointerEvents = enabled ? "auto" : "none";
+    btnImportWrap.setAttribute("aria-disabled", enabled ? "false" : "true");
+  }
+
+  // 도움말/프로젝트 버튼은 항상 사용 가능
   const help = document.getElementById("btnHelp");
   if (help) help.disabled = false;
-}
 
+  const btnProjectOpen = document.getElementById("btnProjectOpen");
+  if (btnProjectOpen) btnProjectOpen.disabled = false;
+}
 
 function updateProjectHeaderUI() {
   const meta = projectIndex.projects.find(p => p.id === activeProjectId);
@@ -2393,7 +2440,7 @@ function updateProjectHeaderUI() {
   if ($name) $name.textContent = meta ? meta.name : "프로젝트 미선택";
   if ($code) $code.textContent = meta ? (`공사코드 ${meta.code || "-"}`) : "공사코드 -";
 
-  setTopButtonsEnabled(!!meta); // 프로젝트 선택 전에는 주요 기능 잠금
+  setTopButtonsEnabled(!!meta);
 }
 
 function openProjectModal() {
@@ -2414,83 +2461,99 @@ function renderProjectList() {
   if (!$list) return;
   $list.innerHTML = "";
 
-  projectIndex.projects
+  const items = projectIndex.projects
     .slice()
-    .sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0))
-    .forEach(p => {
-      const row = document.createElement("div");
-      row.className = "project-row" + (p.id === activeProjectId ? " active" : "");
+    .sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0));
 
-      const name = document.createElement("input");
-      name.className = "cell";
-      name.value = p.name;
-      name.placeholder = "프로젝트명";
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.style.padding = "12px";
+    empty.style.color = "rgba(90,90,97,1)";
+    empty.style.fontWeight = "700";
+    empty.textContent = "프로젝트가 없습니다. [프로젝트 추가]로 생성하세요.";
+    $list.appendChild(empty);
+    return;
+  }
 
-      const code = document.createElement("input");
-      code.className = "cell";
-      code.value = p.code;
-      code.placeholder = "공사코드";
+  items.forEach(p => {
+    const row = document.createElement("div");
+    row.className = "project-row" + (p.id === activeProjectId ? " active" : "");
 
-      const btnOpen = document.createElement("button");
-      btnOpen.className = "smallbtn";
-      btnOpen.textContent = "열기";
-      btnOpen.onclick = () => {
-        selectProject(p.id);
-        closeProjectModal();
-      };
+    const name = document.createElement("input");
+    name.className = "cell";
+    name.value = p.name || "";
+    name.placeholder = "프로젝트명";
 
-      const btnDel = document.createElement("button");
-      btnDel.className = "smallbtn";
-      btnDel.textContent = "삭제";
-      btnDel.onclick = () => {
-        if (!confirm(`프로젝트를 삭제할까요?\n${p.name} (${p.code})`)) return;
-        deleteProject(p.id);
-      };
+    const code = document.createElement("input");
+    code.className = "cell";
+    code.value = p.code || "";
+    code.placeholder = "공사코드";
 
-      const btnSave = document.createElement("button");
-      btnSave.className = "smallbtn";
-      btnSave.textContent = "저장";
-      btnSave.onclick = () => {
-  if (p.id === activeProjectId) saveProjectState(activeProjectId); // ✅ 안전망(선택)
-  p.name = name.value.trim() || "새 프로젝트";
-  p.code = code.value.trim();
-  p.updatedAt = Date.now();
-  saveProjectIndex(projectIndex);
-  updateProjectHeaderUI();
-  renderProjectList();
-};
+    const btnSave = document.createElement("button");
+    btnSave.className = "smallbtn";
+    btnSave.textContent = "저장";
+    btnSave.onclick = () => {
+      // ✅ 현재 active인 프로젝트는 저장 후 메타 변경(안전)
+      if (p.id === activeProjectId) saveProjectState(activeProjectId);
 
+      p.name = name.value.trim() || "새 프로젝트";
+      p.code = code.value.trim();
+      p.updatedAt = Date.now();
 
-      row.appendChild(name);
-      row.appendChild(code);
-      row.appendChild(btnSave);
-      row.appendChild(btnOpen);
-      row.appendChild(btnDel);
+      saveProjectIndex(projectIndex);
+      updateProjectHeaderUI();
+      renderProjectList();
+    };
 
-      $list.appendChild(row);
-    });
+    const btnOpen = document.createElement("button");
+    btnOpen.className = "smallbtn";
+    btnOpen.textContent = "열기";
+    btnOpen.onclick = () => {
+      selectProject(p.id);
+      closeProjectModal();
+    };
+
+    const btnDel = document.createElement("button");
+    btnDel.className = "smallbtn";
+    btnDel.textContent = "삭제";
+    btnDel.onclick = () => {
+      if (!confirm(`프로젝트를 삭제할까요?\n${p.name} (${p.code || "-"})`)) return;
+      deleteProject(p.id);
+    };
+
+    row.appendChild(name);
+    row.appendChild(code);
+    row.appendChild(btnSave);
+    row.appendChild(btnOpen);
+    row.appendChild(btnDel);
+
+    $list.appendChild(row);
+  });
 }
 
 function createProject() {
   const pid = genId();
   const meta = normalizeProjectMeta({ id: pid, name: "새 프로젝트", code: "" });
+
   projectIndex.projects.push(meta);
   saveProjectIndex(projectIndex);
 
+  // ✅ 신규 프로젝트는 DEFAULT_STATE로 저장해두고 바로 선택
   ProjectStore.saveProjectState(pid, deepClone(DEFAULT_STATE));
-
-  // ✅ 생성 즉시 선택
   selectProject(pid);
+
   renderProjectList();
 }
 
-
 function deleteProject(projectId) {
-  // active 삭제면 active 해제
+  // ✅ active 삭제면 먼저 active 저장/해제
   if (projectId === activeProjectId) {
+    // 저장은 굳이 안 해도 되지만(삭제니까) 혹시 모를 안전망
+    try { saveProjectState(activeProjectId); } catch {}
     activeProjectId = "";
     ProjectStore.saveActiveId("");
   }
+
   projectIndex.projects = projectIndex.projects.filter(p => p.id !== projectId);
   saveProjectIndex(projectIndex);
   ProjectStore.deleteProject(projectId);
@@ -2498,7 +2561,7 @@ function deleteProject(projectId) {
   updateProjectHeaderUI();
   renderProjectList();
 
-  // active가 없어졌으면 화면도 기본으로
+  // ✅ active가 없으면 화면은 기본 상태로
   if (!activeProjectId) {
     state = deepClone(DEFAULT_STATE);
     render();
@@ -2509,7 +2572,7 @@ function selectProject(projectId) {
   const meta = projectIndex.projects.find(p => p.id === projectId);
   if (!meta) return;
 
-  // 현재 프로젝트 저장 후 전환
+  // ✅ 전환 전: 기존 active 프로젝트 state 저장
   if (activeProjectId) saveProjectState(activeProjectId);
 
   activeProjectId = projectId;
@@ -2518,13 +2581,14 @@ function selectProject(projectId) {
   meta.updatedAt = Date.now();
   saveProjectIndex(projectIndex);
 
+  // ✅ 새 프로젝트 state 로드
   state = loadProjectState(activeProjectId);
+
   updateProjectHeaderUI();
   render();
 }
 
-
-  let __boundTopOnce = false;
+let __boundTopOnce = false;
 
 function bindTopButtons() {
   if (__boundTopOnce) return;
@@ -2544,6 +2608,7 @@ function bindTopButtons() {
   if (btnHelp) btnHelp.onclick = openHelpWindow;
   if (btnOpen) btnOpen.onclick = openCodePicker;
   if (btnExport) btnExport.onclick = openExcelExportModal;
+
   if (btnProjectOpen) btnProjectOpen.onclick = openProjectModal;
   if (btnProjectClose) btnProjectClose.onclick = closeProjectModal;
   if (btnProjectAdd) btnProjectAdd.onclick = createProject;
@@ -2554,35 +2619,40 @@ function bindTopButtons() {
     });
   }
 
+  // ✅ Excel import (Codes 시트 → codeMaster 갱신)
+  if (fileImport) fileImport.onchange = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
 
-    
+    try {
+      await importExcelToCodes(f);
+      alert("가져오기(Excel) 완료: codeMaster(코드)가 갱신되었습니다.");
+      render();
+    } catch (err) {
+      console.error(err);
+      alert("가져오기(Excel) 실패: XLSX 로드 여부 / Codes 시트 존재 여부를 확인해 주세요.");
+    } finally {
+      e.target.value = "";
+    }
+  };
 
-    if (fileImport) fileImport.onchange = async (e) => {
-      const f = e.target.files?.[0];
-      if (!f) return;
+  // ✅ Reset: 현재 프로젝트만 초기화
+  if (btnReset) btnReset.onclick = () => {
+    if (!activeProjectId) return alert("먼저 프로젝트를 선택하세요.");
+    if (!confirm("정말 초기화할까요? (현재 프로젝트의 로컬 저장 데이터가 초기화됩니다)")) return;
 
-      try {
-        await importExcelToCodes(f);
-        alert("가져오기(Excel) 완료: codeMaster(코드)가 갱신되었습니다.");
-        render();
-      } catch (err) {
-        console.error(err);
-        alert("가져오기(Excel) 실패: 현재는 'Codes(또는 코드)' 시트를 임시 양식으로 읽습니다.\n(양식 제공 후 매핑을 확정하면 안정적으로 동작합니다.)");
-      } finally {
-        e.target.value = "";
-      }
-    };
+    ProjectStore.saveProjectState(activeProjectId, deepClone(DEFAULT_STATE));
+    state = loadProjectState(activeProjectId);
+    render();
+  };
+}
 
-    if (btnReset) btnReset.onclick = () => {
-  if (!activeProjectId) return alert("먼저 프로젝트를 선택하세요.");
-  if (!confirm("정말 초기화할까요? (현재 프로젝트의 로컬 저장 데이터가 초기화됩니다)")) return;
+/***************
+ * Init
+ ***************/
+updateProjectHeaderUI();
+render();
 
-  ProjectStore.saveProjectState(activeProjectId, deepClone(DEFAULT_STATE));
-  state = loadProjectState(activeProjectId);
-  render();
-};
-
-  }
 
   function applyPanelStickyTop() {
     const root = document.documentElement;

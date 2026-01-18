@@ -126,9 +126,10 @@ const LS_KEY_OLD_SINGLE_V11 = "FIN_WEB_STATE_V11";
 
       h = clamp(h, 160, 20000);
 
-      // ✅ 핵심: maxHeight 대신 height로 고정 (공백 제거)
-      sc.style.height = "";
-      sc.style.maxHeight = `${h}px`;
+      // ✅ 핵심: maxHeight 대신 height로 고정
+sc.style.maxHeight = "";
+sc.style.height = `${h}px`;
+
     });
   }
 
@@ -2449,13 +2450,15 @@ function renderProjectList() {
       btnSave.className = "smallbtn";
       btnSave.textContent = "저장";
       btnSave.onclick = () => {
-        p.name = name.value.trim() || "새 프로젝트";
-        p.code = code.value.trim();
-        p.updatedAt = Date.now();
-        saveProjectIndex(projectIndex);
-        updateProjectHeaderUI();
-        renderProjectList();
-      };
+  if (p.id === activeProjectId) saveProjectState(activeProjectId); // ✅ 안전망(선택)
+  p.name = name.value.trim() || "새 프로젝트";
+  p.code = code.value.trim();
+  p.updatedAt = Date.now();
+  saveProjectIndex(projectIndex);
+  updateProjectHeaderUI();
+  renderProjectList();
+};
+
 
       row.appendChild(name);
       row.appendChild(code);
@@ -2473,10 +2476,13 @@ function createProject() {
   projectIndex.projects.push(meta);
   saveProjectIndex(projectIndex);
 
-  // 프로젝트 초기 상태 저장
   ProjectStore.saveProjectState(pid, deepClone(DEFAULT_STATE));
+
+  // ✅ 생성 즉시 선택
+  selectProject(pid);
   renderProjectList();
 }
+
 
 function deleteProject(projectId) {
   // active 삭제면 active 해제
@@ -2548,9 +2554,7 @@ function bindTopButtons() {
   }
 
 
-    if (btnExport) btnExport.onclick = () => {
-      openExcelExportModal();
-    };
+    
 
     if (fileImport) fileImport.onchange = async (e) => {
       const f = e.target.files?.[0];

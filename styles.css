@@ -859,3 +859,247 @@ table.calc-table thead tr.row-selected th{
 }
 
 
+/* =========================================================
+   ✅ Project Slot (Topbar 중앙/노란박스 위치)
+   ========================================================= */
+.project-slot{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex: 0 0 auto;
+}
+
+/* 프로젝트 버튼은 도움말/오렌지 라인 스타일로 통일 */
+.btn.btn-project{
+  height: 38px;
+  padding: 0 14px;
+  min-width: 260px;               /* ✅ 노란 박스 느낌 */
+  justify-content: center;
+  background: rgba(255,255,255,.70);
+  border: 2px solid rgba(240,138,36,.45);
+  color: var(--accent);
+  font-weight: 1000;
+}
+
+/* hover/active는 topbar 버튼과 동일 */
+.btn.btn-project:hover{
+  border-color: rgba(240,138,36,.70);
+  box-shadow: 0 14px 28px rgba(0,0,0,.12);
+}
+.btn.btn-project:active{
+  box-shadow: 0 8px 18px rgba(0,0,0,.10);
+}
+
+/* 현재 프로젝트 뱃지 */
+.project-badge{
+  height: 38px;
+  display:flex;
+  align-items:center;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.88);
+  box-shadow: 0 10px 22px rgba(0,0,0,.08);
+
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(0,0,0,.70);
+
+  max-width: 320px;
+  overflow:hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* topbar 레이아웃: brand - project-slot - actions
+   화면이 좁아지면 project-slot이 아래로 내려가도 자연스럽게 */
+@media (max-width: 1100px){
+  .topbar{
+    align-items:flex-start;
+    flex-wrap: wrap;
+  }
+  .project-slot{
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .btn.btn-project{
+    min-width: 240px;
+  }
+  .project-badge{
+    max-width: calc(100% - 260px);
+  }
+}
+
+/* =========================================================
+   ✅ Project Modal (공사 리스트 입력 UI)
+   - 너의 기존 .btn 디자인과 충돌 없이 추가
+   ========================================================= */
+.modal{ position: fixed; inset:0; display:none; z-index: 9999; }
+.modal[aria-hidden="false"]{ display:block; }
+
+.modal-backdrop{
+  position:absolute; inset:0;
+  background: rgba(0,0,0,.35);
+  backdrop-filter: blur(3px);
+}
+
+/* 모달 카드 */
+.modal-card{
+  position: relative;
+  width: min(980px, calc(100vw - 28px));
+  margin: 60px auto 0;
+  background: rgba(255,255,255,.96);
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgba(0,0,0,.25);
+  overflow:hidden;
+}
+.modal-wide{ width: min(1060px, calc(100vw - 28px)); }
+
+/* 헤더/푸터 */
+.modal-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+  gap: 12px;
+  background: rgba(255,255,255,.92);
+}
+.modal-title{
+  font-size: 16px;
+  font-weight: 1000;
+  letter-spacing: -.2px;
+  position: relative;
+  padding-left: 12px;
+}
+.modal-title::before{
+  content:"";
+  position:absolute;
+  left:0; top: 4px;
+  width:4px; height: 14px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.modal-head-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+.modal-body{ padding: 12px 14px 14px; }
+.modal-foot{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding: 10px 14px;
+  border-top: 1px solid rgba(0,0,0,.08);
+  gap: 12px;
+  background: rgba(255,255,255,.92);
+}
+
+/* 힌트 */
+.project-hint{
+  font-size: 12px;
+  color: rgba(0,0,0,.55);
+  margin-bottom: 10px;
+  line-height: 1.45;
+}
+
+/* 테이블 래퍼 */
+.project-table-wrap{
+  max-height: min(58vh, 560px);
+  overflow:auto;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 22px rgba(0,0,0,.08);
+}
+
+/* 테이블 */
+.project-table{
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.project-table thead th{
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(250,250,250,.98);
+  border-bottom: 2px solid rgba(240,138,36,.55);
+  padding: 10px 10px;
+  text-align:left;
+  font-weight: 1000;
+  white-space: nowrap;
+}
+.project-table tbody td{
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  padding: 6px 8px;
+  vertical-align: middle;
+}
+
+/* 행 선택 */
+.project-row{ cursor:pointer; }
+.project-row.selected td{
+  background: rgba(240,138,36,.10);
+}
+.project-row.selected td:first-child{
+  box-shadow: inset 4px 0 0 rgba(240,138,36,.85);
+}
+
+/* 셀 input */
+.project-cell-input{
+  width: 100%;
+  min-width: 0;
+  border: 2px solid rgba(240,138,36,.30);
+  background: rgba(255,255,255,.96);
+  border-radius: 12px;
+  padding: 7px 10px;
+  font-size: 12px;
+  outline: none;
+}
+.project-cell-input:focus{
+  border-color: rgba(240,138,36,.85);
+  box-shadow: 0 0 0 4px rgba(240,138,36,.16);
+}
+
+/* 버튼 타입 (기존 btn 기반으로 확장) */
+.btn.btn-primary{
+  border: 2px solid rgba(240,138,36,.70);
+  background: linear-gradient(180deg, rgba(255,181,90,.45), rgba(240,138,36,.12));
+  color: var(--accent);
+  font-weight: 1000;
+}
+.btn.btn-danger{
+  border: 2px solid rgba(200,0,0,.25);
+  background: rgba(255,230,230,.85);
+}
+
+/* 모달 하단 문구 */
+.modal-foot .muted{
+  font-size: 12px;
+  color: rgba(0,0,0,.55);
+}
+
+/* 모바일 모달 최적화 */
+@media (max-width: 640px){
+  .modal-card{
+    margin: 16px auto 0;
+  }
+  .modal-head{
+    align-items:flex-start;
+    gap: 10px;
+  }
+  .modal-head-actions{
+    justify-content:flex-end;
+  }
+  .project-table-wrap{
+    max-height: 70vh;
+  }
+}
+
+

@@ -1844,231 +1844,349 @@ function bindTopButtonsOnce(forceRetry = false) {
 
 
   /* ============================
-     ✅ Project UI (list 기반) — 너가 전에 올린 방식 유지
-     (projectName/projectCode/projectModal/projectList 기준)
-  ============================ */
-  function setTopButtonsEnabled(enabled) {
-    const btnOpen = document.getElementById("btnOpenPicker");
-    const btnExport = document.getElementById("btnExport");
-    const btnReset = document.getElementById("btnReset");
-    const fileImport = document.getElementById("fileImport");
-    const btnImportWrap = document.getElementById("btnImportWrap");
-
-    if (btnOpen) btnOpen.disabled = !enabled;
-    if (btnExport) btnExport.disabled = !enabled;
-    if (btnReset) btnReset.disabled = !enabled;
-    if (fileImport) fileImport.disabled = !enabled;
-
-    if (btnImportWrap) {
-      btnImportWrap.style.opacity = enabled ? "1" : "0.45";
-      btnImportWrap.style.pointerEvents = enabled ? "auto" : "none";
-      btnImportWrap.setAttribute("aria-disabled", enabled ? "false" : "true");
-    }
-
-    const help = document.getElementById("btnHelp");
-    if (help) help.disabled = false;
-  }
-
-  function updateProjectHeaderUI() {
-    const meta = projectIndex.projects.find(p => p.id === activeProjectId);
-    const $name = document.getElementById("projectName");
-    const $code = document.getElementById("projectCode");
-
-    if ($name) $name.textContent = meta ? meta.name : "프로젝트 미선택";
-    if ($code) $code.textContent = meta ? (`공사코드 ${meta.code || "-"}`) : "공사코드 -";
-
-    setTopButtonsEnabled(!!meta);
-  }
-
-  function openProjectModal() {
-    const modal = document.getElementById("projectModal");
-    if (!modal) return;
-
-    // Patch: hidden + aria-hidden 동시 지원
-    modal.hidden = false;
-    modal.setAttribute("aria-hidden", "false");
-
-    renderProjectList();
-  }
-
-  function closeProjectModal() {
-    const modal = document.getElementById("projectModal");
-    if (!modal) return;
-
-    modal.hidden = true;
-    modal.setAttribute("aria-hidden", "true");
-  }
-
-  function renderProjectList() {
-    const $list = document.getElementById("projectList");
-    if (!$list) return;
-    $list.innerHTML = "";
-
-    const items = projectIndex.projects
-      .slice()
-      .sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0));
-
-    if (!items.length) {
-      const empty = document.createElement("div");
-      empty.style.padding = "12px";
-      empty.style.color = "rgba(90,90,97,1)";
-      empty.style.fontWeight = "700";
-      empty.textContent = "프로젝트가 없습니다. [프로젝트 추가]로 생성하세요.";
-      $list.appendChild(empty);
-      return;
-    }
-
-    items.forEach(p => {
-      const row = document.createElement("div");
-      row.className = "project-row" + (p.id === activeProjectId ? " active" : "");
-
-      const name = document.createElement("input");
-      name.className = "cell";
-      name.value = p.name || "";
-      name.placeholder = "프로젝트명";
-
-      const code = document.createElement("input");
-      code.className = "cell";
-      code.value = p.code || "";
-      code.placeholder = "공사코드";
-
-      const btnSave = document.createElement("button");
-      btnSave.className = "smallbtn";
-      btnSave.textContent = "저장";
-      btnSave.onclick = () => {
-        if (p.id === activeProjectId) saveProjectState(activeProjectId);
-
-        p.name = name.value.trim() || "새 프로젝트";
-        p.code = code.value.trim();
-        p.updatedAt = Date.now();
-
-        saveProjectIndex(projectIndex);
-        updateProjectHeaderUI();
-        renderProjectList();
-      };
-
-      const btnOpen = document.createElement("button");
-      btnOpen.className = "smallbtn";
-      btnOpen.textContent = "열기";
-      btnOpen.onclick = () => {
-        selectProject(p.id);
-        closeProjectModal();
-      };
-
-      const btnDel = document.createElement("button");
-      btnDel.className = "smallbtn";
-      btnDel.textContent = "삭제";
-      btnDel.onclick = () => {
-        if (!confirm(`프로젝트를 삭제할까요?\n${p.name} (${p.code || "-"})`)) return;
-        deleteProject(p.id);
-      };
-
-      row.appendChild(name);
-      row.appendChild(code);
-      row.appendChild(btnSave);
-      row.appendChild(btnOpen);
-      row.appendChild(btnDel);
-
-      $list.appendChild(row);
-    });
-  }
-
-  function createProject() {
-    const pid = genId();
-    const meta = normalizeProjectMeta({ id: pid, name: "새 프로젝트", code: "" });
-
-    projectIndex.projects.push(meta);
-    saveProjectIndex(projectIndex);
-
-    ProjectStore.saveProjectState(pid, deepClone(DEFAULT_STATE));
-    selectProject(pid);
-
-    renderProjectList();
-  }
-
-  function deleteProject(projectId) {
-    if (projectId === activeProjectId) {
-      try { saveProjectState(activeProjectId); } catch {}
-      activeProjectId = "";
-      ProjectStore.saveActiveId("");
-    }
-
-    projectIndex.projects = projectIndex.projects.filter(p => p.id !== projectId);
-    saveProjectIndex(projectIndex);
-    ProjectStore.deleteProject(projectId);
-
-    updateProjectHeaderUI();
-    renderProjectList();
-
-    if (!activeProjectId) {
-      state = deepClone(DEFAULT_STATE);
-      render();
-    }
-  }
-
-  function selectProject(projectId) {
-    const meta = projectIndex.projects.find(p => p.id === projectId);
-    if (!meta) return alert("프로젝트를 찾을 수 없습니다.");
-
-    // 현재 프로젝트 저장
-    if (activeProjectId) saveProjectState(activeProjectId);
-
-    // 새 프로젝트 로드
-    state = loadProjectState(projectId);
-
-    activeProjectId = projectId;
-    ProjectStore.saveActiveId(activeProjectId);
-
-    updateProjectHeaderUI();
-    render();
-  }
-
-  /* ============================
-     ✅ Render Main
-  ============================ */
-  function render() {
-    if (!$view) return;
-
-    applyTopSplitH();
-    renderTabs();
-
-    clear($view);
-
-    let node = null;
-    if (state.activeTab === "code") node = renderCodeTab();
-    else if (state.activeTab === "steel") node = renderCalcTab("steel", "철골");
-    else if (state.activeTab === "steel_sum") node = renderSummaryTab("steel", "철골_집계");
-    else if (state.activeTab === "steel_sub") node = renderCalcTab("steel_sub", "철골_부자재");
-    else if (state.activeTab === "support") node = renderCalcTab("support", "구조이기/동바리");
-    else if (state.activeTab === "support_sum") node = renderSummaryTab("support", "구조이기/동바리_집계");
-    else node = renderCodeTab();
-
-    $view.appendChild(node);
-
-    // sticky / heights patch
-    raf2(() => {
-      updateStickyVars();
-      applyPanelStickyTop();
-      updateViewFillHeight();
-      updateScrollHeights();
-
-      // (v13.2) 구분 포커스 복원
-      if (__pendingSectionFocus && __pendingSectionFocus.tabId === state.activeTab) {
-        const list = document.querySelector(`.section-list[data-tab="${__pendingSectionFocus.tabId}"]`);
-        const idx = __pendingSectionFocus.index;
-        const item = list?.querySelectorAll(".section-item")?.[idx];
-        raf2(() => safeFocus(item));
-        __pendingSectionFocus = null;
-      }
-    });
-  }
-
-  /* ============================
-   ✅ Init (DOM 준비 후 1회)
+   ✅ Project UI (index.html v22 1:1 매칭)
+   - 상단: btnProject / activeProjectBadge
+   - 모달: projectModal / projectTbody
+   - 모달버튼: btnProjectAdd / btnProjectDelete / btnProjectSave / btnProjectClose / btnProjectOpen
 ============================ */
+
+/** 상단 주요 버튼 잠금/해제 (코드선택/내보내기/가져오기/초기화) */
+function setTopButtonsEnabled(enabled) {
+  const btnOpen = document.getElementById("btnOpenPicker");
+  const btnExport = document.getElementById("btnExport");
+  const btnReset = document.getElementById("btnReset");
+  const fileImport = document.getElementById("fileImport");
+  const btnImportWrap = document.getElementById("btnImportWrap"); // label wrapper
+
+  if (btnOpen) btnOpen.disabled = !enabled;
+  if (btnExport) btnExport.disabled = !enabled;
+  if (btnReset) btnReset.disabled = !enabled;
+  if (fileImport) fileImport.disabled = !enabled;
+
+  // label wrapper는 disabled가 안 먹어서 스타일로 잠금
+  if (btnImportWrap) {
+    btnImportWrap.style.opacity = enabled ? "1" : "0.55";
+    btnImportWrap.style.pointerEvents = enabled ? "auto" : "none";
+    btnImportWrap.setAttribute("aria-disabled", enabled ? "false" : "true");
+  }
+
+  // 도움말은 항상 사용 가능
+  const help = document.getElementById("btnHelp");
+  if (help) help.disabled = false;
+}
+
+/** 상단 배지 + 버튼 잠금 상태 업데이트 */
+function updateProjectHeaderUI() {
+  const meta = projectIndex.projects.find(p => p.id === activeProjectId);
+  const badge = document.getElementById("activeProjectBadge");
+
+  if (badge) {
+    badge.textContent = meta ? `${meta.code || "-"} · ${meta.name || ""}` : "(미선택)";
+  }
+
+  setTopButtonsEnabled(!!meta);
+}
+
+/** 모달 열기 */
+function openProjectModal() {
+  const modal = document.getElementById("projectModal");
+  if (!modal) return;
+
+  modal.hidden = false;
+  modal.setAttribute("aria-hidden", "false");
+
+  // ✅ 테이블 렌더
+  renderProjectTable();
+
+  // ✅ 선택 상태 기본값(없으면 active 선택)
+  if (!__selectedProjectIdInModal && activeProjectId) {
+    __selectedProjectIdInModal = activeProjectId;
+    markSelectedRow(__selectedProjectIdInModal);
+  }
+}
+
+/** 모달 닫기 */
+function closeProjectModal() {
+  const modal = document.getElementById("projectModal");
+  if (!modal) return;
+
+  modal.hidden = true;
+  modal.setAttribute("aria-hidden", "true");
+}
+
+/** 모달 내부 선택 프로젝트 id */
+let __selectedProjectIdInModal = "";
+
+/** 선택 표시 */
+function markSelectedRow(pid) {
+  document.querySelectorAll("#projectTbody tr").forEach(tr => {
+    tr.classList.toggle("selected", tr.dataset.pid === pid);
+  });
+}
+
+/** 프로젝트 테이블 렌더 */
+function renderProjectTable() {
+  const tbody = document.getElementById("projectTbody");
+  if (!tbody) return;
+
+  tbody.innerHTML = "";
+
+  const items = projectIndex.projects
+    .slice()
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+  if (!items.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 3;
+    td.style.padding = "14px";
+    td.style.color = "rgba(90,90,97,1)";
+    td.style.fontWeight = "700";
+    td.textContent = "프로젝트가 없습니다. [추가]로 생성하세요.";
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  items.forEach(p => {
+    const tr = document.createElement("tr");
+    tr.dataset.pid = p.id;
+
+    // activeProjectId와 별개로 "모달 선택" 기준으로 하이라이트
+    const isSelected = (p.id === (__selectedProjectIdInModal || activeProjectId));
+    if (isSelected) tr.classList.add("selected");
+
+    const tdCode = document.createElement("td");
+    const tdName = document.createElement("td");
+    const tdDate = document.createElement("td");
+
+    const inpCode = document.createElement("input");
+    inpCode.className = "cell";
+    inpCode.value = p.code || "";
+    inpCode.placeholder = "공사코드";
+
+    const inpName = document.createElement("input");
+    inpName.className = "cell";
+    inpName.value = p.name || "";
+    inpName.placeholder = "프로젝트명";
+
+    // 입력 값은 meta에 즉시 반영(저장은 '저장' 버튼)
+    inpCode.addEventListener("input", () => { p.code = inpCode.value; });
+    inpName.addEventListener("input", () => { p.name = inpName.value; });
+
+    // 클릭하면 선택 표시
+    const pick = () => {
+      __selectedProjectIdInModal = p.id;
+      markSelectedRow(p.id);
+    };
+    tr.addEventListener("click", pick);
+    inpCode.addEventListener("click", (e) => { e.stopPropagation(); pick(); });
+    inpName.addEventListener("click", (e) => { e.stopPropagation(); pick(); });
+
+    tdCode.appendChild(inpCode);
+    tdName.appendChild(inpName);
+
+    const d = new Date(p.createdAt || p.updatedAt || Date.now());
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    tdDate.textContent = `${yyyy}-${mm}-${dd}`;
+
+    tr.appendChild(tdCode);
+    tr.appendChild(tdName);
+    tr.appendChild(tdDate);
+
+    tbody.appendChild(tr);
+  });
+}
+
+/** 프로젝트 추가 */
+function createProject() {
+  const pid = genId();
+  const meta = normalizeProjectMeta({ id: pid, name: "새 프로젝트", code: "" });
+
+  projectIndex.projects.push(meta);
+  saveProjectIndex(projectIndex);
+
+  // 신규 기본 상태 저장
+  ProjectStore.saveProjectState(pid, deepClone(DEFAULT_STATE));
+
+  // 모달에서 바로 선택
+  __selectedProjectIdInModal = pid;
+
+  renderProjectTable();
+  markSelectedRow(pid);
+}
+
+/** 모달에서 프로젝트 저장 */
+function saveProjectsFromModal() {
+  projectIndex.projects.forEach(p => {
+    p.name = (p.name || "").trim() || "새 프로젝트";
+    p.code = (p.code || "").trim();
+    p.updatedAt = Date.now();
+  });
+
+  saveProjectIndex(projectIndex);
+  renderProjectTable();
+  updateProjectHeaderUI();
+}
+
+/** 모달에서 선택 프로젝트 삭제 */
+function deleteSelectedProjectInModal() {
+  const pid = __selectedProjectIdInModal || activeProjectId;
+  if (!pid) return alert("삭제할 프로젝트를 선택해 주세요.");
+
+  const meta = projectIndex.projects.find(p => p.id === pid);
+  if (!confirm(`프로젝트를 삭제할까요?\n${meta?.name || ""} (${meta?.code || "-"})`)) return;
+
+  // active 삭제면 active 해제
+  if (pid === activeProjectId) {
+    try { saveProjectState(activeProjectId); } catch {}
+    activeProjectId = "";
+    ProjectStore.saveActiveId("");
+  }
+
+  projectIndex.projects = projectIndex.projects.filter(p => p.id !== pid);
+  saveProjectIndex(projectIndex);
+  ProjectStore.deleteProject(pid);
+
+  __selectedProjectIdInModal = "";
+
+  // 프로젝트가 0개면 하나 생성
+  if (projectIndex.projects.length === 0) {
+    const nid = genId();
+    const m = normalizeProjectMeta({ id: nid, name: "프로젝트 1", code: "" });
+    projectIndex.projects.push(m);
+    saveProjectIndex(projectIndex);
+    ProjectStore.saveProjectState(nid, deepClone(DEFAULT_STATE));
+  }
+
+  // active가 없으면 첫 프로젝트로
+  if (!activeProjectId) {
+    activeProjectId = projectIndex.projects[0].id;
+    ProjectStore.saveActiveId(activeProjectId);
+    state = loadProjectState(activeProjectId);
+  }
+
+  renderProjectTable();
+  updateProjectHeaderUI();
+  render();
+}
+
+/** 모달의 "선택 프로젝트 열기" */
+function openSelectedProjectFromModal() {
+  const pid = __selectedProjectIdInModal || activeProjectId;
+  if (!pid) return alert("열 프로젝트를 선택해 주세요.");
+
+  selectProject(pid);
+  closeProjectModal();
+}
+
+/** 프로젝트 선택(열기) */
+function selectProject(projectId) {
+  const meta = projectIndex.projects.find(p => p.id === projectId);
+  if (!meta) return alert("프로젝트를 찾을 수 없습니다.");
+
+  // 현재 프로젝트 저장
+  if (activeProjectId) saveProjectState(activeProjectId);
+
+  // 새 프로젝트 로드
+  state = loadProjectState(projectId);
+
+  activeProjectId = projectId;
+  ProjectStore.saveActiveId(activeProjectId);
+
+  updateProjectHeaderUI();
+  render();
+}
+
+/* ============================
+   ✅ Render Main (그대로 유지)
+============================ */
+function render() {
+  if (!$view) return;
+
+  applyTopSplitH();
+  renderTabs();
+
+  clear($view);
+
+  let node = null;
+  if (state.activeTab === "code") node = renderCodeTab();
+  else if (state.activeTab === "steel") node = renderCalcTab("steel", "철골");
+  else if (state.activeTab === "steel_sum") node = renderSummaryTab("steel", "철골_집계");
+  else if (state.activeTab === "steel_sub") node = renderCalcTab("steel_sub", "철골_부자재");
+  else if (state.activeTab === "support") node = renderCalcTab("support", "구조이기/동바리");
+  else if (state.activeTab === "support_sum") node = renderSummaryTab("support", "구조이기/동바리_집계");
+  else node = renderCodeTab();
+
+  $view.appendChild(node);
+
+  raf2(() => {
+    updateStickyVars();
+    applyPanelStickyTop();
+    updateViewFillHeight();
+    updateScrollHeights();
+
+    if (__pendingSectionFocus && __pendingSectionFocus.tabId === state.activeTab) {
+      const list = document.querySelector(`.section-list[data-tab="${__pendingSectionFocus.tabId}"]`);
+      const idx = __pendingSectionFocus.index;
+      const item = list?.querySelectorAll(".section-item")?.[idx];
+      raf2(() => safeFocus(item));
+      __pendingSectionFocus = null;
+    }
+  });
+}
+
+/* ============================
+   ✅ Init (DOM 준비 후 1회) — index.html v22 맞춤
+============================ */
+let __appInited = false;
 function initAppOnce() {
-  // DOM이 준비된 뒤에 바인딩
-  bindTopButtonsOnce(true);   // ✅ 강제 재시도 옵션
+  if (__appInited) return;
+  __appInited = true;
+
+  // ✅ 기존 상단 버튼 바인딩(너 파일에 있는 함수)
+  // (bindTopButtonsOnce의 시그니처가 다를 수 있어서 안전하게 호출)
+  try { bindTopButtonsOnce(); } catch {}
+
+  // ✅ 프로젝트 버튼/모달 바인딩 (여기서 핵심: btnProject)
+  const btnProject = document.getElementById("btnProject");
+  if (btnProject) btnProject.onclick = openProjectModal;
+
+  const btnProjectClose = document.getElementById("btnProjectClose");
+  if (btnProjectClose) btnProjectClose.onclick = closeProjectModal;
+
+  const btnProjectAdd = document.getElementById("btnProjectAdd");
+  if (btnProjectAdd) btnProjectAdd.onclick = createProject;
+
+  const btnProjectDelete = document.getElementById("btnProjectDelete");
+  if (btnProjectDelete) btnProjectDelete.onclick = deleteSelectedProjectInModal;
+
+  const btnProjectSave = document.getElementById("btnProjectSave");
+  if (btnProjectSave) btnProjectSave.onclick = saveProjectsFromModal;
+
+  const btnProjectOpen = document.getElementById("btnProjectOpen");
+  if (btnProjectOpen) btnProjectOpen.onclick = openSelectedProjectFromModal;
+
+  // backdrop 클릭 닫기
+  const modal = document.getElementById("projectModal");
+  if (modal) {
+    modal.addEventListener("click", (e) => {
+      const t = e.target;
+      if (t && t.getAttribute && t.getAttribute("data-close") === "1") closeProjectModal();
+    });
+  }
+
+  // ESC로 닫기
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const modal = document.getElementById("projectModal");
+    if (!modal) return;
+    if (modal.getAttribute("aria-hidden") === "false") closeProjectModal();
+  });
+
+  // ✅ 최초 UI 반영
   updateProjectHeaderUI();
   render();
 
@@ -2086,8 +2204,6 @@ if (document.readyState === "loading") {
 } else {
   initAppOnce();
 }
-);
 
-})();
 
 

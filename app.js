@@ -21,10 +21,19 @@
   "use strict";
 
   /***************
-   * Storage
-   ***************/
-  const LS_KEY = "FIN_WEB_STATE_V13_2A";   // ✅ v13.2a 전용 저장키(유지)
-  const LS_KEY_OLD = "FIN_WEB_STATE_V11"; // ✅ 기존 저장키(자동 마이그레이션용)
+ * Storage (✅ Project-ready)
+ * - 프로젝트 목록/선택/CRUD는 "index"로 관리
+ * - 실제 산출 데이터는 프로젝트별 key로 저장
+ * - 추후 서버 연동 시 adapter만 교체하면 됨
+ ***************/
+const PROJECT_INDEX_KEY  = "FIN_PROJECT_INDEX_V1";
+const PROJECT_ACTIVE_KEY = "FIN_PROJECT_ACTIVE_V1";
+const PROJECT_STATE_PREFIX = "FIN_PROJECT_STATE_V1::";
+
+// (기존 단일 저장키 마이그레이션용)
+const LS_KEY_OLD_SINGLE_V13 = "FIN_WEB_STATE_V13_2A";
+const LS_KEY_OLD_SINGLE_V11 = "FIN_WEB_STATE_V11";
+
 
   const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
@@ -209,53 +218,150 @@
     }
   };
 
+   /***************
+ * ✅ Project Store Adapter (Local now, Server later)
+ ***************/
+const ProjectStore = (() => {
+  // ---- Local adapter ----
+  const local = {
+    loadIndex() {
+      try {
+        const raw = localStorage.getItem(PROJECT_INDEX_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (!parsed || !Array.isArray(parsed.projects)) return { projects: [] };
+        return parsed;
+      } catch { return { projects: [] }; }
+    },
+    saveIndex(index) {
+      localStorage.setItem(PROJECT_INDEX_KEY, JSON.stringify(index));
+    },
+    loadActiveId() {
+      return localStorage.getItem(PROJECT_ACTIVE_KEY) || "";
+    },
+    saveActiveId(id) {
+      if (!id) localStorage.removeItem(PROJECT_ACTIVE_KEY);
+      else localStorage.setItem(PROJECT_ACTIVE_KEY, id);
+    },
+    loadProjectState(id) {
+      const k = PROJECT_STATE_PREFIX + id;
+      const raw = localStorage.getItem(k);
+      return raw ? JSON.parse(raw) : null;
+    },
+    saveProjectState(id, projectState) {
+      const k = PROJECT_STATE_PREFIX + id;
+      localStorage.setItem(k, JSON.stringify(projectState));
+    },
+    deleteProject(id) {
+      localStorage.removeItem(PROJECT_STATE_PREFIX + id);
+    }
+  };
+
+  // ---- Server adapter placeholder ----
+  // 나중에 서버 붙이면 아래 객체를 server로 구현해서 return만 바꾸면 됨.
+  // const server = { ...same methods... }
+
+  return local;
+})();
+
+function genId() {
+  // 충돌 방지용(서버 붙여도 무난)
+  return "p_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+}
+
+function normalizeProjectMeta(p) {
+  return {
+    id: String(p?.id || genId()),
+    name: String(p?.name || "새 프로젝트"),
+    code: String(p?.code || ""),
+    updatedAt: Number(p?.updatedAt || Date.now()),
+    createdAt: Number(p?.createdAt || Date.now()),
+  };
+}
+
+
   // ✅ (Patch) 구버전 LS_KEY(V11) 자동 마이그레이션
-  function getRawStateFromStorage() {
-    const rawNew = localStorage.getItem(LS_KEY);
-    if (rawNew) return { raw: rawNew, migrated: false };
+  /***************
+ * ✅ Project-aware load/save
+ ***************/
+function loadProjectIndex() {
+  const idx = ProjectStore.loadIndex();
+  return { projects: Array.isArray(idx.projects) ? idx.projects.map(normalizeProjectMeta) : [] };
+}
 
-    const rawOld = localStorage.getItem(LS_KEY_OLD);
-    if (rawOld) {
-      try { localStorage.setItem(LS_KEY, rawOld); } catch {}
-      return { raw: rawOld, migrated: true };
-    }
-    return { raw: null, migrated: false };
-  }
+   function saveState() {
+  if (!activeProjectId) return;           // ✅ 프로젝트 선택 전엔 저장 안 함
+  saveProjectState(activeProjectId);
+}
 
-  function loadState() {
-    try {
-      const { raw } = getRawStateFromStorage();
-      if (!raw) return deepClone(DEFAULT_STATE);
 
-      const parsed = JSON.parse(raw);
 
-      const s = { ...deepClone(DEFAULT_STATE), ...parsed };
-      s.codeMaster = Array.isArray(parsed?.codeMaster) ? parsed.codeMaster : deepClone(DEFAULT_CODE_MASTER);
+function saveProjectIndex(index) {
+  ProjectStore.saveIndex(index);
+}
 
-      for (const k of ["steel", "steel_sub", "support"]) {
-        if (!s[k] || !Array.isArray(s[k].sections) || s[k].sections.length === 0) {
-          s[k] = deepClone(DEFAULT_STATE[k]);
-        }
-        s[k].activeSection = clamp(Number(s[k].activeSection || 0), 0, s[k].sections.length - 1);
+function loadProjectState(projectId) {
+  try {
+    const parsed = ProjectStore.loadProjectState(projectId);
+    if (!parsed) return deepClone(DEFAULT_STATE);
+
+    const s = { ...deepClone(DEFAULT_STATE), ...parsed };
+    s.codeMaster = Array.isArray(parsed?.codeMaster) ? parsed.codeMaster : deepClone(DEFAULT_CODE_MASTER);
+
+    for (const k of ["steel", "steel_sub", "support"]) {
+      if (!s[k] || !Array.isArray(s[k].sections) || s[k].sections.length === 0) {
+        s[k] = deepClone(DEFAULT_STATE[k]);
       }
-
-      // ✅ ui
-      if (!s.ui || typeof s.ui !== "object") s.ui = deepClone(DEFAULT_STATE.ui);
-      s.ui.topSplitH = clamp(Number(s.ui.topSplitH ?? 190), 120, 520);
-
-      if (!TABS.some(t => t.id === s.activeTab)) s.activeTab = "code";
-      return s;
-    } catch (e) {
-      console.warn("loadState failed:", e);
-      return deepClone(DEFAULT_STATE);
+      s[k].activeSection = clamp(Number(s[k].activeSection || 0), 0, s[k].sections.length - 1);
     }
-  }
 
-  function saveState() {
-    localStorage.setItem(LS_KEY, JSON.stringify(state));
-  }
+    if (!s.ui || typeof s.ui !== "object") s.ui = deepClone(DEFAULT_STATE.ui);
+    s.ui.topSplitH = clamp(Number(s.ui.topSplitH ?? 190), 120, 520);
 
-  let state = loadState();
+    if (!TABS.some(t => t.id === s.activeTab)) s.activeTab = "code";
+    return s;
+  } catch (e) {
+    console.warn("loadProjectState failed:", e);
+    return deepClone(DEFAULT_STATE);
+  }
+}
+
+function saveProjectState(projectId) {
+  if (!projectId) return;
+  ProjectStore.saveProjectState(projectId, state);
+}
+
+
+  let projectIndex = loadProjectIndex();
+let activeProjectId = ProjectStore.loadActiveId();
+
+// ✅ (마이그레이션) 예전 단일키가 남아있으면 "마이그레이션 프로젝트"로 1회 옮김
+(function migrateLegacySingleToProjectOnce(){
+  const legacy = localStorage.getItem(LS_KEY_OLD_SINGLE_V13) || localStorage.getItem(LS_KEY_OLD_SINGLE_V11);
+  if (!legacy) return;
+
+  // 이미 프로젝트가 있으면 마이그레이션 생략
+  if (projectIndex.projects.length > 0) return;
+
+  try {
+    const parsed = JSON.parse(legacy);
+    const pid = genId();
+    const meta = normalizeProjectMeta({ id: pid, name: "마이그레이션 프로젝트", code: "LEGACY" });
+    projectIndex.projects.push(meta);
+    saveProjectIndex(projectIndex);
+    ProjectStore.saveActiveId(pid);
+    activeProjectId = pid;
+
+    // 상태 저장
+    ProjectStore.saveProjectState(pid, { ...deepClone(DEFAULT_STATE), ...parsed });
+
+    // 기존 키는 남겨도 되지만, 혼동 방지 위해 삭제 권장
+    // localStorage.removeItem(LS_KEY_OLD_SINGLE_V13);
+    // localStorage.removeItem(LS_KEY_OLD_SINGLE_V11);
+  } catch {}
+})();
+
+let state = activeProjectId ? loadProjectState(activeProjectId) : deepClone(DEFAULT_STATE);
+
 
   // ✅ (v13.2) 구분명 리스트 클릭/↑↓ 후 렌더링되면 포커스 복원
   let __pendingSectionFocus = null;
@@ -2259,15 +2365,188 @@ if (grid === "calc" || grid === "var") {
     saveState();
   }
 
-  function bindTopButtons() {
-    const btnHelp = document.getElementById("btnHelp");
-    const btnOpen = document.getElementById("btnOpenPicker");
-    const btnExport = document.getElementById("btnExport");
-    const btnReset = document.getElementById("btnReset");
-    const fileImport = document.getElementById("fileImport");
+   /***************
+ * ✅ Project UI (Open/Add/Edit/Delete/Select)
+ ***************/
+function setTopButtonsEnabled(enabled) {
+  const ids = ["btnOpenPicker", "btnExport", "fileImport", "btnReset"];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el instanceof HTMLInputElement) el.disabled = !enabled;
+    else el.disabled = !enabled;
+  });
 
-    if (btnHelp) btnHelp.onclick = openHelpWindow;
-    if (btnOpen) btnOpen.onclick = openCodePicker;
+  // 도움말은 항상 사용 가능
+  const help = document.getElementById("btnHelp");
+  if (help) help.disabled = false;
+}
+
+
+function updateProjectHeaderUI() {
+  const meta = projectIndex.projects.find(p => p.id === activeProjectId);
+  const $name = document.getElementById("projectName");
+  const $code = document.getElementById("projectCode");
+
+  if ($name) $name.textContent = meta ? meta.name : "프로젝트 미선택";
+  if ($code) $code.textContent = meta ? (`공사코드 ${meta.code || "-"}`) : "공사코드 -";
+
+  setTopButtonsEnabled(!!meta); // 프로젝트 선택 전에는 주요 기능 잠금
+}
+
+function openProjectModal() {
+  const modal = document.getElementById("projectModal");
+  if (!modal) return;
+  modal.hidden = false;
+  renderProjectList();
+}
+
+function closeProjectModal() {
+  const modal = document.getElementById("projectModal");
+  if (!modal) return;
+  modal.hidden = true;
+}
+
+function renderProjectList() {
+  const $list = document.getElementById("projectList");
+  if (!$list) return;
+  $list.innerHTML = "";
+
+  projectIndex.projects
+    .slice()
+    .sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0))
+    .forEach(p => {
+      const row = document.createElement("div");
+      row.className = "project-row" + (p.id === activeProjectId ? " active" : "");
+
+      const name = document.createElement("input");
+      name.className = "cell";
+      name.value = p.name;
+      name.placeholder = "프로젝트명";
+
+      const code = document.createElement("input");
+      code.className = "cell";
+      code.value = p.code;
+      code.placeholder = "공사코드";
+
+      const btnOpen = document.createElement("button");
+      btnOpen.className = "smallbtn";
+      btnOpen.textContent = "열기";
+      btnOpen.onclick = () => {
+        selectProject(p.id);
+        closeProjectModal();
+      };
+
+      const btnDel = document.createElement("button");
+      btnDel.className = "smallbtn";
+      btnDel.textContent = "삭제";
+      btnDel.onclick = () => {
+        if (!confirm(`프로젝트를 삭제할까요?\n${p.name} (${p.code})`)) return;
+        deleteProject(p.id);
+      };
+
+      const btnSave = document.createElement("button");
+      btnSave.className = "smallbtn";
+      btnSave.textContent = "저장";
+      btnSave.onclick = () => {
+        p.name = name.value.trim() || "새 프로젝트";
+        p.code = code.value.trim();
+        p.updatedAt = Date.now();
+        saveProjectIndex(projectIndex);
+        updateProjectHeaderUI();
+        renderProjectList();
+      };
+
+      row.appendChild(name);
+      row.appendChild(code);
+      row.appendChild(btnSave);
+      row.appendChild(btnOpen);
+      row.appendChild(btnDel);
+
+      $list.appendChild(row);
+    });
+}
+
+function createProject() {
+  const pid = genId();
+  const meta = normalizeProjectMeta({ id: pid, name: "새 프로젝트", code: "" });
+  projectIndex.projects.push(meta);
+  saveProjectIndex(projectIndex);
+
+  // 프로젝트 초기 상태 저장
+  ProjectStore.saveProjectState(pid, deepClone(DEFAULT_STATE));
+  renderProjectList();
+}
+
+function deleteProject(projectId) {
+  // active 삭제면 active 해제
+  if (projectId === activeProjectId) {
+    activeProjectId = "";
+    ProjectStore.saveActiveId("");
+  }
+  projectIndex.projects = projectIndex.projects.filter(p => p.id !== projectId);
+  saveProjectIndex(projectIndex);
+  ProjectStore.deleteProject(projectId);
+
+  updateProjectHeaderUI();
+  renderProjectList();
+
+  // active가 없어졌으면 화면도 기본으로
+  if (!activeProjectId) {
+    state = deepClone(DEFAULT_STATE);
+    render();
+  }
+}
+
+function selectProject(projectId) {
+  const meta = projectIndex.projects.find(p => p.id === projectId);
+  if (!meta) return;
+
+  // 현재 프로젝트 저장 후 전환
+  if (activeProjectId) saveProjectState(activeProjectId);
+
+  activeProjectId = projectId;
+  ProjectStore.saveActiveId(projectId);
+
+  meta.updatedAt = Date.now();
+  saveProjectIndex(projectIndex);
+
+  state = loadProjectState(activeProjectId);
+  updateProjectHeaderUI();
+  render();
+}
+
+
+  let __boundTopOnce = false;
+
+function bindTopButtons() {
+  if (__boundTopOnce) return;
+  __boundTopOnce = true;
+
+  const btnHelp = document.getElementById("btnHelp");
+  const btnOpen = document.getElementById("btnOpenPicker");
+  const btnExport = document.getElementById("btnExport");
+  const btnReset = document.getElementById("btnReset");
+  const fileImport = document.getElementById("fileImport");
+
+  const btnProjectOpen = document.getElementById("btnProjectOpen");
+  const btnProjectClose = document.getElementById("btnProjectClose");
+  const btnProjectAdd = document.getElementById("btnProjectAdd");
+  const projectModal = document.getElementById("projectModal");
+
+  if (btnHelp) btnHelp.onclick = openHelpWindow;
+  if (btnOpen) btnOpen.onclick = openCodePicker;
+  if (btnExport) btnExport.onclick = openExcelExportModal;
+  if (btnProjectOpen) btnProjectOpen.onclick = openProjectModal;
+  if (btnProjectClose) btnProjectClose.onclick = closeProjectModal;
+  if (btnProjectAdd) btnProjectAdd.onclick = createProject;
+
+  if (projectModal) {
+    projectModal.addEventListener("click", (e) => {
+      if (e.target === projectModal) closeProjectModal();
+    });
+  }
+
 
     if (btnExport) btnExport.onclick = () => {
       openExcelExportModal();
@@ -2290,15 +2569,14 @@ if (grid === "calc" || grid === "var") {
     };
 
     if (btnReset) btnReset.onclick = () => {
-      if (!confirm("정말 초기화할까요? (로컬 저장 데이터가 삭제됩니다)")) return;
+  if (!activeProjectId) return alert("먼저 프로젝트를 선택하세요.");
+  if (!confirm("정말 초기화할까요? (현재 프로젝트의 로컬 저장 데이터가 초기화됩니다)")) return;
 
-      // ✅ (Patch) 새키/구키 모두 삭제
-      localStorage.removeItem(LS_KEY);
-      localStorage.removeItem(LS_KEY_OLD);
+  ProjectStore.saveProjectState(activeProjectId, deepClone(DEFAULT_STATE));
+  state = loadProjectState(activeProjectId);
+  render();
+};
 
-      state = loadState();
-      render();
-    };
   }
 
   function applyPanelStickyTop() {

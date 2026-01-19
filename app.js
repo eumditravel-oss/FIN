@@ -1655,44 +1655,52 @@ const CODE_COL_INDEX = {
   }
 
   function moveCell(fromInput, dRow, dCol, pageJump = false) {
-    const { grid, tab, row, col } = parseCellDataset(fromInput);
-    if (!grid) return;
+  const { grid, tab, row, col } = parseCellDataset(fromInput);
+  if (!grid) return;
 
-    // row/col 범위 추정
-    let maxRow = 0;
-    let maxCol = 0;
+  // row/col 범위 추정
+  let maxRow = 0;
+  let maxCol = 0;
 
-    const all = grid === "code"
-      ? document.querySelectorAll(`input[data-grid="code"]`)
-      : document.querySelectorAll(`input[data-grid="${grid}"][data-tab="${tab}"]`);
+  const all = grid === "code"
+    ? document.querySelectorAll(`input[data-grid="code"]`)
+    : document.querySelectorAll(`input[data-grid="${grid}"][data-tab="${tab}"]`);
 
-    all.forEach((x) => {
-      const r = Number(x.dataset.row || 0);
-      const c = Number(x.dataset.col || 0);
-      if (r > maxRow) maxRow = r;
-      if (c > maxCol) maxCol = c;
-    });
+  all.forEach((x) => {
+    const r = Number(x.dataset.row || 0);
+    const c = Number(x.dataset.col || 0);
+    if (r > maxRow) maxRow = r;
+    if (c > maxCol) maxCol = c;
+  });
 
-    let nextRow = clamp(row + dRow, 0, maxRow);
-    let nextCol = clamp(col + dCol, 0, maxCol);
+  let nextRow = clamp(row + dRow, 0, maxRow);
+  let nextCol = clamp(col + dCol, 0, maxCol);
 
-    if (pageJump) {
-      // pageJump일 때는 scroller 높이 기준으로 row를 대략 이동
-      const sc = fromInput.closest(".calc-scroll");
-      if (sc) {
-        const rect = sc.getBoundingClientRect();
-        const rowH = 34; // 대략
-        const jump = Math.max(1, Math.floor(rect.height / rowH) - 1);
-        nextRow = clamp(row + (dRow > 0 ? jump : -jump), 0, maxRow);
-      }
-    }
-
-    const target = queryCell(grid, tab, nextRow, nextCol);
-    if (target) {
-      safeFocus(target);
-      ensureScrollIntoView(target);
+  if (pageJump) {
+    // pageJump일 때는 scroller 높이 기준으로 row를 대략 이동
+    const sc = fromInput.closest(".calc-scroll");
+    if (sc) {
+      const rect = sc.getBoundingClientRect();
+      const rowH = 34; // 대략
+      const jump = Math.max(1, Math.floor(rect.height / rowH) - 1);
+      nextRow = clamp(row + (dRow > 0 ? jump : -jump), 0, maxRow);
     }
   }
+
+  const target = queryCell(grid, tab, nextRow, nextCol);
+  if (target) {
+    // ✅ 포커스는 jump 방지 옵션 유지
+    safeFocus(target);
+
+    // ✅ 스크롤은 레이아웃 갱신 이후 확실히 보정(특히 PageUp/Down)
+    raf2(() => {
+      safeFocus(target);
+      ensureScrollIntoView(target);
+    });
+  }
+}
+
+
 
   function attachGridNav(container) {
     if (!container) return;

@@ -5,32 +5,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>코드 선택</title>
 
-  <!-- ✅ 메인과 동일 테마 사용 (메인과 버전 맞추기 권장) -->
+  <!-- ✅ 메인과 동일 테마 사용 -->
   <link rel="stylesheet" href="styles.css?v=22" />
 
-  <!-- ✅ picker 전용: 레이아웃만 최소 보정 (색/버튼/테이블은 styles.css가 담당) -->
+  <!-- ✅ picker 전용: 메인의 "페이지 스크롤 금지(overflow:hidden)"를 되돌리고,
+      메인 topbar + tabs 스타일을 picker에서도 그대로 재사용 -->
   <style>
-    /* styles.css에서 html,body overflow:hidden 강제하는 부분을 picker에서 해제 */
+    /* ============================
+       ✅ picker는 메인처럼 페이지 스크롤을 막으면 안 됨
+       (styles.css에서 html,body overflow:hidden 강제중이라 picker에서 해제)
+    ============================ */
     html, body{
       height: auto !important;
       overflow: auto !important;
       overflow-x: hidden !important;
     }
-
     body{
-      display:block;
-      padding: 14px;
-      margin: 0;
+      display: block !important;
+      padding: 0 !important;
+      margin: 0 !important;
     }
 
-    .picker-wrap{
-      max-width: 1100px;
+    /* picker는 content만 쓰고 tabs는 숨김(필요하면 보여도 됨) */
+    .tabs{ display:none !important; }
+
+    /* ============================
+       ✅ picker 레이아웃
+    ============================ */
+    .picker-page{
+      max-width: 1200px;
       margin: 0 auto;
+      padding: 12px 16px 18px;
     }
 
     .picker-head{
       display:flex;
-      align-items:flex-start;
+      align-items:center;
       justify-content:space-between;
       gap:12px;
       margin-bottom: 10px;
@@ -40,13 +50,11 @@
       font-size: 18px;
       letter-spacing: -0.2px;
       color: var(--accent);
-      line-height: 1.15;
     }
     .picker-sub{
-      margin-top: 4px;
+      margin-top: 2px;
       font-size: 12px;
       color: var(--muted);
-      line-height: 1.55;
     }
 
     .picker-tools{
@@ -61,7 +69,7 @@
       gap:8px;
       flex-wrap:wrap;
       align-items:center;
-      margin: 10px 0 10px;
+      margin: 10px 0 8px;
     }
     .picker-bar select,
     .picker-bar input{
@@ -78,27 +86,48 @@
       min-width: 220px;
     }
 
-    /* ✅ 메인 테마의 table-wrap을 그대로 쓰기 위한 최소 보정 */
+    /* 테이블 영역 */
     .picker-tablewrap{
-      max-height: 70vh;
+      border:1px solid var(--line);
+      border-radius: 16px;
+      overflow:auto;
+      background: rgba(255,255,255,.55);
+      box-shadow: var(--shadow);
+      max-height: calc(100vh - 260px); /* 상단 topbar 높이 고려 */
     }
-
     .picker-table{
-      width: 100%;
-      min-width: 980px; /* 기존 유지 */
+      width:100%;
+      min-width: 980px;
       border-collapse: separate;
       border-spacing: 0;
       font-size: 12px;
     }
+    .picker-table thead th{
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: rgba(250,250,250,.98);
+      border-bottom: 2px solid rgba(240,138,36,.55);
+      padding: 10px 10px;
+      text-align:left;
+      font-weight: 1000;
+      white-space: nowrap;
+    }
+    .picker-table tbody td{
+      border-bottom: 1px solid rgba(0,0,0,.06);
+      padding: 8px 10px;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
 
-    /* 커서/선택 스타일 (테마 색 유지) */
+    /* 커서/선택 스타일(메인 테마 톤으로 맞춤) */
     tr.cursor td{
-      outline: 2px solid rgba(26,61,124,.18);
+      outline: 2px solid rgba(240,138,36,.35);
       outline-offset: -2px;
-      background: rgba(26,61,124,.05);
+      background: rgba(240,138,36,.08);
     }
     tr.sel td{
-      background: rgba(240,138,36,.10);
+      background: rgba(240,138,36,.12);
     }
 
     .picker-foot{
@@ -114,13 +143,53 @@
       color: var(--muted);
       font-size: 12px;
       line-height: 1.6;
-      white-space: nowrap;
     }
+
+    /* ============================
+       ✅ picker 전용: topbar 안에서 버튼들 보기 좋게
+    ============================ */
+    .picker-actions{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:flex-end;
+    }
+
+    /* favicon 404는 기능상 문제 없음(없애고 싶으면 아래처럼 favicon 추가하면 됨) */
   </style>
+
+  <!-- (선택) favicon 404 없애기: assets/favicon.ico 올리면 해결 -->
+  <!-- <link rel="icon" href="assets/favicon.ico"> -->
 </head>
 
 <body>
-  <div class="picker-wrap">
+  <!-- ======================
+       ✅ picker도 메인 topbar 그대로
+       ====================== -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-main">
+        <!-- ✅ 로고 (메인과 동일) -->
+        <img class="brand-logo" src="assets/logo.png" alt="로고" />
+        <div class="brand-text">
+          <div class="title">Viet QS FIN 산출프로그램</div>
+          <div class="sub">Viet QS x Con-cost Tool</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- picker 전용 오른쪽 버튼 -->
+    <div class="picker-actions">
+      <button id="btnInsert" class="btn">삽입(Ctrl+Enter)</button>
+      <button id="btnClose" class="btn ghost">닫기(Esc)</button>
+    </div>
+  </header>
+
+  <!-- ======================
+       ✅ picker 본문
+       ====================== -->
+  <main class="picker-page">
     <div class="panel">
       <div class="picker-head">
         <div>
@@ -128,11 +197,6 @@
           <div class="picker-sub">
             Ctrl+B 선택토글 · Shift+↑/↓ 블록선택 · Ctrl+Enter 삽입/닫기 · Esc 닫기
           </div>
-        </div>
-
-        <div class="picker-tools">
-          <button id="btnInsert" class="btn">삽입(Ctrl+Enter)</button>
-          <button id="btnClose" class="btn ghost">닫기(Esc)</button>
         </div>
       </div>
 
@@ -145,11 +209,10 @@
         </select>
 
         <input id="q" type="text" placeholder="검색어 입력 후 Enter (미입력 = 전체)" />
-        <div id="pickInfo" class="picker-sub" style="margin:0; white-space:nowrap;"></div>
+        <div id="pickInfo" class="picker-sub"></div>
       </div>
 
-      <!-- ✅ 여기 핵심: picker-tablewrap은 메인 테마(table-wrap)를 같이 부여 -->
-      <div class="table-wrap picker-tablewrap">
+      <div class="picker-tablewrap">
         <table class="picker-table">
           <thead>
             <tr>
@@ -171,9 +234,8 @@
         <div class="picker-hotkeys" id="originInfo"></div>
       </div>
     </div>
-  </div>
+  </main>
 
-  <!-- ✅ 캐시 방지: 버전 올리기 권장 -->
-  <script src="picker.js?v=31"></script>
+  <script src="picker.js?v=30"></script>
 </body>
 </html>

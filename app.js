@@ -784,7 +784,21 @@
     return table;
   }
 
-  const CODE_COL_INDEX = { code: 0, name: 1, spec: 2, unit: 3, surcharge: 4, convUnit: 5, convFactor: 6, note: 7 };
+    // ✅ Calc table 실제 열 번호 (No 포함 0~10 기준)
+  // 0:No, 1:code, 2:name, 3:spec, 4:unit, 5:formula, 6:value, 7:surchargePct, 8:convUnit, 9:convFactor, 10:converted
+  const CALC_COL_INDEX = {
+    code: 1,
+    name: 2,
+    spec: 3,
+    unit: 4,
+    formula: 5,
+    value: 6,
+    surchargePct: 7,
+    convUnit: 8,
+    convFactor: 9,
+    converted: 10,
+  };
+
 
   function tdInput(scope, rowIndex, field, value, opts = {}) {
     const ds =
@@ -1189,118 +1203,103 @@
     table.appendChild(thead);
     table.appendChild(tbody);
 
-    raf2(() => __applyCalcRowSelectionStyles(tabId));
+        raf2(() => __applyCalcRowSelectionStyles(tabId));
 
-    // ✅ (전역/상단 어딘가에 1회만 선언) — buildCalcTable 밖
-const CALC_COL_INDEX = {
-  code: 1,
-  name: 2,
-  spec: 3,
-  unit: 4,
-  formula: 5,
-  value: 6,
-  surchargePct: 7,
-  convUnit: 8,
-  convFactor: 9,
-  converted: 10,
-};
+    // ✅ buildCalcTable 내부 keydown (중간생략 없음)
+    table.addEventListener("keydown", (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLInputElement)) return;
+      if (t.dataset.grid !== "calc") return;
 
-...
+      // 편집 중이면 Enter로 편집 종료만 허용
+      if (t.dataset.editing === "1") {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          delete t.dataset.editing;
+          t.blur();
+          raf2(() => safeFocus(t));
+        }
+        return;
+      }
 
-// ✅ buildCalcTable 내부의 keydown 핸들러는 아래로 “통째 교체”
-table.addEventListener("keydown", (e) => {
-  const t = e.target;
-  if (!(t instanceof HTMLInputElement)) return;
-  if (t.dataset.grid !== "calc") return;
+      const curRow = Number(t.dataset.row || 0);
 
-  // 편집 중이면 Enter로 편집 종료만 허용
-  if (t.dataset.editing === "1") {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      delete t.dataset.editing;
-      t.blur();
-      raf2(() => safeFocus(t));
-    }
-    return;
-  }
+      // ESC: 다중선택 종료
+      if (e.key === "Escape") {
+        if (__calcMulti.active) {
+          e.preventDefault();
+          __calcMultiClear();
+          __applyCalcRowSelectionStyles(tabId);
+        }
+        return;
+      }
 
-  const curRow = Number(t.dataset.row || 0);
+      // Shift+B: 다중선택 토글
+      if ((e.key === "B" || e.key === "b") && e.shiftKey) {
+        e.preventDefault();
+        if (!__calcMultiIsSameContext(tabId)) __calcMultiBegin(tabId, curRow);
+        else __calcMultiClear();
+        __applyCalcRowSelectionStyles(tabId);
+        return;
+      }
 
-  // ESC: 다중선택 종료
-  if (e.key === "Escape") {
-    if (__calcMulti.active) {
-      e.preventDefault();
-      __calcMultiClear();
-      __applyCalcRowSelectionStyles(tabId);
-    }
-    return;
-  }
+      // Shift+↑/↓ : 다중선택 범위 확장 + 포커스 이동
+      if ((e.key === "ArrowUp" || e.key === "ArrowDown") && e.shiftKey) {
+        e.preventDefault();
 
-  // Shift+B: 다중선택 토글
-  if ((e.key === "B" || e.key === "b") && e.shiftKey) {
-    e.preventDefault();
-    if (!__calcMultiIsSameContext(tabId)) __calcMultiBegin(tabId, curRow);
-    else __calcMultiClear();
-    __applyCalcRowSelectionStyles(tabId);
-    return;
-  }
+        const bucket = state[tabId];
+        const sec = bucket.sections[bucket.activeSection];
 
-  // Shift+↑/↓ : 다중선택 범위 확장 + 포커스 이동
-  if ((e.key === "ArrowUp" || e.key === "ArrowDown") && e.shiftKey) {
-    e.preventDefault();
+        const next = clamp(
+          curRow + (e.key === "ArrowDown" ? 1 : -1),
+          0,
+          sec.rows.length - 1
+        );
 
-    const bucket = state[tabId];
-    const sec = bucket.sections[bucket.activeSection];
+        if (!__calcMultiIsSameContext(tabId)) __calcMultiBegin(tabId, curRow);
+        __calcMultiSetRange(tabId, __calcMulti.anchorRow ?? curRow, next);
+        __applyCalcRowSelectionStyles(tabId);
 
-    const next = clamp(
-      curRow + (e.key === "ArrowDown" ? 1 : -1),
-      0,
-      sec.rows.length - 1
-    );
+        raf2(() => {
+          const col = t.dataset.col || String(CALC_COL_INDEX.code);
+          const target = document.querySelector(
+            `input[data-grid="calc"][data-tab="${tabId}"][data-row="${next}"][data-col="${col}"]`
+          );
+          safeFocus(target);
+          ensureScrollIntoView(target);
+        });
+        return;
+      }
 
-    if (!__calcMultiIsSameContext(tabId)) __calcMultiBegin(tabId, curRow);
-    __calcMultiSetRange(tabId, __calcMulti.anchorRow ?? curRow, next);
-    __applyCalcRowSelectionStyles(tabId);
+      // Ctrl+Del: 선택행 삭제(없으면 현재행)
+      if ((e.key === "Delete" || e.key === "Del") && e.ctrlKey) {
+        e.preventDefault();
+        const selected = __getSelectedCalcRows(tabId);
+        const targets = selected.length ? selected : [curRow];
+        if (!confirm(`선택된 ${targets.length}행을 삭제할까요?`)) return;
+        deleteCalcRows(tabId, targets);
+        __calcMultiClear();
+        return;
+      }
 
-    raf2(() => {
-      const col = t.dataset.col || String(CALC_COL_INDEX.code);
-      const target = document.querySelector(
-        `input[data-grid="calc"][data-tab="${tabId}"][data-row="${next}"][data-col="${col}"]`
-      );
-      safeFocus(target);
-      ensureScrollIntoView(target);
-    });
-    return;
-  }
+      // Del(단독): 현재행 삭제
+      if ((e.key === "Delete" || e.key === "Del") && !e.ctrlKey) {
+        e.preventDefault();
+        if (!confirm("현재 행을 삭제할까요?")) return;
+        deleteCalcRows(tabId, [curRow]);
+        return;
+      }
 
-  // Ctrl+Del: 선택행 삭제(없으면 현재행)
-  if ((e.key === "Delete" || e.key === "Del") && e.ctrlKey) {
-    e.preventDefault();
-    const selected = __getSelectedCalcRows(tabId);
-    const targets = selected.length ? selected : [curRow];
-    if (!confirm(`선택된 ${targets.length}행을 삭제할까요?`)) return;
-    deleteCalcRows(tabId, targets);
-    __calcMultiClear();
-    return;
-  }
+      // Ctrl+G: 선택행 복사/삽입
+      if ((e.key === "g" || e.key === "G") && e.ctrlKey) {
+        e.preventDefault();
+        const selected = __getSelectedCalcRows(tabId);
+        if (!selected.length) return;
+        duplicateCalcRows(tabId, selected, curRow);
+        return;
+      }
+    }, true);
 
-  // Del(단독): 현재행 삭제
-  if ((e.key === "Delete" || e.key === "Del") && !e.ctrlKey) {
-    e.preventDefault();
-    if (!confirm("현재 행을 삭제할까요?")) return;
-    deleteCalcRows(tabId, [curRow]);
-    return;
-  }
-
-  // Ctrl+G: 선택행 복사/삽입
-  if ((e.key === "g" || e.key === "G") && e.ctrlKey) {
-    e.preventDefault();
-    const selected = __getSelectedCalcRows(tabId);
-    if (!selected.length) return;
-    duplicateCalcRows(tabId, selected, curRow);
-    return;
-  }
-}, true);
 
 
     // ✅ input 변화가 있을 때 재계산 + 저장 + 렌더 반영
@@ -2167,8 +2166,17 @@ function render() {
 ============================ */
 let __appInited = false;
 function initAppOnce() {
+  console.log("[FIN] initAppOnce fired");
   if (__appInited) return;
   __appInited = true;
+
+     if (btnProject) {
+    btnProject.onclick = () => {
+      console.log("[FIN] btnProject clicked");
+      openProjectModal();
+    };
+  }
+
 
   // ✅ 기존 상단 버튼 바인딩(너 파일에 있는 함수)
   // (bindTopButtonsOnce의 시그니처가 다를 수 있어서 안전하게 호출)

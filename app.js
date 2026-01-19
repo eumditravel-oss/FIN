@@ -2015,32 +2015,31 @@ if (!window.__finPickerMsgBound) {
   const codes = Array.isArray(msg.selectedCodes) ? msg.selectedCodes : [];
   if (!codes.length) return;
 
-  // 대상 탭이 calc 탭인지 확인
   const isCalc = (tabId === "steel" || tabId === "steel_sub" || tabId === "support");
   if (!isCalc) return;
 
   const bucket = state[tabId];
   const sec = bucket.sections[bucket.activeSection];
 
-  const insertPos = clamp(focusRow, 0, sec.rows.length); // ✅ 삽입 위치
+  // ✅ 핵심: "현재 행 아래"에 삽입 (아래 행 전체가 밀림)
+  const insertPos = clamp(focusRow + 1, 0, sec.rows.length);
 
-  // ✅ (중요) 선택 개수만큼 "새 행"을 insertPos에 삽입 (기존 행은 아래로 밀림)
+  // ✅ 선택 개수만큼 새 행을 insertPos에 끼워넣기
   const newRows = Array.from({ length: codes.length }, () => defaultCalcRow());
   sec.rows.splice(insertPos, 0, ...newRows);
 
-  // ✅ 새로 삽입된 행들에 코드 채우기
+  // ✅ 새로 생긴 행에 코드 채우기
   codes.forEach((c, i) => {
     const r = sec.rows[insertPos + i];
     if (!r) return;
     r.code = String(c || "").trim();
   });
 
-  // ✅ 재계산 + 저장 + UI 갱신
   recomputeSection(tabId);
   saveState();
   render();
 
-  // ✅ 포커스 이동 (삽입 시작 행 코드셀)
+  // ✅ 포커스는 첫 삽입 행의 코드칸으로
   raf2(() => {
     const target = document.querySelector(
       `input[data-grid="calc"][data-tab="${tabId}"][data-row="${insertPos}"][data-col="${CALC_COL_INDEX.code}"]`
@@ -2049,6 +2048,7 @@ if (!window.__finPickerMsgBound) {
     ensureScrollIntoView(target);
   });
 }
+
 
 
 

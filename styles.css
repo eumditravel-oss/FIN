@@ -107,15 +107,15 @@ body{
 .brand-main{
   display:flex;
   align-items:center;
-  gap:10px;
+  gap:14px;          /* 로고 커지니까 간격도 살짝 증가 */
 }
 
 .brand-logo{
-  width: 46px;
-  height: 46px;
-  object-fit: contain;
-  display:block;
+  height: 50px;      /* ✅ 기존 대비 약 2.5배 */
+  width: auto;       /* ✅ 비율 유지 */
+  display: block;
 }
+
 
 .brand-text{
   display:flex;

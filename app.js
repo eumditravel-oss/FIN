@@ -440,6 +440,30 @@
     return [...__calcMulti.rows].sort((a, b) => a - b);
   }
 
+
+   // ✅ [추가] Ctrl+B에서 "현재 행 선택 토글"을 만들기 위한 함수
+function __calcMultiToggleRow(tabId, row) {
+  const bucket = state?.[tabId];
+  const secIdx = bucket?.activeSection ?? 0;
+  const maxRow = (bucket?.sections?.[secIdx]?.rows?.length ?? 1) - 1;
+  const r = clamp(Number(row || 0), 0, Math.max(0, maxRow));
+
+  // 컨텍스트 다르면 시작(=첫 선택은 anchor로)
+  if (!__calcMultiIsSameContext(tabId)) {
+    __calcMultiBegin(tabId, r);
+    return;
+  }
+
+  // 같은 컨텍스트면 현재 row 토글
+  if (__calcMulti.rows.has(r)) __calcMulti.rows.delete(r);
+  else __calcMulti.rows.add(r);
+
+  // 전부 해제됐으면 모드도 종료
+  if (__calcMulti.rows.size === 0) __calcMultiClear();
+}
+
+   
+
   /***************
    * DOM
    ***************/
@@ -2353,27 +2377,25 @@ function bindGlobalHotkeysOnce() {
     //   Ctrl+B도 같은 동작을 하도록 매핑
     // -------------------------
     if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === "b" || e.key === "B")) {
-      // 텍스트 입력 중 Ctrl+B는 브라우저 기본(굵게)일 수 있어서 항상 막고 커스텀 사용
-      e.preventDefault();
-      e.stopPropagation();
+  e.preventDefault();
+  e.stopPropagation();
 
-      // calc 탭(steel/steel_sub/support)에서만 의미가 있음
-      const tabId = state.activeTab;
-      const isCalc = (tabId === "steel" || tabId === "steel_sub" || tabId === "support");
-      if (!isCalc) return;
+  const tabId = state.activeTab;
+  const isCalc = (tabId === "steel" || tabId === "steel_sub" || tabId === "support");
+  if (!isCalc) return;
 
-      // 현재 포커스된 calc 셀의 row를 기준으로 토글
-      let curRow = 0;
-      if (ae instanceof HTMLInputElement && ae.dataset.grid === "calc" && ae.dataset.tab === tabId) {
-        curRow = Number(ae.dataset.row || 0);
-      }
+  // 현재 포커스된 calc 셀 row 기준
+  let curRow = 0;
+  if (ae instanceof HTMLInputElement && ae.dataset.grid === "calc" && ae.dataset.tab === tabId) {
+    curRow = Number(ae.dataset.row || 0);
+  }
 
-      if (!__calcMultiIsSameContext(tabId)) __calcMultiBegin(tabId, curRow);
-      else __calcMultiClear();
+  // ✅ Ctrl+B = 현재 행 선택 토글 (추가/해제)
+  __calcMultiToggleRow(tabId, curRow);
+  __applyCalcRowSelectionStyles(tabId);
+  return;
+}
 
-      __applyCalcRowSelectionStyles(tabId);
-      return;
-    }
 
     // -------------------------
     // Ctrl + F3 : 현재 행 아래 행 추가

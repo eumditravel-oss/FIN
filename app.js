@@ -1881,6 +1881,127 @@ function bindTopButtonsOnce(forceRetry = false) {
 }
 
 
+   /* ============================
+   ✅ Code Picker Window (picker.html + picker.js 연동)
+   - Ctrl+. 또는 버튼으로 열기
+   - INIT 메시지로 codes 전달
+   - picker → INSERT_SELECTED 수신 후 calc/code 셀에 반영
+============================ */
+
+let __pickerWin = null;
+
+function getActiveCalcFocusRow(tabId) {
+  const ae = document.activeElement;
+  if (ae instanceof HTMLInputElement && ae.dataset.grid === "calc" && ae.dataset.tab === tabId) {
+    return clamp(Number(ae.dataset.row || 0), 0, 999999);
+  }
+  return 0;
+}
+
+function openPickerWindow() {
+  // code 탭에서는 의미가 애매하니(필요하면 허용 가능) 우선 산출탭에서만 사용 권장
+  const tabId = state.activeTab;
+
+  const isCalc = (tabId === "steel" || tabId === "steel_sub" || tabId === "support");
+  if (!isCalc) {
+    alert("코드 선택은 산출 탭(철골/부자재/동바리)에서 사용해 주세요.");
+    return;
+  }
+
+  const focusRow = getActiveCalcFocusRow(tabId);
+
+  // picker.html 열기 (같은 폴더에 있어야 함)
+  const w = window.open("picker.html", "FIN_PICKER", "width=1100,height=820");
+  if (!w) {
+    alert("팝업이 차단되었습니다. 브라우저에서 팝업 허용 후 다시 시도해 주세요.");
+    return;
+  }
+  __pickerWin = w;
+
+  // ✅ picker.js가 INIT을 받을 때까지 약간 딜레이/재시도
+  const payload = {
+    type: "INIT",
+    originTab: tabId,
+    focusRow,
+    codes: Array.isArray(state.codeMaster) ? state.codeMaster.map(x => ({
+      code: x.code || "",
+      name: x.name || "",
+      spec: x.spec || "",
+      unit: x.unit || "",
+      surcharge: (x.surcharge ?? ""),
+      conv_unit: (x.convUnit || ""),
+      conv_factor: (x.convFactor ?? ""),
+    })) : []
+  };
+
+  let tries = 0;
+  const timer = setInterval(() => {
+    tries++;
+    try {
+      w.postMessage(payload, window.location.origin);
+    } catch {}
+    if (tries >= 20) clearInterval(timer);
+  }, 120);
+}
+
+// ✅ picker → 메인으로 삽입 요청 수신
+if (!window.__finPickerMsgBound) {
+  window.__finPickerMsgBound = true;
+
+  window.addEventListener("message", (event) => {
+    if (event.origin !== window.location.origin) return;
+    const msg = event.data;
+    if (!msg || typeof msg !== "object") return;
+
+    // picker가 닫힐 때 알림(선택사항)
+    if (msg.type === "CLOSE_PICKER") {
+      try { __pickerWin = null; } catch {}
+      return;
+    }
+
+    if (msg.type === "INSERT_SELECTED") {
+      const tabId = msg.originTab;
+      const focusRow = Number(msg.focusRow || 0);
+      const codes = Array.isArray(msg.selectedCodes) ? msg.selectedCodes : [];
+      if (!codes.length) return;
+
+      // 대상 탭이 calc 탭인지 확인
+      const isCalc = (tabId === "steel" || tabId === "steel_sub" || tabId === "support");
+      if (!isCalc) return;
+
+      const bucket = state[tabId];
+      const sec = bucket.sections[bucket.activeSection];
+
+      // rows 길이 보정(삽입 행 수만큼 부족하면 추가)
+      while (sec.rows.length < focusRow + codes.length) {
+        sec.rows.push(defaultCalcRow());
+      }
+
+      // focusRow부터 순서대로 code 채움
+      codes.forEach((c, i) => {
+        const r = sec.rows[focusRow + i];
+        if (!r) return;
+        r.code = String(c || "").trim();
+      });
+
+      // 재계산 + 저장 + UI 갱신
+      recomputeSection(tabId);
+      saveState();
+      render();
+
+      // 포커스 이동 (삽입 시작 행 코드셀)
+      raf2(() => {
+        const target = document.querySelector(
+          `input[data-grid="calc"][data-tab="${tabId}"][data-row="${focusRow}"][data-col="${CALC_COL_INDEX.code}"]`
+        );
+        safeFocus(target);
+        ensureScrollIntoView(target);
+      });
+    }
+  }, true);
+}
+
+
 
   /* ============================
    ✅ Project UI (index.html v22 1:1 매칭)

@@ -109,14 +109,19 @@
       const bottomPad = 12;
 
       const panel = sc.closest(".panel");
-      let h = 0;
+let h = 0;
 
-      if (panel instanceof HTMLElement) {
-        const panelRect = panel.getBoundingClientRect();
-        h = Math.floor(panelRect.bottom - scRect.top - bottomPad);
-      } else {
-        h = Math.floor(viewportH - scRect.top - bottomPad);
-      }
+if (panel instanceof HTMLElement) {
+  const panelRect = panel.getBoundingClientRect();
+
+  // ✅ 패널이 화면 밖으로 내려가도, 계산 기준은 "뷰포트 바닥"까지만
+  const bottom = Math.min(panelRect.bottom, viewportH);
+
+  h = Math.floor(bottom - scRect.top - bottomPad);
+} else {
+  h = Math.floor(viewportH - scRect.top - bottomPad);
+}
+
 
       h = clamp(h, 160, 20000);
 
@@ -509,16 +514,28 @@ function __calcMultiToggleRow(tabId, row) {
   }
 
   function updateViewFillHeight() {
-    const view = document.getElementById("view");
-    if (!view) return;
+  const view = document.getElementById("view");
+  if (!view) return;
 
-    const scale = getUiScale();
-    const vh = window.innerHeight || document.documentElement.clientHeight || 800;
-    const target = Math.ceil(vh / scale);
+  const scale = getUiScale();
+  const vh = window.innerHeight || document.documentElement.clientHeight || 800;
 
-    view.style.height = `${target}px`;
-    view.style.minHeight = `${target}px`;
-  }
+  const topbar = document.querySelector(".topbar");
+  const tabs = document.querySelector(".tabs");
+
+  const topbarH = topbar ? topbar.getBoundingClientRect().height : 0;
+  const tabsH = tabs ? tabs.getBoundingClientRect().height : 0;
+
+  // ✅ view는 "상단(topbar+tabs) 제외한 나머지"만 차지해야 함
+  const available = Math.max(200, vh - Math.ceil(topbarH + tabsH));
+
+  // ✅ uiScale이 transform 기반이면 실제 px로 맞추기 위해 scale로 보정
+  const target = Math.ceil(available / scale);
+
+  view.style.height = `${target}px`;
+  view.style.minHeight = `${target}px`;
+}
+
 
   /***************
    * Helpers: Code master lookup

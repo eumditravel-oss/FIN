@@ -2170,55 +2170,32 @@ function initAppOnce() {
   if (__appInited) return;
   __appInited = true;
 
-     if (btnProject) {
-    btnProject.onclick = () => {
-      console.log("[FIN] btnProject clicked");
-      openProjectModal();
-    };
-  }
+  // ✅ 1) 먼저 상단 버튼들(프로젝트 포함)을 bindTopButtonsOnce에서 바인딩
+  //    (여기 안에서 btnProject를 이미 getElementById로 잡고 onclick을 걸어줌)
+  try { bindTopButtonsOnce(); } catch (e) { console.warn(e); }
 
+  // ✅ 2) initAppOnce에서 다시 btnProject를 “중복 바인딩”하지 않는다
+  //    (중복 바인딩은 필요 없고, TDZ 에러 원인이 됐음)
 
-  // ✅ 기존 상단 버튼 바인딩(너 파일에 있는 함수)
-  // (bindTopButtonsOnce의 시그니처가 다를 수 있어서 안전하게 호출)
-  try { bindTopButtonsOnce(); } catch {}
-
-  // ✅ 프로젝트 버튼/모달 바인딩 (여기서 핵심: btnProject)
-  const btnProject = document.getElementById("btnProject");
-  if (btnProject) btnProject.onclick = openProjectModal;
-
-  const btnProjectClose = document.getElementById("btnProjectClose");
-  if (btnProjectClose) btnProjectClose.onclick = closeProjectModal;
-
-  const btnProjectAdd = document.getElementById("btnProjectAdd");
-  if (btnProjectAdd) btnProjectAdd.onclick = createProject;
-
-  const btnProjectDelete = document.getElementById("btnProjectDelete");
-  if (btnProjectDelete) btnProjectDelete.onclick = deleteSelectedProjectInModal;
-
-  const btnProjectSave = document.getElementById("btnProjectSave");
-  if (btnProjectSave) btnProjectSave.onclick = saveProjectsFromModal;
-
-  const btnProjectOpen = document.getElementById("btnProjectOpen");
-  if (btnProjectOpen) btnProjectOpen.onclick = openSelectedProjectFromModal;
-
-  // backdrop 클릭 닫기
+  // ✅ 3) 모달 닫기(backdrop/ESC)는 1회만 걸리도록 가드 추가
   const modal = document.getElementById("projectModal");
-  if (modal) {
+  if (modal && !modal.__finModalBound) {
+    modal.__finModalBound = true;
+
     modal.addEventListener("click", (e) => {
       const t = e.target;
       if (t && t.getAttribute && t.getAttribute("data-close") === "1") closeProjectModal();
     });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      const m = document.getElementById("projectModal");
+      if (!m) return;
+      if (m.getAttribute("aria-hidden") === "false") closeProjectModal();
+    });
   }
 
-  // ESC로 닫기
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    const modal = document.getElementById("projectModal");
-    if (!modal) return;
-    if (modal.getAttribute("aria-hidden") === "false") closeProjectModal();
-  });
-
-  // ✅ 최초 UI 반영
+  // ✅ 4) 최초 UI 반영
   updateProjectHeaderUI();
   render();
 
@@ -2229,6 +2206,7 @@ function initAppOnce() {
     updateScrollHeights();
   });
 }
+
 
 // DOMContentLoaded 보장
 if (document.readyState === "loading") {

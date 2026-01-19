@@ -1835,10 +1835,11 @@ function bindTopButtonsOnce(forceRetry = false) {
   btnProjectClose.onclick = closeProjectModal;
   btnProjectOpen.onclick = openSelectedProjectFromModal;
 
-  // (참고) 코드선택 버튼은 너 기존 로직이 있으면 연결
+    // ✅ 코드선택 버튼 연결 (Ctrl+. / 버튼 모두 이걸 타게 됨)
   if (btnOpenPicker) {
-    // btnOpenPicker.onclick = openPickerWindow; // 기존 함수 있으면 연결
+    btnOpenPicker.onclick = openPickerWindow;
   }
+
 
   // 내보내기/가져오기/초기화
   btnExport.onclick = () => exportToExcelSelectedTabs([state.activeTab]);

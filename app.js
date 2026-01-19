@@ -634,6 +634,20 @@
 
   const CODE_COL_WEIGHTS = [0.6, 2.2, 2.2, 0.6, 0.6, 0.7, 0.7, 1.2, 0.6];
 
+// ✅ [추가] codeMaster(코드표) 필드 → 실제 열 번호 매핑 (0~8)
+// 0:code, 1:name, 2:spec, 3:unit, 4:surcharge, 5:convUnit, 6:convFactor, 7:note, 8:action(삭제버튼)
+const CODE_COL_INDEX = {
+  code: 0,
+  name: 1,
+  spec: 2,
+  unit: 3,
+  surcharge: 4,
+  convUnit: 5,
+  convFactor: 6,
+  note: 7,
+  action: 8,
+};
+
   /***************
    * ✅ Help
    ***************/
@@ -646,6 +660,7 @@
           "코드 선택 창에서 Ctrl+B : 다중선택",
           "코드 선택 창에서 Ctrl+Enter : 삽입",
         ]},
+
         { title: "표 이동/편집(공통)", items: [
           "방향키: 셀 이동",
           "F2: 편집 모드(읽기전용 셀 제외)",
@@ -1795,9 +1810,10 @@ function bindTopButtonsOnce(forceRetry = false) {
   const fileImport = document.getElementById("fileImport");
 
   // ✅ DOM 아직 안 잡히면 다음 프레임 재시도
-  const needRetry =
+    const needRetry =
     !btnProject || !btnProjectAdd || !btnProjectDelete || !btnProjectSave || !btnProjectClose || !btnProjectOpen ||
-    !btnExport || !btnReset || !fileImport;
+    !btnOpenPicker || !btnExport || !btnReset || !fileImport;
+
 
   if (needRetry) {
     raf2(() => bindTopButtonsOnce(true));

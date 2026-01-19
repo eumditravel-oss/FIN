@@ -6,6 +6,8 @@
    - ✅ Shift+↑/↓: 연속 범위 블록 선택
    - ✅ Ctrl+Enter: 선택(또는 커서1개) 삽입 + 닫기
    - ✅ Ctrl+. 로 열린 창(INIT 메시지 수신) 그대로 사용
+   - 🛠 (PATCH) INIT 수신 전 boot에서 runSearch 금지(커서/스크롤 리셋으로 ↓가 원점으로 튀는 현상 방지)
+   - 🛠 (PATCH) INIT 완료 플래그(__inited)로 중복/선행 키 입력 방지
    ========================= */
 
 let originTab = "steel";
@@ -21,6 +23,9 @@ const selected = new Set(); // code string set
 
 // Shift 블록 선택용 앵커
 let rangeAnchor = null;
+
+// ✅ INIT 완료 플래그(boot에서 runSearch 막기 + INIT 전 키입력 방지)
+let __inited = false;
 
 // DOM
 const $q = document.getElementById("q");
@@ -219,16 +224,20 @@ window.addEventListener("message", (event) => {
   if (!msg || typeof msg !== "object") return;
 
   if (msg.type === "INIT") {
+    __inited = true;
+
     originTab = msg.originTab || "steel";
     focusRow = Number(msg.focusRow || 0);
 
     // codes는 배열 오브젝트(코드마스터) 그대로 들어온다고 가정
     codes = Array.isArray(msg.codes) ? msg.codes : [];
 
-    // 초기화
+    // 초기화(여기서만 1회)
     if($q) $q.value = "";
     selected.clear();
     rangeAnchor = null;
+
+    // ✅ 커서 초기값 확정
     cursorIndex = (codes.length ? 0 : -1);
 
     runSearch();
@@ -240,6 +249,16 @@ window.addEventListener("message", (event) => {
 
 /* ===== Keys ===== */
 document.addEventListener("keydown", (e)=>{
+  // ✅ INIT 전에는 조작 금지(초기 흔들림/커서 리셋 체감 방지)
+  if(!__inited) {
+    // 단, Esc는 닫기 허용
+    if(e.key === "Escape"){
+      e.preventDefault();
+      closeMe();
+    }
+    return;
+  }
+
   // Esc 닫기
   if(e.key === "Escape"){
     e.preventDefault();
@@ -317,7 +336,8 @@ $mode?.addEventListener("change", runSearch);
 
 /* ===== boot ===== */
 (function boot(){
-  runSearch();
+  // ✅ INIT 수신 전에는 검색/렌더를 돌리지 않는다(커서/스크롤 리셋 원인)
+  setStatus("대기중… (메인 창에서 INIT 수신)");
   updateBadges();
   setTimeout(()=> $q?.focus(), 0);
 })();

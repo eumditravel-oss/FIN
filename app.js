@@ -2009,46 +2009,48 @@ if (!window.__finPickerMsgBound) {
       return;
     }
 
-    if (msg.type === "INSERT_SELECTED") {
-  const tabId = msg.originTab;
-  const focusRow = Number(msg.focusRow || 0);
-  const codes = Array.isArray(msg.selectedCodes) ? msg.selectedCodes : [];
-  if (!codes.length) return;
+        if (msg.type === "INSERT_SELECTED") {
+      const tabId = msg.originTab;
+      const focusRow = Number(msg.focusRow || 0);
+      const codes = Array.isArray(msg.selectedCodes) ? msg.selectedCodes : [];
+      if (!codes.length) return;
 
-  const isCalc = (tabId === "steel" || tabId === "steel_sub" || tabId === "support");
-  if (!isCalc) return;
+      const isCalc = (tabId === "steel" || tabId === "steel_sub" || tabId === "support");
+      if (!isCalc) return;
 
-  const bucket = state[tabId];
-  const sec = bucket.sections[bucket.activeSection];
+      const bucket = state[tabId];
+      const sec = bucket.sections[bucket.activeSection];
 
-  // ✅ 핵심: "현재 행 아래"에 삽입 (아래 행 전체가 밀림)
-  const insertPos = clamp(focusRow + 1, 0, sec.rows.length);
+      // ✅ "현재 행 아래"에 삽입
+      const insertPos = clamp(focusRow + 1, 0, sec.rows.length);
 
-  // ✅ 선택 개수만큼 새 행을 insertPos에 끼워넣기
-  const newRows = Array.from({ length: codes.length }, () => defaultCalcRow());
-  sec.rows.splice(insertPos, 0, ...newRows);
+      // ✅ 선택 개수만큼 새 행 끼워넣기
+      const newRows = Array.from({ length: codes.length }, () => defaultCalcRow());
+      sec.rows.splice(insertPos, 0, ...newRows);
 
-  // ✅ 새로 생긴 행에 코드 채우기
-  codes.forEach((c, i) => {
-    const r = sec.rows[insertPos + i];
-    if (!r) return;
-    r.code = String(c || "").trim();
-  });
+      // ✅ 새로 생긴 행에 코드 채우기
+      codes.forEach((c, i) => {
+        const r = sec.rows[insertPos + i];
+        if (!r) return;
+        r.code = String(c || "").trim();
+      });
 
-  recomputeSection(tabId);
-  saveState();
-  render();
+      recomputeSection(tabId);
+      saveState();
+      render();
 
-  // ✅ 포커스는 첫 삽입 행의 코드칸으로
-  raf2(() => {
-    const target = document.querySelector(
-      `input[data-grid="calc"][data-tab="${tabId}"][data-row="${insertPos}"][data-col="${CALC_COL_INDEX.code}"]`
-    );
-    safeFocus(target);
-    ensureScrollIntoView(target);
-  });
-}
+      raf2(() => {
+        const target = document.querySelector(
+          `input[data-grid="calc"][data-tab="${tabId}"][data-row="${insertPos}"][data-col="${CALC_COL_INDEX.code}"]`
+        );
+        safeFocus(target);
+        ensureScrollIntoView(target);
+      });
 
+      return; // ✅ 다른 메시지 타입으로 흐르지 않게(안전)
+    }
+  }); // ✅ window.addEventListener("message", ...) 닫기
+} // ✅ if (!window.__finPickerMsgBound) 닫기
 
 
 

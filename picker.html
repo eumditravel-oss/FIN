@@ -5,17 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>코드 선택</title>
 
-  <!-- ✅ 메인과 동일 테마 사용 -->
-  <link rel="stylesheet" href="styles.css?v=14" />
+  <!-- ✅ 메인과 동일 테마 사용 (메인과 버전 맞추기 권장) -->
+  <link rel="stylesheet" href="styles.css?v=22" />
 
-  <!-- ✅ picker 전용 레이아웃 보정(메인 레이아웃 영향 최소화) -->
+  <!-- ✅ picker 전용: 레이아웃만 최소 보정 (색/버튼/테이블은 styles.css가 담당) -->
   <style>
+    /* styles.css에서 html,body overflow:hidden 강제하는 부분을 picker에서 해제 */
+    html, body{
+      height: auto !important;
+      overflow: auto !important;
+      overflow-x: hidden !important;
+    }
+
     body{
-      height:auto;
-      overflow:auto;
       display:block;
       padding: 14px;
+      margin: 0;
     }
+
     .picker-wrap{
       max-width: 1100px;
       margin: 0 auto;
@@ -23,21 +30,23 @@
 
     .picker-head{
       display:flex;
-      align-items:center;
+      align-items:flex-start;
       justify-content:space-between;
       gap:12px;
       margin-bottom: 10px;
     }
     .picker-title{
-      font-weight: 900;
+      font-weight: 1000;
       font-size: 18px;
       letter-spacing: -0.2px;
       color: var(--accent);
+      line-height: 1.15;
     }
     .picker-sub{
-      margin-top: 2px;
+      margin-top: 4px;
       font-size: 12px;
       color: var(--muted);
+      line-height: 1.55;
     }
 
     .picker-tools{
@@ -52,7 +61,7 @@
       gap:8px;
       flex-wrap:wrap;
       align-items:center;
-      margin: 10px 0 8px;
+      margin: 10px 0 10px;
     }
     .picker-bar select,
     .picker-bar input{
@@ -62,54 +71,34 @@
       padding: 8px 10px;
       font-size: 13px;
       outline: none;
+      height: 38px;
     }
     .picker-bar input{
       flex: 1 1 320px;
       min-width: 220px;
     }
 
-    /* 테이블 영역 */
+    /* ✅ 메인 테마의 table-wrap을 그대로 쓰기 위한 최소 보정 */
     .picker-tablewrap{
-      border:1px solid var(--line);
-      border-radius: 16px;
-      overflow:auto;
-      background: rgba(255,255,255,.55);
-      box-shadow: var(--shadow);
       max-height: 70vh;
     }
+
     .picker-table{
-      width:100%;
-      min-width: 980px;
+      width: 100%;
+      min-width: 980px; /* 기존 유지 */
       border-collapse: separate;
       border-spacing: 0;
       font-size: 12px;
     }
-    .picker-table thead th{
-      position: sticky;
-      top: 0;
-      z-index: 5;
-      background: rgba(255,250,240,.95);
-      border-bottom: 1px solid var(--line);
-      padding: 10px 10px;
-      text-align:left;
-      font-weight: 900;
-      white-space: nowrap;
-    }
-    .picker-table tbody td{
-      border-bottom: 1px solid rgba(0,0,0,.06);
-      padding: 8px 10px;
-      vertical-align: middle;
-      white-space: nowrap;
-    }
 
-    /* 커서/선택 스타일 */
+    /* 커서/선택 스타일 (테마 색 유지) */
     tr.cursor td{
-      outline: 2px solid rgba(26,61,124,.22);
+      outline: 2px solid rgba(26,61,124,.18);
       outline-offset: -2px;
-      background: rgba(26,61,124,.06);
+      background: rgba(26,61,124,.05);
     }
     tr.sel td{
-      background: rgba(255,140,0,.10);
+      background: rgba(240,138,36,.10);
     }
 
     .picker-foot{
@@ -125,6 +114,7 @@
       color: var(--muted);
       font-size: 12px;
       line-height: 1.6;
+      white-space: nowrap;
     }
   </style>
 </head>
@@ -155,10 +145,11 @@
         </select>
 
         <input id="q" type="text" placeholder="검색어 입력 후 Enter (미입력 = 전체)" />
-        <div id="pickInfo" class="picker-sub"></div>
+        <div id="pickInfo" class="picker-sub" style="margin:0; white-space:nowrap;"></div>
       </div>
 
-      <div class="picker-tablewrap">
+      <!-- ✅ 여기 핵심: picker-tablewrap은 메인 테마(table-wrap)를 같이 부여 -->
+      <div class="table-wrap picker-tablewrap">
         <table class="picker-table">
           <thead>
             <tr>
@@ -182,6 +173,7 @@
     </div>
   </div>
 
-  <script src="picker.js?v=30"></script>
+  <!-- ✅ 캐시 방지: 버전 올리기 권장 -->
+  <script src="picker.js?v=31"></script>
 </body>
 </html>

@@ -2010,46 +2010,46 @@ if (!window.__finPickerMsgBound) {
     }
 
     if (msg.type === "INSERT_SELECTED") {
-      const tabId = msg.originTab;
-      const focusRow = Number(msg.focusRow || 0);
-      const codes = Array.isArray(msg.selectedCodes) ? msg.selectedCodes : [];
-      if (!codes.length) return;
+  const tabId = msg.originTab;
+  const focusRow = Number(msg.focusRow || 0);
+  const codes = Array.isArray(msg.selectedCodes) ? msg.selectedCodes : [];
+  if (!codes.length) return;
 
-      // 대상 탭이 calc 탭인지 확인
-      const isCalc = (tabId === "steel" || tabId === "steel_sub" || tabId === "support");
-      if (!isCalc) return;
+  // 대상 탭이 calc 탭인지 확인
+  const isCalc = (tabId === "steel" || tabId === "steel_sub" || tabId === "support");
+  if (!isCalc) return;
 
-      const bucket = state[tabId];
-      const sec = bucket.sections[bucket.activeSection];
+  const bucket = state[tabId];
+  const sec = bucket.sections[bucket.activeSection];
 
-      // rows 길이 보정(삽입 행 수만큼 부족하면 추가)
-      while (sec.rows.length < focusRow + codes.length) {
-        sec.rows.push(defaultCalcRow());
-      }
+  const insertPos = clamp(focusRow, 0, sec.rows.length); // ✅ 삽입 위치
 
-      // focusRow부터 순서대로 code 채움
-      codes.forEach((c, i) => {
-        const r = sec.rows[focusRow + i];
-        if (!r) return;
-        r.code = String(c || "").trim();
-      });
+  // ✅ (중요) 선택 개수만큼 "새 행"을 insertPos에 삽입 (기존 행은 아래로 밀림)
+  const newRows = Array.from({ length: codes.length }, () => defaultCalcRow());
+  sec.rows.splice(insertPos, 0, ...newRows);
 
-      // 재계산 + 저장 + UI 갱신
-      recomputeSection(tabId);
-      saveState();
-      render();
+  // ✅ 새로 삽입된 행들에 코드 채우기
+  codes.forEach((c, i) => {
+    const r = sec.rows[insertPos + i];
+    if (!r) return;
+    r.code = String(c || "").trim();
+  });
 
-      // 포커스 이동 (삽입 시작 행 코드셀)
-      raf2(() => {
-        const target = document.querySelector(
-          `input[data-grid="calc"][data-tab="${tabId}"][data-row="${focusRow}"][data-col="${CALC_COL_INDEX.code}"]`
-        );
-        safeFocus(target);
-        ensureScrollIntoView(target);
-      });
-    }
-  }, true);
+  // ✅ 재계산 + 저장 + UI 갱신
+  recomputeSection(tabId);
+  saveState();
+  render();
+
+  // ✅ 포커스 이동 (삽입 시작 행 코드셀)
+  raf2(() => {
+    const target = document.querySelector(
+      `input[data-grid="calc"][data-tab="${tabId}"][data-row="${insertPos}"][data-col="${CALC_COL_INDEX.code}"]`
+    );
+    safeFocus(target);
+    ensureScrollIntoView(target);
+  });
 }
+
 
 
 

@@ -2190,6 +2190,112 @@ function initAppOnce() {
   //    (여기 안에서 btnProject를 이미 getElementById로 잡고 onclick을 걸어줌)
   try { bindTopButtonsOnce(); } catch (e) { console.warn(e); }
 
+   /* ============================
+   ✅ Global Hotkeys (Ctrl+., Ctrl+B, Ctrl+F3)
+   - 프로젝트 선택된 상태에서만 작동
+   - input/textarea 편집중에는 일부 단축키 무시
+============================ */
+let __globalHotkeysBound = false;
+
+function bindGlobalHotkeysOnce() {
+  if (__globalHotkeysBound) return;
+  __globalHotkeysBound = true;
+
+  document.addEventListener("keydown", (e) => {
+    // 프로젝트 미선택이면 단축키 동작시키지 않음(버튼도 disabled 상태)
+    if (!activeProjectId) return;
+
+    const ae = document.activeElement;
+    const isEditing =
+      ae instanceof HTMLInputElement ||
+      ae instanceof HTMLTextAreaElement ||
+      (ae && ae.getAttribute && ae.getAttribute("contenteditable") === "true");
+
+    // -------------------------
+    // Ctrl + . : 코드 선택창
+    // -------------------------
+    if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const btn = document.getElementById("btnOpenPicker");
+      // btn이 disabled가 아니면 클릭 트리거(기존 로직 그대로 활용)
+      if (btn && !btn.disabled) btn.click();
+      else alert("프로젝트를 먼저 선택(열기)해 주세요.");
+      return;
+    }
+
+    // -------------------------
+    // Ctrl + B : (현재 탭 기준) '다중선택' 토글
+    // - 기존 코드에서는 'Shift+B'로 구현돼 있으니
+    //   Ctrl+B도 같은 동작을 하도록 매핑
+    // -------------------------
+    if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === "b" || e.key === "B")) {
+      // 텍스트 입력 중 Ctrl+B는 브라우저 기본(굵게)일 수 있어서 항상 막고 커스텀 사용
+      e.preventDefault();
+      e.stopPropagation();
+
+      // calc 탭(steel/steel_sub/support)에서만 의미가 있음
+      const tabId = state.activeTab;
+      const isCalc = (tabId === "steel" || tabId === "steel_sub" || tabId === "support");
+      if (!isCalc) return;
+
+      // 현재 포커스된 calc 셀의 row를 기준으로 토글
+      let curRow = 0;
+      if (ae instanceof HTMLInputElement && ae.dataset.grid === "calc" && ae.dataset.tab === tabId) {
+        curRow = Number(ae.dataset.row || 0);
+      }
+
+      if (!__calcMultiIsSameContext(tabId)) __calcMultiBegin(tabId, curRow);
+      else __calcMultiClear();
+
+      __applyCalcRowSelectionStyles(tabId);
+      return;
+    }
+
+    // -------------------------
+    // Ctrl + F3 : 현재 행 아래 행 추가
+    // Shift + Ctrl + F3 : +10행
+    // - 코드탭(code) / 산출탭(steel/steel_sub/support) / 변수표(var) 모두 지원
+    // -------------------------
+    if (e.ctrlKey && e.key === "F3") {
+      // 입력 중이어도 행 추가는 허용(Excel 느낌)
+      e.preventDefault();
+      e.stopPropagation();
+
+      const n = e.shiftKey ? 10 : 1;
+      const tabId = state.activeTab;
+
+      // 1) 코드탭
+      if (tabId === "code") {
+        let insertAfter = null;
+        if (ae instanceof HTMLInputElement && ae.dataset.grid === "code") {
+          insertAfter = Number(ae.dataset.row || 0);
+        }
+        addCodeRows(n, insertAfter);
+        return;
+      }
+
+      // 2) 산출탭(steel/steel_sub/support)
+      if (tabId === "steel" || tabId === "steel_sub" || tabId === "support") {
+        let insertAfter = null;
+
+        // calc 셀에 포커스면 그 row 아래로
+        if (ae instanceof HTMLInputElement && ae.dataset.grid === "calc" && ae.dataset.tab === tabId) {
+          insertAfter = Number(ae.dataset.row || 0);
+        }
+
+        addRows(tabId, n, insertAfter);
+        return;
+      }
+
+      // 3) 집계탭/기타에서는 무시
+      return;
+    }
+  }, true);
+}
+
+
   // ✅ 2) initAppOnce에서 다시 btnProject를 “중복 바인딩”하지 않는다
   //    (중복 바인딩은 필요 없고, TDZ 에러 원인이 됐음)
 
@@ -2211,9 +2317,12 @@ function initAppOnce() {
     });
   }
 
-  // ✅ 4) 최초 UI 반영
+    // ✅ 4) 최초 UI 반영
   updateProjectHeaderUI();
   render();
+
+  // ✅ 5) 전역 단축키 바인딩 (Ctrl+., Ctrl+B, Ctrl+F3 등)
+  bindGlobalHotkeysOnce();
 
   raf2(() => {
     updateStickyVars();
@@ -2222,6 +2331,7 @@ function initAppOnce() {
     updateScrollHeights();
   });
 }
+
 
 
 // DOMContentLoaded 보장

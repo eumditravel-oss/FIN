@@ -1807,29 +1807,308 @@ const CODE_COL_INDEX = {
     });
   }
 
+
+   function openExportModal() {
+  // 프로젝트 미선택 방지
+  if (!activeProjectId) {
+    alert("프로젝트를 먼저 선택(열기)해 주세요.");
+    return;
+  }
+
+  // 이미 모달이 있으면 제거 후 재생성(중복 방지)
+  const old = document.getElementById("exportModal");
+  if (old) old.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "exportModal";
+  modal.className = "modal";
+  modal.setAttribute("aria-hidden", "false");
+  modal.hidden = false;
+
+  modal.innerHTML = `
+    <div class="modal-backdrop" data-close="1"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
+      <div class="modal-head">
+        <div class="modal-title" id="exportModalTitle">내보내기(EXCEL)</div>
+        <div class="modal-head-actions">
+          <button id="btnExportAll" class="btn">전체선택</button>
+          <button id="btnExportDo" class="btn btn-primary">다운로드</button>
+          <button id="btnExportClose" class="btn">닫기</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="project-hint" style="margin-bottom:10px;">
+          내보낼 탭을 선택하세요.
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <label style="display:flex; gap:10px; align-items:center;">
+            <input type="checkbox" data-tab="code" checked />
+            <b>코드</b>
+          </label>
+
+          <label style="display:flex; gap:10px; align-items:center;">
+            <input type="checkbox" data-tab="steel" checked />
+            <b>철골</b>
+          </label>
+
+          <label style="display:flex; gap:10px; align-items:center;">
+            <input type="checkbox" data-tab="steel_sub" checked />
+            <b>철골_부자재</b>
+          </label>
+
+          <label style="display:flex; gap:10px; align-items:center;">
+            <input type="checkbox" data-tab="support" checked />
+            <b>구조이기/동바리</b>
+          </label>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <div class="muted">* 선택한 탭들이 하나의 .xlsx 파일에 시트로 포함됩니다.</div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const close = () => {
+    modal.setAttribute("aria-hidden", "true");
+    modal.hidden = true;
+    modal.remove();
+  };
+
+  modal.addEventListener("click", (e) => {
+    const t = e.target;
+    if (t && t.getAttribute && t.getAttribute("data-close") === "1") close();
+  });
+
+  const btnClose = document.getElementById("btnExportClose");
+  const btnAll = document.getElementById("btnExportAll");
+  const btnDo = document.getElementById("btnExportDo");
+
+  if (btnClose) btnClose.onclick = close;
+
+  if (btnAll) {
+    btnAll.onclick = () => {
+      const checks = modal.querySelectorAll('input[type="checkbox"][data-tab]');
+      const allChecked = Array.from(checks).every(c => c.checked);
+      checks.forEach(c => { c.checked = !allChecked; });
+    };
+  }
+
+  if (btnDo) {
+    btnDo.onclick = () => {
+      const checks = modal.querySelectorAll('input[type="checkbox"][data-tab]');
+      const selected = Array.from(checks).filter(c => c.checked).map(c => c.getAttribute("data-tab"));
+      if (!selected.length) {
+        alert("내보낼 탭을 1개 이상 선택해 주세요.");
+        return;
+      }
+      exportToExcelSelectedTabs(selected);
+      close();
+    };
+  }
+}
+
+
+
+   
   /* ============================
      ✅ Export / Import (placeholder-safe)
      - XLSX가 페이지에 로드되어 있으면 실제로 동작
      - 없으면 alert로 안내 (런타임 에러 방지)
   ============================ */
   function exportToExcelSelectedTabs(tabIds) {
-    // XLSX가 없는 경우 대비
-    if (!window.XLSX) {
-      alert("XLSX 라이브러리가 로드되지 않았습니다.\nexport.js 또는 CDN이 필요합니다.");
-      return;
-    }
-    // TODO: 기존 v13.0 export 로직이 있다면 여기로 연결
-    alert("내보내기 로직 연결 지점입니다. (기존 v13.0 export 함수로 연결하세요)");
+  if (!window.XLSX) {
+    alert("XLSX 라이브러리가 로드되지 않았습니다.\nCDN(xlsx.full.min.js) 로드 상태를 확인해 주세요.");
+    return;
   }
 
-  function importFromExcelFile(file) {
-    if (!window.XLSX) {
-      alert("XLSX 라이브러리가 로드되지 않았습니다.\nimport.js 또는 CDN이 필요합니다.");
-      return;
-    }
-    // TODO: 기존 v13.0 import 로직이 있다면 여기로 연결
-    alert("가져오기 로직 연결 지점입니다. (기존 v13.0 import 함수로 연결하세요)");
+  const wb = window.XLSX.utils.book_new();
+
+  const sanitizeSheetName = (name) => {
+    // Excel sheet name 제한 대응: \ / ? * [ ] : 최대 31자
+    return String(name || "")
+      .replace(/[\\/?*\[\]:]/g, "_")
+      .slice(0, 31) || "Sheet";
+  };
+
+  const addSheet = (sheetName, aoaOrJson, mode = "aoa") => {
+    const ws = (mode === "json")
+      ? window.XLSX.utils.json_to_sheet(aoaOrJson)
+      : window.XLSX.utils.aoa_to_sheet(aoaOrJson);
+    window.XLSX.utils.book_append_sheet(wb, ws, sanitizeSheetName(sheetName));
+  };
+
+  const want = new Set((tabIds || []).map(x => String(x)));
+
+  // 1) Codes (코드마스터)
+  if (want.has("code")) {
+    const rows = Array.isArray(state.codeMaster) ? state.codeMaster : [];
+    const aoa = [
+      ["code", "name", "spec", "unit", "surcharge", "convUnit", "convFactor", "note"],
+      ...rows.map(r => ([
+        r.code ?? "",
+        r.name ?? "",
+        r.spec ?? "",
+        r.unit ?? "",
+        r.surcharge ?? "",
+        r.convUnit ?? "",
+        r.convFactor ?? "",
+        r.note ?? ""
+      ]))
+    ];
+    addSheet("Codes", aoa, "aoa");
   }
+
+  // 2) 산출탭(구분 포함 flatten)
+  const exportCalcTab = (tabId, sheetTitle) => {
+    const bucket = state?.[tabId];
+    if (!bucket || !Array.isArray(bucket.sections)) return;
+
+    // export 전 계산값 최신화(현재 activeSection만 recompute가 아니라, export는 저장값 기준이라도 괜찮지만
+    // 최대한 정확하게 하려면 섹션별로 varMap 재계산이 필요 -> 간단히 activeSection만 최신화 + 저장값 사용)
+    try { recomputeSection(tabId); } catch {}
+
+    const aoa = [
+      ["sectionName", "count", "no", "code", "name", "spec", "unit", "formula", "value", "surchargePct", "convUnit", "convFactor", "converted", "note"],
+    ];
+
+    bucket.sections.forEach((sec, sidx) => {
+      const sectionName = sec?.name ?? `구분 ${sidx + 1}`;
+      const count = sec?.count ?? "";
+
+      const rows = Array.isArray(sec?.rows) ? sec.rows : [];
+      rows.forEach((r, i) => {
+        aoa.push([
+          sectionName,
+          count,
+          i + 1,
+          r.code ?? "",
+          r.name ?? "",
+          r.spec ?? "",
+          r.unit ?? "",
+          r.formula ?? "",
+          r.value ?? 0,
+          r.surchargePct ?? "",
+          r.convUnit ?? "",
+          r.convFactor ?? "",
+          r.converted ?? 0,
+          r.note ?? ""
+        ]);
+      });
+    });
+
+    addSheet(sheetTitle, aoa, "aoa");
+  };
+
+  if (want.has("steel")) exportCalcTab("steel", "철골");
+  if (want.has("steel_sub")) exportCalcTab("steel_sub", "철골_부자재");
+  if (want.has("support")) exportCalcTab("support", "구조이기_동바리");
+
+  // 파일명: 프로젝트명 반영
+  const meta = projectIndex.projects.find(p => p.id === activeProjectId);
+  const baseName = meta ? `${(meta.code || "FIN")}_${(meta.name || "Project")}` : "FIN_Project";
+  const filename = `${baseName}_export.xlsx`;
+
+  window.XLSX.writeFile(wb, filename);
+}
+
+function importFromExcelFile(file) {
+  if (!window.XLSX) {
+    alert("XLSX 라이브러리가 로드되지 않았습니다.\nCDN(xlsx.full.min.js) 로드 상태를 확인해 주세요.");
+    return;
+  }
+
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    try {
+      const data = evt.target.result;
+      const wb = window.XLSX.read(data, { type: "array" });
+
+      // Codes 또는 코드 시트 찾기
+      const sheetName =
+        wb.SheetNames.find(n => n.toLowerCase() === "codes") ||
+        wb.SheetNames.find(n => n.includes("코드")) ||
+        wb.SheetNames[0];
+
+      const ws = wb.Sheets[sheetName];
+      if (!ws) {
+        alert("가져올 시트를 찾지 못했습니다. (Codes 또는 코드 시트 필요)");
+        return;
+      }
+
+      const aoa = window.XLSX.utils.sheet_to_json(ws, { header: 1, raw: true });
+      if (!Array.isArray(aoa) || aoa.length < 2) {
+        alert("Codes/코드 시트에 데이터가 없습니다.");
+        return;
+      }
+
+      // 헤더 기반 매핑 (code, name, spec, unit, surcharge, convUnit, convFactor, note)
+      const header = aoa[0].map(x => String(x || "").trim());
+      const idx = (key) => header.findIndex(h => h.toLowerCase() === key.toLowerCase());
+
+      const iCode = idx("code");
+      const iName = idx("name");
+      const iSpec = idx("spec");
+      const iUnit = idx("unit");
+      const iSurcharge = idx("surcharge");
+      const iConvUnit = idx("convUnit");
+      const iConvFactor = idx("convFactor");
+      const iNote = idx("note");
+
+      if (iCode < 0) {
+        alert("Codes/코드 시트 헤더에 'code' 컬럼이 필요합니다.");
+        return;
+      }
+
+      const next = [];
+      for (let r = 1; r < aoa.length; r++) {
+        const row = aoa[r];
+        if (!row) continue;
+
+        const code = String(row[iCode] ?? "").trim();
+        if (!code) continue;
+
+        const obj = {
+          code,
+          name: iName >= 0 ? String(row[iName] ?? "") : "",
+          spec: iSpec >= 0 ? String(row[iSpec] ?? "") : "",
+          unit: iUnit >= 0 ? String(row[iUnit] ?? "") : "",
+          surcharge: iSurcharge >= 0 ? (row[iSurcharge] === "" || row[iSurcharge] == null ? null : Number(row[iSurcharge])) : null,
+          convUnit: iConvUnit >= 0 ? String(row[iConvUnit] ?? "") : "",
+          convFactor: iConvFactor >= 0 ? (row[iConvFactor] === "" || row[iConvFactor] == null ? null : Number(row[iConvFactor])) : null,
+          note: iNote >= 0 ? String(row[iNote] ?? "") : "",
+        };
+
+        // 숫자 NaN 정리
+        if (!Number.isFinite(obj.surcharge)) obj.surcharge = (obj.surcharge == null ? null : null);
+        if (!Number.isFinite(obj.convFactor)) obj.convFactor = (obj.convFactor == null ? null : null);
+
+        next.push(obj);
+      }
+
+      if (!next.length) {
+        alert("가져올 코드 데이터가 없습니다.");
+        return;
+      }
+
+      state.codeMaster = next;
+      saveState();
+      render();
+
+      alert(`코드 ${next.length}개를 가져왔습니다. (시트: ${sheetName})`);
+    } catch (err) {
+      console.error(err);
+      alert("가져오기 실패: 파일 형식/시트 구성을 확인해 주세요.");
+    }
+  };
+
+  reader.readAsArrayBuffer(file);
+}
+
 
   /* ============================
    ✅ Top Buttons (bind once)
@@ -1891,7 +2170,8 @@ function bindTopButtonsOnce(forceRetry = false) {
 
 
   // 내보내기/가져오기/초기화
-  btnExport.onclick = () => exportToExcelSelectedTabs([state.activeTab]);
+btnExport.onclick = () => openExportModal();
+
 
   fileImport.onchange = (e) => {
     const f = e.target.files?.[0];

@@ -224,27 +224,37 @@ window.addEventListener("message", (event) => {
   if (!msg || typeof msg !== "object") return;
 
   if (msg.type === "INIT") {
-    __inited = true;
-
-    originTab = msg.originTab || "steel";
-    focusRow = Number(msg.focusRow || 0);
-
-    // codes는 배열 오브젝트(코드마스터) 그대로 들어온다고 가정
-    codes = Array.isArray(msg.codes) ? msg.codes : [];
-
-    // 초기화(여기서만 1회)
-    if($q) $q.value = "";
-    selected.clear();
-    rangeAnchor = null;
-
-    // ✅ 커서 초기값 확정
-    cursorIndex = (codes.length ? 0 : -1);
-
-    runSearch();
-    updateBadges();
-
-    setTimeout(()=> $q?.focus(), 0);
+  // ✅ 중복 INIT 차단 (메인이 여러 번 보내도 첫 1회만 처리)
+  if (__inited) {
+    // (선택) 메인 쪽에서 재전송 끊게 ACK 보내고 싶으면 사용
+    // try { window.opener?.postMessage({ type: "PICKER_INIT_ACK" }, window.location.origin); } catch {}
+    return;
   }
+  __inited = true;
+
+  originTab = msg.originTab || "steel";
+  focusRow = Number(msg.focusRow || 0);
+
+  // codes는 배열 오브젝트(코드마스터) 그대로 들어온다고 가정
+  codes = Array.isArray(msg.codes) ? msg.codes : [];
+
+  // 초기화(여기서만 1회)
+  if($q) $q.value = "";
+  selected.clear();
+  rangeAnchor = null;
+
+  // ✅ 커서 초기값 확정
+  cursorIndex = (codes.length ? 0 : -1);
+
+  runSearch();
+  updateBadges();
+
+  setTimeout(()=> $q?.focus(), 0);
+
+  // (선택) 메인 쪽에서 재전송 끊게 ACK 보내고 싶으면 사용
+  // try { window.opener?.postMessage({ type: "PICKER_INIT_ACK" }, window.location.origin); } catch {}
+}
+
 });
 
 /* ===== Keys ===== */

@@ -2660,12 +2660,50 @@ function initAppOnce() {
   //    (여기 안에서 btnProject를 이미 getElementById로 잡고 onclick을 걸어줌)
   try { bindTopButtonsOnce(); } catch (e) { console.warn(e); }
 
+  /* ============================
+     ✅ Shift+좌클릭 셀 블록지정 이벤트(1회 바인딩)
+     - input.cell만 대상
+     - ShiftKey면 anchor~target 사각형 블록 지정
+     ============================ */
+  if (!window.__finCellBlockBound) {
+    window.__finCellBlockBound = true;
+
+    document.addEventListener("mousedown", (e) => {
+      const t = e.target;
+      const input = t?.closest?.("input.cell");
+      if (!(input instanceof HTMLInputElement)) return;
+
+      // grid 없는 input(cell)도 있으니 최소 조건: class cell
+      // 필요하면 특정 grid만 적용 가능(아래 주석 참고)
+      // const g = input.dataset?.grid || "";
+      // if (!["calc","code","var"].includes(g)) return;
+
+      // Shift + 좌클릭 => 범위 지정
+      if (e.shiftKey) {
+        e.preventDefault();  // 텍스트 드래그 선택 방지
+        __handleShiftClickCell(input);
+        return;
+      }
+
+      // 일반 클릭 => 앵커 갱신(기존 블록 해제 포함)
+      __handleNormalClickCell(input);
+    }, true);
+
+    // Esc => 블록 해제(원하면 유지/삭제 가능)
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        __clearCellBlockSelection();
+      }
+    }, true);
+  }
+
    /* ============================
    ✅ Global Hotkeys (Ctrl+., Ctrl+B, Ctrl+F3)
    - 프로젝트 선택된 상태에서만 작동
    - input/textarea 편집중에는 일부 단축키 무시
 ============================ */
 let __globalHotkeysBound = false;
+
 
 function bindGlobalHotkeysOnce() {
   if (__globalHotkeysBound) return;

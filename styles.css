@@ -284,7 +284,7 @@ body{
   overflow-x:hidden !important;
 }
 
-/* ✅ FIX FINAL: zoom + 레이아웃 보정 */
+/* ✅ FIX FINAL: zoom 제거 → transform scale로 교체(클릭/포커스 히트테스트 안정화) */
 #view{
   height: 100%;
   width: 100%;
@@ -292,12 +292,22 @@ body{
   min-height:0;
   overflow:hidden;
 
-  zoom: var(--uiScale);
+  /* ❌ zoom 제거 */
+  /* zoom: var(--uiScale); */
+
+  /* ✅ scale 적용 */
+  transform: scale(var(--uiScale));
+  transform-origin: top left;
+
+  /* ✅ scale로 줄어든 만큼 “역보정”해서 실제 화면을 꽉 채움 */
+  width: calc(100% / var(--uiScale));
+  height: calc(100% / var(--uiScale));
 
   display:flex;
   flex-direction:column;
   flex: 1 1 auto;
 }
+
 
 /* view 내부 레이아웃 안정 */
 .view-fill{

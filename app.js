@@ -90,45 +90,51 @@
    * ✅ 내부 스크롤 높이 자동 보정 (PATCH: 하단 공백 제거)
    ***************/
   function updateScrollHeights() {
-    const scrolls = document.querySelectorAll(".calc-scroll");
-    if (!scrolls.length) return;
+  const scrolls = document.querySelectorAll(".calc-scroll");
+  if (!scrolls.length) return;
 
-    scrolls.forEach((sc) => {
-      if (!(sc instanceof HTMLElement)) return;
+  scrolls.forEach((sc) => {
+    if (!(sc instanceof HTMLElement)) return;
 
-      sc.style.overflow = "auto";
-      sc.style.webkitOverflowScrolling = "touch";
-      sc.tabIndex = -1;
+    // ✅ 최근에 스크롤 중이면(사용자 조작 중) 강제 height 갱신을 건너뛰어
+    // 클릭 hit-test / 포커스 튐을 줄임
+    const now = Date.now();
+    const last = Number(sc.__lastScrollAt || 0);
+    if (now - last < 120) return;
 
-      // ✅ 중요: flex 컨테이너 안에서 스크롤 영역이 제대로 줄어들도록
-      sc.style.minHeight = "0";
+    sc.style.overflow = "auto";
+    sc.style.webkitOverflowScrolling = "touch";
+    sc.tabIndex = -1;
 
-      const scRect = sc.getBoundingClientRect();
-      const viewportH = window.innerHeight || document.documentElement.clientHeight || 800;
+    // ✅ 중요: flex 컨테이너 안에서 스크롤 영역이 제대로 줄어들도록
+    sc.style.minHeight = "0";
 
-      const bottomPad = 12;
+    const scRect = sc.getBoundingClientRect();
+    const viewportH = window.innerHeight || document.documentElement.clientHeight || 800;
 
-      const panel = sc.closest(".panel");
-let h = 0;
+    const bottomPad = 12;
 
-if (panel instanceof HTMLElement) {
-  const panelRect = panel.getBoundingClientRect();
+    const panel = sc.closest(".panel");
+    let h = 0;
 
-  // ✅ 패널이 화면 밖으로 내려가도, 계산 기준은 "뷰포트 바닥"까지만
-  const bottom = Math.min(panelRect.bottom, viewportH);
+    if (panel instanceof HTMLElement) {
+      const panelRect = panel.getBoundingClientRect();
 
-  h = Math.floor(bottom - scRect.top - bottomPad);
-} else {
-  h = Math.floor(viewportH - scRect.top - bottomPad);
+      // ✅ 패널이 화면 밖으로 내려가도, 계산 기준은 "뷰포트 바닥"까지만
+      const bottom = Math.min(panelRect.bottom, viewportH);
+
+      h = Math.floor(bottom - scRect.top - bottomPad);
+    } else {
+      h = Math.floor(viewportH - scRect.top - bottomPad);
+    }
+
+    h = clamp(h, 160, 20000);
+
+    sc.style.maxHeight = "";
+    sc.style.height = `${h}px`;
+  });
 }
 
-
-      h = clamp(h, 160, 20000);
-
-      sc.style.maxHeight = "";
-      sc.style.height = `${h}px`;
-    });
-  }
 
   /***************
    * Code Master
@@ -1704,18 +1710,17 @@ const CODE_COL_INDEX = {
     }
   }
 
-  const target = queryCell(grid, tab, nextRow, nextCol);
+    const target = queryCell(grid, tab, nextRow, nextCol);
   if (target) {
-    // ✅ 포커스는 jump 방지 옵션 유지
+    // ✅ 포커스는 1번만 (2번 주면 sticky/transform 환경에서 튐이 생길 수 있음)
     safeFocus(target);
 
-    // ✅ 스크롤은 레이아웃 갱신 이후 확실히 보정(특히 PageUp/Down)
+    // ✅ 스크롤만 다음 프레임에서 보정
     raf2(() => {
-      safeFocus(target);
       ensureScrollIntoView(target);
     });
   }
-}
+
 
 
 
@@ -1770,27 +1775,41 @@ const CODE_COL_INDEX = {
   }
 
   function forceScrollStyle(sc) {
-    if (!sc || !(sc instanceof HTMLElement)) return;
-    sc.style.overflow = "auto";
-    sc.style.webkitOverflowScrolling = "touch";
-    sc.style.minHeight = "0";
-    sc.tabIndex = -1;
+  if (!sc || !(sc instanceof HTMLElement)) return;
+  sc.style.overflow = "auto";
+  sc.style.webkitOverflowScrolling = "touch";
+  sc.style.minHeight = "0";
+  sc.tabIndex = -1;
+
+  // ✅ 사용자가 스크롤 중인지 판단하기 위한 타임스탬프 기록
+  if (!sc.__finScrollBound) {
+    sc.__finScrollBound = true;
+    sc.addEventListener("scroll", () => {
+      sc.__lastScrollAt = Date.now();
+    }, { passive: true });
   }
+}
+
 
   function ensureScrollIntoView(target) {
-    if (!target || !(target instanceof HTMLElement)) return;
-    const sc = target.closest(".calc-scroll");
-    if (!sc) return;
-    const tRect = target.getBoundingClientRect();
-    const sRect = sc.getBoundingClientRect();
+  if (!target || !(target instanceof HTMLElement)) return;
+  const sc = target.closest(".calc-scroll");
+  if (!sc) return;
 
-    const pad = 8;
-    if (tRect.top < sRect.top + pad) {
-      sc.scrollTop -= (sRect.top + pad - tRect.top);
-    } else if (tRect.bottom > sRect.bottom - pad) {
-      sc.scrollTop += (tRect.bottom - (sRect.bottom - pad));
-    }
+  const tRect = target.getBoundingClientRect();
+  const sRect = sc.getBoundingClientRect();
+
+  // ✅ 스티키 헤더(패널헤더/테이블헤더)에 가려지는 상단 여유를 반영
+  // (실측 기반으로 복잡하게 가지 않고, 안정적인 고정 topPad로 보정)
+  const topPad = 60;     // 대략 thead + 여유
+  const bottomPad = 10;
+
+  if (tRect.top < sRect.top + topPad) {
+    sc.scrollTop -= (sRect.top + topPad - tRect.top);
+  } else if (tRect.bottom > sRect.bottom - bottomPad) {
+    sc.scrollTop += (tRect.bottom - (sRect.bottom - bottomPad));
   }
+}
 
   /* ============================
      ✅ Sticky Panel Top 적용

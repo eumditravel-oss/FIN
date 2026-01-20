@@ -116,7 +116,6 @@ body{
   display: block;
 }
 
-
 .brand-text{
   display:flex;
   flex-direction:column;
@@ -451,6 +450,9 @@ thead th{
   text-align:left;
   font-weight: 900;
   white-space: nowrap;
+
+  /* ✅ FIX: sticky 헤더가 첫 행 클릭을 가로채는 문제 방지 */
+  pointer-events: none;
 }
 
 th, td{ min-width:0; }
@@ -459,6 +461,10 @@ tbody td{
   border-bottom: 1px solid rgba(0,0,0,.06);
   padding: 6px 8px;
   vertical-align: middle;
+
+  /* ✅ FIX: body 셀이 헤더 아래에서 정상 hit 되도록 */
+  position: relative;
+  z-index: 1;
 }
 
 /* ===== Inputs ===== */
@@ -482,6 +488,10 @@ tbody td{
   user-select: text !important;
   -webkit-user-select: text !important;
   cursor: text;
+
+  /* ✅ FIX: 클릭/포커스 hit 안정화 */
+  position: relative;
+  z-index: 2;
 }
 
 .cell:focus{
@@ -674,11 +684,18 @@ tbody td{
   padding: 10px 10px;
   text-align:left;
   font-weight:900;
+
+  /* ✅ FIX: sticky 헤더가 첫 행 클릭을 가로채는 문제 방지 */
+  pointer-events: none;
 }
 
 .var-table tbody td{
   border-bottom:1px solid rgba(0,0,0,.06);
   padding:6px 8px;
+
+  /* ✅ FIX: body 셀이 헤더 아래에서 정상 hit 되도록 */
+  position: relative;
+  z-index: 1;
 }
 
 /* ===== Scrollbar ===== */
@@ -1011,11 +1028,18 @@ table.calc-table thead tr.row-selected th{
   text-align:left;
   font-weight: 1000;
   white-space: nowrap;
+
+  /* ✅ FIX: sticky 헤더가 첫 행 클릭을 가로채는 문제 방지 */
+  pointer-events: none;
 }
 .project-table tbody td{
   border-bottom: 1px solid rgba(0,0,0,.06);
   padding: 6px 8px;
   vertical-align: middle;
+
+  /* ✅ FIX: body 셀이 헤더 아래에서 정상 hit 되도록 */
+  position: relative;
+  z-index: 1;
 }
 
 /* ✅ 행 선택(테이블 전용) - tr.project-row로 고정 */
@@ -1037,6 +1061,10 @@ table.calc-table thead tr.row-selected th{
   padding: 7px 10px;
   font-size: 12px;
   outline: none;
+
+  /* ✅ FIX: 클릭/포커스 hit 안정화 */
+  position: relative;
+  z-index: 2;
 }
 .project-cell-input:focus{
   border-color: rgba(240,138,36,.85);

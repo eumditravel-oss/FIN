@@ -1710,7 +1710,7 @@ const CODE_COL_INDEX = {
     }
   }
 
-    const target = queryCell(grid, tab, nextRow, nextCol);
+  const target = queryCell(grid, tab, nextRow, nextCol);
   if (target) {
     // ✅ 포커스는 1번만 (2번 주면 sticky/transform 환경에서 튐이 생길 수 있음)
     safeFocus(target);
@@ -1720,45 +1720,43 @@ const CODE_COL_INDEX = {
       ensureScrollIntoView(target);
     });
   }
+}
 
+function attachGridNav(container) {
+  if (!container) return;
+  container.addEventListener("keydown", (e) => {
+    const t = e.target;
+    if (!(t instanceof HTMLInputElement)) return;
+    if (!t.dataset.grid) return;
 
+    // 편집중이면 방향키 이동 막음
+    if (t.dataset.editing === "1") return;
 
+    const isInput = (document.activeElement instanceof HTMLInputElement);
+    if (!isInput) return;
 
-  function attachGridNav(container) {
-    if (!container) return;
-    container.addEventListener("keydown", (e) => {
-      const t = e.target;
-      if (!(t instanceof HTMLInputElement)) return;
-      if (!t.dataset.grid) return;
+    const key = e.key;
 
-      // 편집중이면 방향키 이동 막음
-      if (t.dataset.editing === "1") return;
-
-      const isInput = (document.activeElement instanceof HTMLInputElement);
-      if (!isInput) return;
-
-      const key = e.key;
-
-      if (key === "ArrowUp") { e.preventDefault(); moveCell(t, -1, 0); }
-      else if (key === "ArrowDown") { e.preventDefault(); moveCell(t, 1, 0); }
-      else if (key === "ArrowLeft") { e.preventDefault(); moveCell(t, 0, -1); }
-      else if (key === "ArrowRight") { e.preventDefault(); moveCell(t, 0, 1); }
-      else if (key === "PageUp") { e.preventDefault(); moveCell(t, -1, 0, true); }
-      else if (key === "PageDown") { e.preventDefault(); moveCell(t, 1, 0, true); }
-      else if (key === "Home" && e.ctrlKey) { e.preventDefault(); moveCell(t, -99999, 0); }
-      else if (key === "End" && e.ctrlKey) { e.preventDefault(); moveCell(t, 99999, 0); }
-      else if ((key === "Delete" || key === "Del") && e.ctrlKey) {
-        // Ctrl+Del: 변수표는 현재 셀 비움 / 코드표/산출표는 “현재 행 삭제”를 상단 핸들러에서 처리
-        const grid = t.dataset.grid;
-        if (grid === "var") {
-          if (t.readOnly) return;
-          e.preventDefault();
-          t.value = "";
-          t.dispatchEvent(new Event("input", { bubbles: true }));
-        }
+    if (key === "ArrowUp") { e.preventDefault(); moveCell(t, -1, 0); }
+    else if (key === "ArrowDown") { e.preventDefault(); moveCell(t, 1, 0); }
+    else if (key === "ArrowLeft") { e.preventDefault(); moveCell(t, 0, -1); }
+    else if (key === "ArrowRight") { e.preventDefault(); moveCell(t, 0, 1); }
+    else if (key === "PageUp") { e.preventDefault(); moveCell(t, -1, 0, true); }
+    else if (key === "PageDown") { e.preventDefault(); moveCell(t, 1, 0, true); }
+    else if (key === "Home" && e.ctrlKey) { e.preventDefault(); moveCell(t, -99999, 0); }
+    else if (key === "End" && e.ctrlKey) { e.preventDefault(); moveCell(t, 99999, 0); }
+    else if ((key === "Delete" || key === "Del") && e.ctrlKey) {
+      // Ctrl+Del: 변수표는 현재 셀 비움 / 코드표/산출표는 “현재 행 삭제”를 상단 핸들러에서 처리
+      const grid = t.dataset.grid;
+      if (grid === "var") {
+        if (t.readOnly) return;
+        e.preventDefault();
+        t.value = "";
+        t.dispatchEvent(new Event("input", { bubbles: true }));
       }
-    }, true);
-  }
+    }
+  }, true);
+}
 
   /* ============================
      ✅ wheel lock (trackpad/space bounce 방지)

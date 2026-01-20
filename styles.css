@@ -111,7 +111,7 @@ body{
 }
 
 .brand-logo{
-  height: 45px;      /* ✅ 기존 대비 약 2.5배 */
+  height: 42px;      /* ✅ 기존 대비 약 2.5배 */
   width: auto;       /* ✅ 비율 유지 */
   display: block;
 }

@@ -436,7 +436,12 @@ body{
 
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+
+  /* ✅ FIX: sticky/transform 히트테스트 안정화 */
+  contain: layout paint;
+  isolation: isolate;
 }
+
 
 table{
   width: 100%;
@@ -460,10 +465,8 @@ thead th{
   text-align:left;
   font-weight: 900;
   white-space: nowrap;
-
-  /* ✅ FIX: sticky 헤더가 첫 행 클릭을 가로채는 문제 방지 */
-  pointer-events: none;
 }
+
 
 th, td{ min-width:0; }
 
@@ -675,6 +678,9 @@ tbody td{
 
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+
+  contain: layout paint;
+  isolation: isolate;
 }
 
 .var-table{
@@ -694,10 +700,8 @@ tbody td{
   padding: 10px 10px;
   text-align:left;
   font-weight:900;
-
-  /* ✅ FIX: sticky 헤더가 첫 행 클릭을 가로채는 문제 방지 */
-  pointer-events: none;
 }
+
 
 .var-table tbody td{
   border-bottom:1px solid rgba(0,0,0,.06);
@@ -733,8 +737,15 @@ tbody td{
   .calc-layout.top-grid{ grid-template-columns: 1fr; }
   :root{ --topSplitH: 220px; }
   :root{ --uiScale: .95; }
-  #view{ zoom: 1; height: 100%; width: 100%; }
+
+  /* ✅ 모바일에서는 transform 스케일 해제 (zoom 절대 쓰지 않음) */
+  #view{
+    transform: none;
+    width: 100%;
+    height: 100%;
+  }
 }
+
 
 /* =========================================================
    ✅ Help button
@@ -1038,10 +1049,8 @@ table.calc-table thead tr.row-selected th{
   text-align:left;
   font-weight: 1000;
   white-space: nowrap;
-
-  /* ✅ FIX: sticky 헤더가 첫 행 클릭을 가로채는 문제 방지 */
-  pointer-events: none;
 }
+
 .project-table tbody td{
   border-bottom: 1px solid rgba(0,0,0,.06);
   padding: 6px 8px;

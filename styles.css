@@ -920,12 +920,67 @@ table.calc-table tr.row-selected-end td{
     inset 0 -1px 0 rgba(240,138,36,.30) !important;
 }
 
-/* 헤더는 선택 영향 X 유지 */
-table.calc-table thead tr.row-selected td,
-table.calc-table thead tr.row-selected th{
-  background: rgba(250,250,250,.98) !important;
-  box-shadow: none !important;
+/* =========================================================
+   ✅ 셀 블록 선택 (Shift+클릭 영역 선택)
+   - JS: input.cell.block-selected
+   - 디자인 일관성 유지 + 명확한 시각 피드백
+   ========================================================= */
+
+/* 기본 블록 셀 */
+.cell.block-selected{
+  background: linear-gradient(
+    180deg,
+    rgba(240,138,36,.28),
+    rgba(240,138,36,.18)
+  ) !important;
+
+  border-color: rgba(240,138,36,.95) !important;
+
+  box-shadow:
+    0 0 0 2px rgba(240,138,36,.55),
+    inset 0 0 0 1px rgba(255,255,255,.65) !important;
+
+  color: #1d1d1f;
 }
+
+/* 포커스가 블록 셀 안에 있을 때 (현재 입력 셀 강조) */
+.cell.block-selected:focus{
+  background: linear-gradient(
+    180deg,
+    rgba(240,138,36,.40),
+    rgba(240,138,36,.26)
+  ) !important;
+
+  box-shadow:
+    0 0 0 3px rgba(240,138,36,.75),
+    0 0 0 7px rgba(240,138,36,.22) !important;
+}
+
+/* 읽기 전용 셀도 블록은 유지 (톤만 다운) */
+.cell.readonly.block-selected{
+  background: linear-gradient(
+    180deg,
+    rgba(240,138,36,.18),
+    rgba(240,138,36,.12)
+  ) !important;
+
+  border-color: rgba(240,138,36,.55) !important;
+  color: rgba(0,0,0,.65);
+}
+
+/* 행 선택(row-selected) 위에 셀 블록이 올라왔을 때 우선순위 */
+table.calc-table tr.row-selected .cell.block-selected{
+  background: linear-gradient(
+    180deg,
+    rgba(240,138,36,.45),
+    rgba(240,138,36,.30)
+  ) !important;
+
+  box-shadow:
+    0 0 0 3px rgba(240,138,36,.85),
+    inset 0 0 0 1px rgba(255,255,255,.75) !important;
+}
+
 
 
 /* =========================================================
